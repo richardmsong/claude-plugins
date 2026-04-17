@@ -68,7 +68,7 @@ function getFileAtCommit(repoRoot: string, commitHash: string, filePath: string)
   return git(repoRoot, ["show", `${commitHash}:${filePath}`]);
 }
 
-interface DiffHunk {
+export interface DiffHunk {
   filePath: string;
   startLine: number;
   lineCount: number;
@@ -77,7 +77,7 @@ interface DiffHunk {
 /**
  * Parse unified diff output to extract hunk positions per file.
  */
-function parseDiffHunks(diffOutput: string): Map<string, DiffHunk[]> {
+export function parseDiffHunks(diffOutput: string): Map<string, DiffHunk[]> {
   const result = new Map<string, DiffHunk[]>();
   let currentFile: string | null = null;
 
@@ -122,7 +122,7 @@ function getCommitDiffHunks(repoRoot: string, commitHash: string): Map<string, D
   return parseDiffHunks(out);
 }
 
-interface SectionBoundary {
+export interface SectionBoundary {
   heading: string;
   lineStart: number;
   lineEnd: number;
@@ -132,7 +132,7 @@ interface SectionBoundary {
  * Given diff hunks for a file and section boundaries, return which sections
  * are touched by the hunks.
  */
-function touchedSections(hunks: DiffHunk[], boundaries: SectionBoundary[]): string[] {
+export function touchedSections(hunks: DiffHunk[], boundaries: SectionBoundary[]): string[] {
   const touched = new Set<string>();
   for (const hunk of hunks) {
     const hunkStart = hunk.startLine;
@@ -221,7 +221,7 @@ export function runLineageScan(db: Database, repoRoot: string): void {
 /**
  * Process a single commit to extract cross-doc lineage.
  */
-function processCommitForLineage(db: Database, repoRoot: string, commitHash: string): void {
+export function processCommitForLineage(db: Database, repoRoot: string, commitHash: string): void {
   const modifiedFiles = getModifiedDocFiles(repoRoot, commitHash);
 
   if (modifiedFiles.length < 2) {
