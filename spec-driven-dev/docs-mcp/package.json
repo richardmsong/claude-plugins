@@ -1,0 +1,14 @@
+{
+  "name": "mclaude-docs-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for MClaude docs — SQLite/FTS5 search, section retrieval, and git lineage",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.23.8"
+  }
+}
