@@ -5,8 +5,11 @@ export interface ParsedSection {
   lineEnd: number;   // 1-based, inclusive
 }
 
+export type AdrStatus = "draft" | "accepted" | "implemented" | "superseded" | "withdrawn";
+
 export interface ParsedDoc {
   title: string | null;
+  status: AdrStatus | null;
   sections: ParsedSection[];
 }
 
@@ -19,9 +22,12 @@ export interface ParsedDoc {
  *   before the next `## ` or EOF.
  * - Sub-headings (###, ####) are included in the parent section's content.
  */
+const STATUS_RE = /^\*\*Status\*\*:\s*(draft|accepted|implemented|superseded|withdrawn)\s*$/i;
+
 export function parseMarkdown(content: string): ParsedDoc {
   const lines = content.split("\n");
   let title: string | null = null;
+  let status: AdrStatus | null = null;
   const sections: ParsedSection[] = [];
 
   let currentHeading: string | null = null;
@@ -36,6 +42,14 @@ export function parseMarkdown(content: string): ParsedDoc {
     if (title === null && /^# /.test(line)) {
       title = line.replace(/^# /, "").trim();
       continue;
+    }
+
+    // Status extraction — scan only first 20 lines to avoid false positives in body
+    if (status === null && lineNum <= 20) {
+      const m = STATUS_RE.exec(line);
+      if (m) {
+        status = m[1].toLowerCase() as AdrStatus;
+      }
     }
 
     // H2 section boundary
@@ -68,7 +82,7 @@ export function parseMarkdown(content: string): ParsedDoc {
     });
   }
 
-  return { title, sections };
+  return { title, status, sections };
 }
 
 /**

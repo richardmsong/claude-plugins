@@ -42,9 +42,12 @@ interface ListDoc {
 
 // ---- Zod schemas ----
 
+const AdrStatusEnum = z.enum(["draft", "accepted", "implemented", "superseded", "withdrawn"]);
+
 export const SearchDocsSchema = z.object({
   query: z.string().describe("Search query (FTS5 syntax: words, phrases, AND/OR/NOT)"),
   category: z.enum(["adr", "spec"]).optional().describe("Filter to ADRs or specs"),
+  status: AdrStatusEnum.optional().describe("Filter by ADR status (draft|accepted|implemented|superseded|withdrawn)"),
   limit: z.number().int().positive().default(10).describe("Max results (default 10)"),
 });
 
@@ -62,6 +65,7 @@ export const GetLineageSchema = z.object({
 
 export const ListDocsSchema = z.object({
   category: z.enum(["adr", "spec"]).optional().describe("Filter by category"),
+  status: AdrStatusEnum.optional().describe("Filter by ADR status (draft|accepted|implemented|superseded|withdrawn)"),
 });
 
 // ---- Tool implementations ----
@@ -70,51 +74,38 @@ export function searchDocs(
   db: Database,
   args: z.infer<typeof SearchDocsSchema>
 ): SearchResult[] {
-  const { query, category, limit } = args;
+  const { query, category, status, limit } = args;
 
-  let sql: string;
-  let params: (string | number)[];
+  const conditions: string[] = ["sections_fts MATCH ?"];
+  const params: (string | number)[] = [query];
 
   if (category) {
-    sql = `
-      SELECT
-        d.path AS doc_path,
-        d.title AS doc_title,
-        d.category,
-        s.heading,
-        snippet(sections_fts, 1, '[', ']', '...', 32) AS snippet,
-        s.line_start,
-        s.line_end,
-        sections_fts.rank AS rank
-      FROM sections_fts
-      JOIN sections s ON sections_fts.rowid = s.id
-      JOIN documents d ON s.doc_id = d.id
-      WHERE sections_fts MATCH ?
-        AND d.category = ?
-      ORDER BY rank
-      LIMIT ?
-    `;
-    params = [query, category, limit];
-  } else {
-    sql = `
-      SELECT
-        d.path AS doc_path,
-        d.title AS doc_title,
-        d.category,
-        s.heading,
-        snippet(sections_fts, 1, '[', ']', '...', 32) AS snippet,
-        s.line_start,
-        s.line_end,
-        sections_fts.rank AS rank
-      FROM sections_fts
-      JOIN sections s ON sections_fts.rowid = s.id
-      JOIN documents d ON s.doc_id = d.id
-      WHERE sections_fts MATCH ?
-      ORDER BY rank
-      LIMIT ?
-    `;
-    params = [query, limit];
+    conditions.push("d.category = ?");
+    params.push(category);
   }
+  if (status) {
+    conditions.push("d.status = ?");
+    params.push(status);
+  }
+  params.push(limit);
+
+  const sql = `
+    SELECT
+      d.path AS doc_path,
+      d.title AS doc_title,
+      d.category,
+      s.heading,
+      snippet(sections_fts, 1, '[', ']', '...', 32) AS snippet,
+      s.line_start,
+      s.line_end,
+      sections_fts.rank AS rank
+    FROM sections_fts
+    JOIN sections s ON sections_fts.rowid = s.id
+    JOIN documents d ON s.doc_id = d.id
+    WHERE ${conditions.join(" AND ")}
+    ORDER BY rank
+    LIMIT ?
+  `;
 
   try {
     return db.query<SearchResult, typeof params>(sql).all(...params);
@@ -157,9 +148,9 @@ export function getLineage(
 ): LineageResult[] {
   const { doc_path, heading } = args;
 
-  // Query lineage where our section is section_a
-  // Join with documents to get doc_title and category for section_b
-  // Only include results where section_b's doc still exists in the index
+  // Only traverse edges where the connected document is an ADR with
+  // accepted or implemented status (per ADR-0018). Non-ADR docs (specs) have
+  // null status and are always included. Draft/superseded/withdrawn ADRs are excluded.
   return db
     .query<LineageResult, [string, string]>(
       `SELECT
@@ -172,30 +163,37 @@ export function getLineage(
        FROM lineage l
        JOIN documents d ON d.path = l.section_b_doc
        WHERE l.section_a_doc = ? AND l.section_a_heading = ?
+         AND (
+           d.category != 'adr'
+           OR d.status IS NULL
+           OR d.status IN ('accepted', 'implemented')
+         )
        ORDER BY l.commit_count DESC`
     )
     .all(doc_path, heading);
 }
 
 export function listDocs(db: Database, args: z.infer<typeof ListDocsSchema>): ListDoc[] {
-  const { category } = args;
+  const { category, status } = args;
 
-  let docs: { id: number; path: string; title: string | null; category: string | null }[];
+  const conditions: string[] = [];
+  const params: string[] = [];
 
   if (category) {
-    docs = db
-      .query<
-        { id: number; path: string; title: string | null; category: string | null },
-        [string]
-      >("SELECT id, path, title, category FROM documents WHERE category = ? ORDER BY path")
-      .all(category);
-  } else {
-    docs = db
-      .query<{ id: number; path: string; title: string | null; category: string | null }, []>(
-        "SELECT id, path, title, category FROM documents ORDER BY path"
-      )
-      .all();
+    conditions.push("category = ?");
+    params.push(category);
   }
+  if (status) {
+    conditions.push("status = ?");
+    params.push(status);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const sql = `SELECT id, path, title, category FROM documents ${where} ORDER BY path`;
+
+  const docs = db
+    .query<{ id: number; path: string; title: string | null; category: string | null }, string[]>(sql)
+    .all(...params);
 
   return docs.map((doc) => {
     const sections = db

@@ -1,7 +1,42 @@
 import { Database } from "bun:sqlite";
-import { statSync, readFileSync, readdirSync, existsSync } from "fs";
+import { statSync, readFileSync, readdirSync, existsSync, lstatSync } from "fs";
 import { join, relative } from "path";
 import { parseMarkdown, classifyCategory } from "./parser.js";
+
+/**
+ * Recursively collect all *.md file paths under a directory.
+ * Skips symlinked directories to avoid loops.
+ */
+function walkMdFiles(dir: string): string[] {
+  const results: string[] = [];
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return results;
+  }
+  for (const entry of entries) {
+    const fullPath = join(dir, entry);
+    let stat;
+    try {
+      stat = lstatSync(fullPath);
+    } catch {
+      continue;
+    }
+    if (stat.isSymbolicLink()) {
+      // Skip symlinked directories to avoid loops; skip symlinked files too
+      continue;
+    }
+    if (stat.isDirectory()) {
+      for (const nested of walkMdFiles(fullPath)) {
+        results.push(nested);
+      }
+    } else if (stat.isFile() && entry.endsWith(".md")) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
 
 /**
  * Index (or reindex) a single markdown file.
@@ -44,13 +79,14 @@ export function indexFile(db: Database, filePath: string, repoRoot: string): boo
   try {
     // Upsert document
     db.run(
-      `INSERT INTO documents(path, category, title, mtime)
-       VALUES (?, ?, ?, ?)
+      `INSERT INTO documents(path, category, title, status, mtime)
+       VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(path) DO UPDATE SET
          category = excluded.category,
          title = excluded.title,
+         status = excluded.status,
          mtime = excluded.mtime`,
-      [docPath, category, parsed.title, mtime]
+      [docPath, category, parsed.title, parsed.status, mtime]
     );
 
     const docRow = db
@@ -99,9 +135,7 @@ export function indexAllDocs(db: Database, docsDir: string, repoRoot: string): n
   let count = 0;
   let files: string[];
   try {
-    files = readdirSync(docsDir)
-      .filter((f) => f.endsWith(".md"))
-      .map((f) => join(docsDir, f));
+    files = walkMdFiles(docsDir);
   } catch (err) {
     console.warn(`[docs-mcp] Cannot read docs/: ${err}`);
     return 0;

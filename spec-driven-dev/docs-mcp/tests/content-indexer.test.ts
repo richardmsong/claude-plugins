@@ -15,6 +15,7 @@ function makeTestDb(): Database {
       path TEXT UNIQUE NOT NULL,
       category TEXT,
       title TEXT,
+      status TEXT,
       mtime REAL NOT NULL
     );
 

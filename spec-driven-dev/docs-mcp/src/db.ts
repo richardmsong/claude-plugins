@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync, unlinkSync } from "fs";
 
-const SCHEMA_VERSION = "1";
+const SCHEMA_VERSION = "2";
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS documents (
@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS documents (
   path TEXT UNIQUE NOT NULL,
   category TEXT,
   title TEXT,
+  status TEXT,
   mtime REAL NOT NULL
 );
 
