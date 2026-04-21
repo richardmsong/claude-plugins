@@ -7,6 +7,14 @@
     "start": "bun run src/index.ts",
     "test": "bun test"
   },
+  "exports": {
+    "./parser": "./src/parser.ts",
+    "./db": "./src/db.ts",
+    "./content-indexer": "./src/content-indexer.ts",
+    "./lineage-scanner": "./src/lineage-scanner.ts",
+    "./watcher": "./src/watcher.ts",
+    "./tools": "./src/tools.ts"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "zod": "^3.23.8"

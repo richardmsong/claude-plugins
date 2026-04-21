@@ -16,6 +16,8 @@ function makeTestDb(): Database {
       category TEXT,
       title TEXT,
       status TEXT,
+      commit_count INTEGER NOT NULL DEFAULT 0,
+      last_status_change TEXT,
       mtime REAL NOT NULL
     );
 
@@ -182,6 +184,54 @@ describe("indexFile", () => {
     expect(docCount).toBe(0);
   });
 
+  test("last_status_change is written to DB when history list present", () => {
+    const filePath = join(docsDir, "adr-0027-docs-dashboard.md");
+    const content = [
+      "# ADR: Docs Dashboard",
+      "",
+      "**Status**: accepted",
+      "**Status history**:",
+      "- 2026-04-21: draft",
+      "- 2026-04-21: accepted",
+      "",
+      "## Overview",
+      "Content.",
+    ].join("\n");
+    writeFileSync(filePath, content);
+    indexFile(db, filePath, tmpDir);
+
+    const doc = db
+      .query<{ last_status_change: string | null }, []>(
+        "SELECT last_status_change FROM documents"
+      )
+      .get();
+    expect(doc!.last_status_change).toBe("2026-04-21");
+  });
+
+  test("last_status_change is null when no history list", () => {
+    const filePath = join(docsDir, "spec-state-schema.md");
+    writeFileSync(filePath, "# State Schema\n\n## KV Buckets\n\nBuckets.\n");
+    indexFile(db, filePath, tmpDir);
+
+    const doc = db
+      .query<{ last_status_change: string | null }, []>(
+        "SELECT last_status_change FROM documents"
+      )
+      .get();
+    expect(doc!.last_status_change).toBeNull();
+  });
+
+  test("commit_count starts at 0 (lineage scanner owns it)", () => {
+    const filePath = join(docsDir, "adr-0001-telemetry.md");
+    writeFileSync(filePath, "# ADR: Telemetry\n\n**Status**: accepted\n\n## Overview\n\nContent.\n");
+    indexFile(db, filePath, tmpDir);
+
+    const doc = db
+      .query<{ commit_count: number }, []>("SELECT commit_count FROM documents")
+      .get();
+    expect(doc!.commit_count).toBe(0);
+  });
+
   test("category classified from filename prefix", () => {
     // adr- prefix → adr
     const filePath = join(docsDir, "adr-2026-04-10-something.md");
@@ -240,8 +290,8 @@ describe("indexAllDocs", () => {
     writeFileSync(join(docsDir, "adr-2026-04-10-a.md"), "# Doc A\n\n## Section A\n\nContent.\n");
     writeFileSync(join(docsDir, "adr-2026-04-10-b.md"), "# Doc B\n\n## Section B\n\nContent.\n");
 
-    const count = indexAllDocs(db, docsDir, tmpDir);
-    expect(count).toBe(2);
+    const changed = indexAllDocs(db, docsDir, tmpDir);
+    expect(changed.length).toBe(2);
 
     const docs = db.query<{ path: string }, []>("SELECT path FROM documents ORDER BY path").all();
     expect(docs.length).toBe(2);
@@ -249,10 +299,10 @@ describe("indexAllDocs", () => {
     expect(docs[1].path).toBe("docs/adr-2026-04-10-b.md");
   });
 
-  test("returns 0 when docs dir does not exist", () => {
+  test("returns empty array when docs dir does not exist", () => {
     const nonExistentDir = join(tmpDir, "nonexistent");
-    const count = indexAllDocs(db, nonExistentDir, tmpDir);
-    expect(count).toBe(0);
+    const changed = indexAllDocs(db, nonExistentDir, tmpDir);
+    expect(changed).toEqual([]);
   });
 
   test("removes stale entries for deleted files", () => {
@@ -279,11 +329,11 @@ describe("indexAllDocs", () => {
     writeFileSync(join(docsDir, "README.txt"), "Not a markdown file");
     writeFileSync(join(docsDir, "notes.json"), '{"foo": "bar"}');
 
-    const count = indexAllDocs(db, docsDir, tmpDir);
-    expect(count).toBe(1);
+    const changed = indexAllDocs(db, docsDir, tmpDir);
+    expect(changed.length).toBe(1);
   });
 
-  test("returns count incremented for reindexed + stale-removed files", () => {
+  test("returns doc paths for reindexed files (stale-removed files not in return)", () => {
     const fileA = join(docsDir, "adr-2026-04-10-a.md");
     const fileB = join(docsDir, "adr-2026-04-10-b.md");
     writeFileSync(fileA, "# Doc A\n\n## Section A\n\nContent.\n");
@@ -294,8 +344,10 @@ describe("indexAllDocs", () => {
     unlinkSync(fileB);
     db.run("UPDATE documents SET mtime = 0 WHERE path = 'docs/adr-2026-04-10-a.md'");
 
-    const count = indexAllDocs(db, docsDir, tmpDir);
-    // A is reindexed (1), B is stale-removed (1) → count = 2
-    expect(count).toBe(2);
+    const changed = indexAllDocs(db, docsDir, tmpDir);
+    // Only A was actually reindexed (indexFile returned true for A)
+    // B was deleted from the DB but not returned in changed (stale removal)
+    expect(changed).toContain("docs/adr-2026-04-10-a.md");
+    expect(changed).not.toContain("docs/adr-2026-04-10-b.md");
   });
 });

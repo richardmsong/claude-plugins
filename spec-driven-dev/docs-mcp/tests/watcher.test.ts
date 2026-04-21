@@ -19,6 +19,8 @@ function makeTestDb(): Database {
       category TEXT,
       title TEXT,
       status TEXT,
+      commit_count INTEGER NOT NULL DEFAULT 0,
+      last_status_change TEXT,
       mtime REAL NOT NULL
     );
 
@@ -306,5 +308,73 @@ describe("watcher HEAD change detection", () => {
       )
       .get();
     expect(metaRow).toBeDefined();
+  });
+});
+
+// ---- onReindex callback tests ----
+
+describe("startWatcher onReindex callback", () => {
+  let db: Database;
+  let tmpDir: string;
+  let docsDir: string;
+
+  beforeEach(() => {
+    db = makeTestDb();
+    tmpDir = mkdtempSync(join(tmpdir(), "docs-mcp-cb-test-"));
+    docsDir = join(tmpDir, "docs");
+    mkdirSync(docsDir);
+  });
+
+  afterEach(() => {
+    db.close();
+    try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+  });
+
+  test("onReindex called with changed paths when a file is written", async () => {
+    const filePath = join(docsDir, "adr-0001-foo.md");
+    writeFileSync(filePath, "# Foo\n\n## Overview\n\nContent.\n");
+
+    const calledWith: string[][] = [];
+    const stop = startWatcher(db, docsDir, tmpDir, (changed) => {
+      calledWith.push([...changed]);
+    });
+
+    // Update the file (trigger a change event)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Force reindex by clearing mtime so indexFile considers it changed
+    db.run("UPDATE documents SET mtime = 0 WHERE path LIKE 'docs/%'");
+    writeFileSync(filePath, "# Foo\n\n## Updated\n\nNew content.\n");
+
+    // Wait for debounce + callback
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    stop();
+
+    // At least one callback should have fired with the changed path
+    expect(calledWith.length).toBeGreaterThan(0);
+    const allPaths = calledWith.flat();
+    expect(allPaths.some((p) => p.includes("adr-0001-foo"))).toBe(true);
+  });
+
+  test("onReindex not called when no files changed (mtime unchanged)", async () => {
+    const filePath = join(docsDir, "spec-state-schema.md");
+    writeFileSync(filePath, "# State Schema\n\n## KV Buckets\n\nContent.\n");
+
+    // Pre-index so mtime is already recorded
+    const { indexFile } = await import("../src/content-indexer.js");
+    indexFile(db, filePath, tmpDir);
+
+    const calledWith: string[][] = [];
+    const stop = startWatcher(db, docsDir, tmpDir, (changed) => {
+      calledWith.push([...changed]);
+    });
+
+    // Wait — no file changes
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    stop();
+
+    // No callback should fire (file mtime unchanged)
+    for (const paths of calledWith) {
+      expect(paths.length).toBe(0);
+    }
   });
 });

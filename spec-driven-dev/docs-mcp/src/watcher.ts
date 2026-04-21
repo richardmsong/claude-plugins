@@ -1,13 +1,18 @@
 import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
-import { join } from "path";
+import { join, relative } from "path";
 import { indexFile, indexAllDocs } from "./content-indexer.js";
 import { runLineageScan, getHeadCommit } from "./lineage-scanner.js";
 
 const DEBOUNCE_MS = 100;
 const POLL_INTERVAL_MS = 5000;
 
-export function startWatcher(db: Database, docsDir: string, repoRoot: string): () => void {
+export function startWatcher(
+  db: Database,
+  docsDir: string,
+  repoRoot: string,
+  onReindex?: (changed: string[]) => void
+): () => void {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let lastHead: string | null = getHeadCommit(repoRoot);
   let stopped = false;
@@ -23,18 +28,24 @@ export function startWatcher(db: Database, docsDir: string, repoRoot: string): (
   const runReindex = (event?: string, filename?: string | null) => {
     if (stopped) return;
 
+    const changedPaths: string[] = [];
+
     // If a specific .md file changed, reindex just that file
     if (filename && filename.endsWith(".md")) {
       const fullPath = join(docsDir, filename);
       try {
-        indexFile(db, fullPath, repoRoot);
+        const reindexed = indexFile(db, fullPath, repoRoot);
+        if (reindexed) {
+          changedPaths.push(relative(repoRoot, fullPath).replace(/\\/g, "/"));
+        }
       } catch (err) {
         console.warn(`[docs-mcp] Error indexing ${fullPath}: ${err}`);
       }
     } else {
       // Re-stat all docs files
       try {
-        indexAllDocs(db, docsDir, repoRoot);
+        const reindexed = indexAllDocs(db, docsDir, repoRoot);
+        for (const p of reindexed) changedPaths.push(p);
       } catch (err) {
         console.warn(`[docs-mcp] Error during full reindex: ${err}`);
       }
@@ -49,6 +60,12 @@ export function startWatcher(db: Database, docsDir: string, repoRoot: string): (
       } catch (err) {
         console.warn(`[docs-mcp] Lineage scan error: ${err}`);
       }
+    }
+
+    // Invoke onReindex callback with deduped changed paths
+    if (onReindex && changedPaths.length > 0) {
+      const deduped = Array.from(new Set(changedPaths));
+      onReindex(deduped);
     }
   };
 

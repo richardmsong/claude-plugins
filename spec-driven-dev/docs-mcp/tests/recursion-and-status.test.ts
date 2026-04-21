@@ -35,6 +35,8 @@ function makeTestDb(): Database {
       category TEXT,
       title TEXT,
       status TEXT,
+      commit_count INTEGER NOT NULL DEFAULT 0,
+      last_status_change TEXT,
       mtime REAL NOT NULL
     );
 
@@ -164,8 +166,8 @@ describe("indexAllDocs recursion", () => {
       "# Design System\n\n## Tokens\n\nDesign tokens here.\n"
     );
 
-    const count = indexAllDocs(db, docsDir, tmpDir);
-    expect(count).toBe(1);
+    const changed = indexAllDocs(db, docsDir, tmpDir);
+    expect(changed.length).toBe(1);
 
     const doc = db
       .query<{ path: string; category: string }, []>(
@@ -218,8 +220,8 @@ describe("indexAllDocs recursion", () => {
       "# Dashboard\n\n## Screens\n\nDashboard screen.\n"
     );
 
-    const count = indexAllDocs(db, docsDir, tmpDir);
-    expect(count).toBe(3);
+    const changed = indexAllDocs(db, docsDir, tmpDir);
+    expect(changed.length).toBe(3);
 
     const paths = db
       .query<{ path: string }, []>("SELECT path FROM documents ORDER BY path")
@@ -249,8 +251,8 @@ describe("indexAllDocs recursion", () => {
     }
 
     // Should not hang or crash — the symlink is skipped
-    const count = indexAllDocs(db, docsDir, tmpDir);
-    expect(count).toBe(1); // Only the real spec-nav.md
+    const changed = indexAllDocs(db, docsDir, tmpDir);
+    expect(changed.length).toBe(1); // Only the real spec-nav.md
 
     const paths = db
       .query<{ path: string }, []>("SELECT path FROM documents")
@@ -599,10 +601,10 @@ describe("searchDocs status filter", () => {
 });
 
 // ============================================================
-// 5. get_lineage skips draft/superseded/withdrawn ADRs
+// 5. get_lineage returns ALL statuses (per ADR-0027 amending ADR-0018)
 // ============================================================
 
-describe("getLineage status filter", () => {
+describe("getLineage — no status filter (ADR-0027)", () => {
   let db: Database;
 
   beforeEach(() => {
@@ -664,7 +666,7 @@ describe("getLineage status filter", () => {
     expect(paths).toContain("docs/adr-0006-implemented.md");
   });
 
-  test("returns spec edges (null status — always included)", () => {
+  test("returns spec edges (null status)", () => {
     const results = getLineage(db, {
       doc_path: "docs/adr-0016-nats-security.md",
       heading: "Security",
@@ -673,40 +675,53 @@ describe("getLineage status filter", () => {
     expect(paths).toContain("docs/spec-state-schema.md");
   });
 
-  test("excludes draft ADR edges", () => {
+  test("includes draft ADR edges (historical context per ADR-0027)", () => {
     const results = getLineage(db, {
       doc_path: "docs/adr-0016-nats-security.md",
       heading: "Security",
     });
     const paths = results.map((r) => r.doc_path);
-    expect(paths).not.toContain("docs/adr-0002-draft.md");
+    expect(paths).toContain("docs/adr-0002-draft.md");
   });
 
-  test("excludes superseded ADR edges", () => {
+  test("includes superseded ADR edges (historical context per ADR-0027)", () => {
     const results = getLineage(db, {
       doc_path: "docs/adr-0016-nats-security.md",
       heading: "Security",
     });
     const paths = results.map((r) => r.doc_path);
-    expect(paths).not.toContain("docs/adr-0004-superseded.md");
+    expect(paths).toContain("docs/adr-0004-superseded.md");
   });
 
-  test("excludes withdrawn ADR edges", () => {
+  test("includes withdrawn ADR edges (historical context per ADR-0027)", () => {
     const results = getLineage(db, {
       doc_path: "docs/adr-0016-nats-security.md",
       heading: "Security",
     });
     const paths = results.map((r) => r.doc_path);
-    expect(paths).not.toContain("docs/adr-0005-withdrawn.md");
+    expect(paths).toContain("docs/adr-0005-withdrawn.md");
   });
 
-  test("total returned edges: only accepted + implemented ADRs + null-status specs", () => {
+  test("total returned edges: all 6 — no status filtering", () => {
     const results = getLineage(db, {
       doc_path: "docs/adr-0016-nats-security.md",
       heading: "Security",
     });
-    // Accepted: adr-0003-k8s, Implemented: adr-0006-implemented, Spec: spec-state-schema
-    // Excluded: draft, superseded, withdrawn
-    expect(results.length).toBe(3);
+    // All 6 edges returned: accepted, draft, superseded, withdrawn, implemented, spec
+    expect(results.length).toBe(6);
+  });
+
+  test("each result includes a status field", () => {
+    const results = getLineage(db, {
+      doc_path: "docs/adr-0016-nats-security.md",
+      heading: "Security",
+    });
+    const draftRow = results.find((r) => r.doc_path === "docs/adr-0002-draft.md");
+    expect(draftRow).toBeDefined();
+    expect(draftRow!.status).toBe("draft");
+
+    const specRow = results.find((r) => r.doc_path === "docs/spec-state-schema.md");
+    expect(specRow).toBeDefined();
+    expect(specRow!.status).toBeNull();
   });
 });

@@ -1,6 +1,9 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { getSection, listDocs } from "../src/tools.js";
+import { mkdtempSync, writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+import { getSection, listDocs, readRawDoc, NotFoundError } from "../src/tools.js";
 
 function makeTestDb(): Database {
   const db = new Database(":memory:");
@@ -13,6 +16,8 @@ function makeTestDb(): Database {
       category TEXT,
       title TEXT,
       status TEXT,
+      commit_count INTEGER NOT NULL DEFAULT 0,
+      last_status_change TEXT,
       mtime REAL NOT NULL
     );
 
@@ -229,5 +234,72 @@ describe("listDocs", () => {
     expect(k8s!.sections[0].heading).toBe("Overview");
     expect(k8s!.sections[1].heading).toBe("Security");
     expect(k8s!.sections[0].line_start).toBeLessThan(k8s!.sections[1].line_start);
+  });
+
+  test("listDocs result includes status, commit_count, last_status_change fields", () => {
+    // The insertDoc helper inserts with mtime=0 and no status/commit_count/last_status_change
+    const results = listDocs(db, { category: "adr" });
+    expect(results.length).toBeGreaterThan(0);
+    for (const doc of results) {
+      // Fields exist (may be null/0)
+      expect("status" in doc).toBe(true);
+      expect("commit_count" in doc).toBe(true);
+      expect("last_status_change" in doc).toBe(true);
+      expect(typeof doc.commit_count).toBe("number");
+    }
+  });
+});
+
+// ============================================================
+// readRawDoc — security and NotFoundError
+// ============================================================
+
+describe("readRawDoc", () => {
+  let repoRoot: string;
+  let docsDir: string;
+
+  beforeEach(() => {
+    repoRoot = mkdtempSync(join(tmpdir(), "docs-mcp-rawdoc-"));
+    docsDir = join(repoRoot, "docs");
+    mkdirSync(docsDir);
+  });
+
+  test("reads a file inside docs/ successfully", () => {
+    const docPath = "docs/adr-0001-telemetry.md";
+    writeFileSync(join(repoRoot, docPath), "# Telemetry\n\n## Overview\n\nContent.\n");
+    const content = readRawDoc(repoRoot, docPath);
+    expect(content).toContain("# Telemetry");
+  });
+
+  test("throws NotFoundError for missing file", () => {
+    expect(() => readRawDoc(repoRoot, "docs/nonexistent.md")).toThrow(NotFoundError);
+  });
+
+  test("NotFoundError is an Error instance", () => {
+    try {
+      readRawDoc(repoRoot, "docs/missing.md");
+    } catch (err) {
+      expect(err).toBeInstanceOf(NotFoundError);
+      expect(err).toBeInstanceOf(Error);
+    }
+  });
+
+  test("rejects path escape via '..'", () => {
+    // Attempt to read a file outside repoRoot via ../ traversal
+    expect(() => readRawDoc(repoRoot, "docs/../../../etc/passwd")).toThrow();
+  });
+
+  test("rejects path that resolves outside docs/ but inside repoRoot", () => {
+    // A file inside repoRoot but not inside repoRoot/docs/
+    writeFileSync(join(repoRoot, "secret.md"), "secret content");
+    expect(() => readRawDoc(repoRoot, "secret.md")).toThrow(NotFoundError);
+  });
+
+  test("reads a file in a subdirectory inside docs/", () => {
+    const subDir = join(docsDir, "mclaude-docs-mcp");
+    mkdirSync(subDir);
+    writeFileSync(join(subDir, "spec-docs-mcp.md"), "# Docs MCP\n\n## Role\n\nContent.\n");
+    const content = readRawDoc(repoRoot, "docs/mclaude-docs-mcp/spec-docs-mcp.md");
+    expect(content).toContain("# Docs MCP");
   });
 });

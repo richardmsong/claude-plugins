@@ -224,6 +224,15 @@ export function runLineageScan(db: Database, repoRoot: string): void {
 export function processCommitForLineage(db: Database, repoRoot: string, commitHash: string): void {
   const modifiedFiles = getModifiedDocFiles(repoRoot, commitHash);
 
+  // Tally commit_count for EVERY modified file, including solo commits, so
+  // the per-doc volatility metric counts all edits (per ADR-0027).
+  for (const filePath of modifiedFiles) {
+    db.run(
+      "UPDATE documents SET commit_count = commit_count + 1 WHERE path = ?",
+      [filePath]
+    );
+  }
+
   if (modifiedFiles.length < 2) {
     // No cross-doc lineage possible
     return;

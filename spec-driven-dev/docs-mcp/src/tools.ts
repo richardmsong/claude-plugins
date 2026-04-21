@@ -1,4 +1,6 @@
 import { Database } from "bun:sqlite";
+import { existsSync, readFileSync } from "fs";
+import { join, resolve } from "path";
 import { z } from "zod";
 
 // ---- Type helpers ----
@@ -29,6 +31,7 @@ interface LineageResult {
   doc_title: string | null;
   category: string | null;
   heading: string;
+  status: string | null;
   commit_count: number;
   last_commit: string;
 }
@@ -37,6 +40,9 @@ interface ListDoc {
   doc_path: string;
   title: string | null;
   category: string | null;
+  status: string | null;
+  commit_count: number;
+  last_status_change: string | null;
   sections: { heading: string; line_start: number; line_end: number }[];
 }
 
@@ -148,26 +154,23 @@ export function getLineage(
 ): LineageResult[] {
   const { doc_path, heading } = args;
 
-  // Only traverse edges where the connected document is an ADR with
-  // accepted or implemented status (per ADR-0018). Non-ADR docs (specs) have
-  // null status and are always included. Draft/superseded/withdrawn ADRs are excluded.
+  // Per ADR-0027 (amending ADR-0018): no status filter applied. All statuses
+  // are returned so callers can see historical context. Superseded/withdrawn ADRs
+  // are "tried but not current"; drafts are "in-progress design thinking." Use
+  // the `status` field for framing rather than filtering them out.
   return db
     .query<LineageResult, [string, string]>(
       `SELECT
          l.section_b_doc AS doc_path,
          d.title AS doc_title,
          d.category,
+         d.status,
          l.section_b_heading AS heading,
          l.commit_count,
          l.last_commit
        FROM lineage l
        JOIN documents d ON d.path = l.section_b_doc
        WHERE l.section_a_doc = ? AND l.section_a_heading = ?
-         AND (
-           d.category != 'adr'
-           OR d.status IS NULL
-           OR d.status IN ('accepted', 'implemented')
-         )
        ORDER BY l.commit_count DESC`
     )
     .all(doc_path, heading);
@@ -189,10 +192,18 @@ export function listDocs(db: Database, args: z.infer<typeof ListDocsSchema>): Li
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const sql = `SELECT id, path, title, category FROM documents ${where} ORDER BY path`;
+  const sql = `SELECT id, path, title, category, status, commit_count, last_status_change FROM documents ${where} ORDER BY path`;
 
   const docs = db
-    .query<{ id: number; path: string; title: string | null; category: string | null }, string[]>(sql)
+    .query<{
+      id: number;
+      path: string;
+      title: string | null;
+      category: string | null;
+      status: string | null;
+      commit_count: number;
+      last_status_change: string | null;
+    }, string[]>(sql)
     .all(...params);
 
   return docs.map((doc) => {
@@ -206,7 +217,54 @@ export function listDocs(db: Database, args: z.infer<typeof ListDocsSchema>): Li
       doc_path: doc.path,
       title: doc.title,
       category: doc.category,
+      status: doc.status,
+      commit_count: doc.commit_count,
+      last_status_change: doc.last_status_change,
       sections,
     };
   });
+}
+
+// ---- Shared helpers (not MCP tools) ----
+
+/**
+ * Error thrown by readRawDoc when a document is not found.
+ */
+export class NotFoundError extends Error {
+  constructor(docPath: string) {
+    super(`Document not found: ${docPath}`);
+    this.name = "NotFoundError";
+  }
+}
+
+/**
+ * Read the raw markdown content of a document in the docs/ tree.
+ *
+ * Security:
+ * - The resolved path must remain inside repoRoot (rejects ".." escape).
+ * - The resolved path must be inside <repoRoot>/docs/ (prevents reading
+ *   non-doc files even if they are inside repoRoot).
+ *
+ * Throws NotFoundError if the file does not exist.
+ */
+export function readRawDoc(repoRoot: string, docPath: string): string {
+  const absRepoRoot = resolve(repoRoot);
+  const absDocsRoot = join(absRepoRoot, "docs");
+  const absPath = resolve(absRepoRoot, docPath);
+
+  // Must remain inside repoRoot
+  if (!absPath.startsWith(absRepoRoot + "/") && absPath !== absRepoRoot) {
+    throw new NotFoundError(docPath);
+  }
+
+  // Must be inside <repoRoot>/docs/
+  if (!absPath.startsWith(absDocsRoot + "/") && absPath !== absDocsRoot) {
+    throw new NotFoundError(docPath);
+  }
+
+  if (!existsSync(absPath)) {
+    throw new NotFoundError(docPath);
+  }
+
+  return readFileSync(absPath, "utf8");
 }

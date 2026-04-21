@@ -13,6 +13,8 @@ function makeTestDb(): Database {
       category TEXT,
       title TEXT,
       status TEXT,
+      commit_count INTEGER NOT NULL DEFAULT 0,
+      last_status_change TEXT,
       mtime REAL NOT NULL
     );
 

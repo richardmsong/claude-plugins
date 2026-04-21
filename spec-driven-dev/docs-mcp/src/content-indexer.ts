@@ -77,16 +77,17 @@ export function indexFile(db: Database, filePath: string, repoRoot: string): boo
 
   db.run("BEGIN");
   try {
-    // Upsert document
+    // Upsert document (commit_count is owned by the lineage scanner — not touched here)
     db.run(
-      `INSERT INTO documents(path, category, title, status, mtime)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO documents(path, category, title, status, last_status_change, mtime)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(path) DO UPDATE SET
          category = excluded.category,
          title = excluded.title,
          status = excluded.status,
+         last_status_change = excluded.last_status_change,
          mtime = excluded.mtime`,
-      [docPath, category, parsed.title, parsed.status, mtime]
+      [docPath, category, parsed.title, parsed.status, parsed.lastStatusChange, mtime]
     );
 
     const docRow = db
@@ -124,25 +125,29 @@ export function removeFile(db: Database, filePath: string, repoRoot: string): vo
 
 /**
  * Index all .md files in the docs/ directory.
- * Returns count of files reindexed.
+ * Returns the repo-root-relative POSIX paths of files that were actually reindexed
+ * (i.e. where indexFile returned true). Callers that only need the count can read
+ * result.length.
  */
-export function indexAllDocs(db: Database, docsDir: string, repoRoot: string): number {
+export function indexAllDocs(db: Database, docsDir: string, repoRoot: string): string[] {
   if (!existsSync(docsDir)) {
     console.warn(`[docs-mcp] docs/ directory not found at ${docsDir}`);
-    return 0;
+    return [];
   }
 
-  let count = 0;
+  const changed: string[] = [];
   let files: string[];
   try {
     files = walkMdFiles(docsDir);
   } catch (err) {
     console.warn(`[docs-mcp] Cannot read docs/: ${err}`);
-    return 0;
+    return [];
   }
 
   for (const file of files) {
-    if (indexFile(db, file, repoRoot)) count++;
+    if (indexFile(db, file, repoRoot)) {
+      changed.push(relative(repoRoot, file).replace(/\\/g, "/"));
+    }
   }
 
   // Remove DB entries for files that no longer exist on disk
@@ -156,9 +161,8 @@ export function indexAllDocs(db: Database, docsDir: string, repoRoot: string): n
   for (const row of allIndexed) {
     if (!docPaths.includes(row.path)) {
       db.run("DELETE FROM documents WHERE path = ?", [row.path]);
-      count++;
     }
   }
 
-  return count;
+  return changed;
 }

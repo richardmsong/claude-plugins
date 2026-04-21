@@ -29,8 +29,8 @@ const db = openDb(dbPath);
 
 // Initial content index
 try {
-  const count = indexAllDocs(db, docsDir, repoRoot);
-  console.error(`[docs-mcp] Initial content index: ${count} file(s) reindexed`);
+  const changed = indexAllDocs(db, docsDir, repoRoot);
+  console.error(`[docs-mcp] Initial content index: ${changed.length} file(s) reindexed`);
 } catch (err) {
   console.error(`[docs-mcp] Initial content index error: ${err}`);
 }
@@ -105,7 +105,9 @@ server.tool(
 // Tool: get_lineage
 server.tool(
   "get_lineage",
-  "Find all sections co-modified with the given section in git history, sorted by co-commit count.",
+  "Find all sections co-modified with the given section in git history, sorted by co-commit count. " +
+  "Returned rows may include superseded or withdrawn ADRs — treat those as 'tried but not current' historical context. " +
+  "Drafts are 'in-progress design thinking.' Use the `status` field for framing.",
   GetLineageSchema.shape,
   async (args) => {
     try {

@@ -27,6 +27,8 @@ function makeTestDb(): Database {
       category TEXT,
       title TEXT,
       status TEXT,
+      commit_count INTEGER NOT NULL DEFAULT 0,
+      last_status_change TEXT,
       mtime REAL NOT NULL
     );
 
@@ -468,5 +470,60 @@ describe("runLineageScan", () => {
     } finally {
       cleanTempRepo(nonGitDir);
     }
+  });
+
+  test("commit_count incremented for solo commits (ADR-0027: count before early return)", () => {
+    // Pre-insert the document so the UPDATE has a row to touch
+    db.run(
+      "INSERT INTO documents(path, category, title, status, mtime) VALUES (?, ?, ?, ?, 0)",
+      ["docs/adr-solo.md", "adr", "Solo ADR", "accepted"]
+    );
+
+    // Commit that touches only one doc (solo → no lineage edges, but commit_count should increment)
+    writeFileSync(join(repo.docsDir, "adr-solo.md"), "# Solo ADR\n\n## Overview\n\nSolo content.\n");
+    gitCommit(repo.repoRoot, "solo commit");
+
+    runLineageScan(db, repo.repoRoot);
+
+    const doc = db
+      .query<{ commit_count: number }, [string]>(
+        "SELECT commit_count FROM documents WHERE path = ?"
+      )
+      .get("docs/adr-solo.md");
+    expect(doc).toBeDefined();
+    // Solo commit → lineage skipped, but commit_count tallied
+    expect(doc!.commit_count).toBe(1);
+
+    // Also verify no lineage edges were written (only one doc in commit)
+    const edges = db.query<{ count: number }, []>("SELECT count(*) as count FROM lineage").get()!;
+    expect(edges.count).toBe(0);
+  });
+
+  test("commit_count tallied for all docs in multi-doc commit", () => {
+    // Pre-insert both documents
+    db.run(
+      "INSERT INTO documents(path, category, title, status, mtime) VALUES (?, ?, ?, ?, 0)",
+      ["docs/adr-alpha.md", "adr", "Alpha", "accepted"]
+    );
+    db.run(
+      "INSERT INTO documents(path, category, title, status, mtime) VALUES (?, ?, ?, ?, 0)",
+      ["docs/adr-beta.md", "adr", "Beta", "accepted"]
+    );
+
+    writeFileSync(join(repo.docsDir, "adr-alpha.md"), "# Alpha\n\n## Section A\n\nContent.\n");
+    writeFileSync(join(repo.docsDir, "adr-beta.md"), "# Beta\n\n## Section B\n\nContent.\n");
+    gitCommit(repo.repoRoot, "add both docs");
+
+    runLineageScan(db, repo.repoRoot);
+
+    const alpha = db
+      .query<{ commit_count: number }, [string]>("SELECT commit_count FROM documents WHERE path = ?")
+      .get("docs/adr-alpha.md");
+    const beta = db
+      .query<{ commit_count: number }, [string]>("SELECT commit_count FROM documents WHERE path = ?")
+      .get("docs/adr-beta.md");
+
+    expect(alpha!.commit_count).toBe(1);
+    expect(beta!.commit_count).toBe(1);
   });
 });

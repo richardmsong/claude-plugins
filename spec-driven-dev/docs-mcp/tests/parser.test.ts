@@ -82,6 +82,95 @@ describe("parseMarkdown", () => {
   });
 });
 
+describe("parseMarkdown — lastStatusChange", () => {
+  test("extracts the latest date from a status history list", () => {
+    const md = [
+      "# ADR: Foo",
+      "",
+      "**Status**: implemented",
+      "**Status history**:",
+      "- 2026-04-19: accepted",
+      "- 2026-04-20: implemented",
+      "",
+      "## Overview",
+      "Content.",
+    ].join("\n");
+    const result = parseMarkdown(md);
+    expect(result.lastStatusChange).toBe("2026-04-20");
+  });
+
+  test("returns the lexicographically maximum date when dates are out of order", () => {
+    const md = [
+      "# ADR: Foo",
+      "",
+      "**Status**: implemented",
+      "**Status history**:",
+      "- 2026-04-21: accepted",
+      "- 2026-04-19: draft",
+      "- 2026-04-20: implemented",
+      "",
+      "## Overview",
+      "Content.",
+    ].join("\n");
+    const result = parseMarkdown(md);
+    expect(result.lastStatusChange).toBe("2026-04-21");
+  });
+
+  test("returns null when no status history marker present", () => {
+    const md = "# ADR: Foo\n\n**Status**: accepted\n\n## Overview\n\nContent.\n";
+    expect(parseMarkdown(md).lastStatusChange).toBeNull();
+  });
+
+  test("returns null when history list is empty (marker present, no bullets)", () => {
+    const md = [
+      "# ADR: Foo",
+      "",
+      "**Status**: accepted",
+      "**Status history**:",
+      "",
+      "## Overview",
+      "Content.",
+    ].join("\n");
+    expect(parseMarkdown(md).lastStatusChange).toBeNull();
+  });
+
+  test("stops scanning history on first non-bullet line", () => {
+    const md = [
+      "# ADR: Foo",
+      "",
+      "**Status**: accepted",
+      "**Status history**:",
+      "- 2026-04-19: accepted",
+      "not a bullet",
+      "- 2026-04-25: implemented",  // should NOT be picked up
+      "",
+      "## Overview",
+      "Content.",
+    ].join("\n");
+    // Only "2026-04-19" is in the consecutive run
+    expect(parseMarkdown(md).lastStatusChange).toBe("2026-04-19");
+  });
+
+  test("returns null for a spec doc with no status history", () => {
+    const md = "# State Schema\n\n## KV Buckets\n\nBuckets here.\n";
+    expect(parseMarkdown(md).lastStatusChange).toBeNull();
+  });
+
+  test("single history entry returns that date", () => {
+    const md = [
+      "# ADR: Bar",
+      "",
+      "**Status**: accepted",
+      "**Status history**:",
+      "- 2026-04-17: accepted",
+      "",
+      "## Overview",
+      "Content.",
+    ].join("\n");
+    expect(parseMarkdown(md).lastStatusChange).toBe("2026-04-17");
+  });
+});
+
 describe("classifyCategory", () => {
   test("adr- prefix → adr", () => {
     expect(classifyCategory("docs/adr-2026-04-10-k8s-integration.md")).toBe("adr");
