@@ -90,18 +90,23 @@ export function handleDoc(db: Database, repoRoot: string, url: URL): Response {
 }
 
 /**
- * GET /api/lineage?doc=<p>&heading=<h>
+ * GET /api/lineage?doc=<p>[&heading=<h>]
+ *
+ * When heading is omitted (or empty), returns doc-level lineage: one row per
+ * co-committed document, aggregated across all sections of the queried doc
+ * (ADR-0031). When heading is provided, returns section-level lineage for that
+ * heading (existing behaviour).
+ *
  * Returns: LineageResult[]
  */
 export function handleLineage(db: Database, url: URL): Response {
   const docPath = url.searchParams.get("doc");
-  const heading = url.searchParams.get("heading");
+  // heading is optional per ADR-0031: absent/empty → doc mode
+  const headingParam = url.searchParams.get("heading");
+  const heading = headingParam || undefined;
 
   if (!docPath) {
     return badRequest("Missing required query param: doc");
-  }
-  if (!heading) {
-    return badRequest("Missing required query param: heading");
   }
 
   try {

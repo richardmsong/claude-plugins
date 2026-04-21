@@ -167,13 +167,66 @@ describe("handleLineage", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 when heading is missing", () => {
+  it("returns 200 (doc mode) when heading is absent (ADR-0031)", async () => {
+    // heading is now optional — absent heading triggers doc-level aggregation,
+    // not a 400 error.
     const url = new URL(
       "http://localhost/api/lineage?doc=" +
         encodeURIComponent("docs/adr-0001-test-feature.md")
     );
     const res = handleLineage(db, url);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  it("returns 200 (doc mode) when heading is empty string (ADR-0031)", async () => {
+    const url = new URL(
+      "http://localhost/api/lineage?doc=" +
+        encodeURIComponent("docs/adr-0001-test-feature.md") +
+        "&heading="
+    );
+    const res = handleLineage(db, url);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  it("doc mode: aggregates multiple section-pairs into one row per co-committed doc (ADR-0031)", async () => {
+    // Seed two lineage edges from the ADR to the spec, via different sections
+    insertLineage(db, [
+      {
+        section_a_doc: "docs/adr-0001-test-feature.md",
+        section_a_heading: "Overview",
+        section_b_doc: "docs/spec-test-component.md",
+        section_b_heading: "Role",
+        commit_count: 3,
+        last_commit: "aaa000",
+      },
+      {
+        section_a_doc: "docs/adr-0001-test-feature.md",
+        section_a_heading: "Implementation",
+        section_b_doc: "docs/spec-test-component.md",
+        section_b_heading: "Endpoints",
+        commit_count: 2,
+        last_commit: "bbb111",
+      },
+    ]);
+
+    // Doc mode: no heading param → aggregate by section_b_doc
+    const url = new URL(
+      "http://localhost/api/lineage?doc=" +
+        encodeURIComponent("docs/adr-0001-test-feature.md")
+    );
+    const res = handleLineage(db, url);
+    expect(res.status).toBe(200);
+    const data = await res.json() as { doc_path: string; commit_count: number; heading: string }[];
+
+    // Only one row for the spec doc (aggregated from two section-pairs)
+    expect(data.length).toBe(1);
+    expect(data[0].doc_path).toBe("docs/spec-test-component.md");
+    expect(data[0].commit_count).toBe(5); // 3 + 2
+    expect(data[0].heading).toBe("");     // empty string in doc mode
   });
 
   it("re-throws (does not return 404) when a non-NotFoundError is thrown — e.g. closed DB", () => {
