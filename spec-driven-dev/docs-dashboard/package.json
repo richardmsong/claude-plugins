@@ -1,0 +1,21 @@
+{
+  "name": "mclaude-docs-dashboard",
+  "version": "1.0.0",
+  "description": "Local development dashboard for the mclaude docs corpus",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "dashboard": "bun run src/server.ts",
+    "build:ui": "cd ui && bun run build",
+    "dev:ui": "cd ui && bun run dev",
+    "test": "bun test",
+    "test:ui": "cd ui && bun run test"
+  },
+  "dependencies": {
+    "mclaude-docs-mcp": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}
