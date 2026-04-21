@@ -1,9 +1,10 @@
 # ADR: Docs Dashboard
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-21: draft
 - 2026-04-21: accepted — paired with docs/mclaude-docs-mcp/spec-docs-mcp.md (new) and docs/mclaude-docs-dashboard/spec-dashboard.md (new)
+- 2026-04-21: implemented — all scope CLEAN (docs-mcp + docs-dashboard spec-evaluator)
 
 ## Overview
 
