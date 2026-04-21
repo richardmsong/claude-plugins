@@ -10,7 +10,7 @@ Established by ADR-0015 (the v1 design), extended by ADR-0018 (status column + s
 
 - Bun (loads `.ts` files natively; no build step).
 - Single-process; stdio transport for MCP. No HTTP, no auth, no network.
-- Entrypoint: `mclaude-docs-mcp/src/index.ts`. On boot: resolves repo root by walking up from `process.cwd()` until a `.git` directory is found; opens the SQLite DB at `<repoRoot>/mclaude-docs-mcp/.docs-index.db`; runs `indexAllDocs` once; starts `startWatcher` for the process lifetime; registers the four MCP tools.
+- Entrypoint: `mclaude-docs-mcp/src/index.ts`. On boot: resolves repo root via a two-level ascent from `import.meta.url` (the entry file lives at `mclaude-docs-mcp/src/index.ts`, a fixed depth below the repo root); opens the SQLite DB at `<repoRoot>/mclaude-docs-mcp/.docs-index.db`; runs `indexAllDocs`; runs `runLineageScan` (initial lineage derivation from `git log`); starts `startWatcher` for the process lifetime; registers the four MCP tools.
 
 ## Data store
 
@@ -102,7 +102,7 @@ The MCP entrypoint does not pass an `onReindex` callback — the MCP server is a
 
 ## Lineage scanner (`src/lineage-scanner.ts`)
 
-Runs on-demand (not on boot by default — triggered by the MCP tool or a CLI command in the current v1 contract; see ADR-0015). Iterates every commit in the repo whose diff touches `docs/*.md`, starting from `metadata.last_lineage_commit + 1` if present, else from the repo's first commit. For each commit:
+Runs on every boot of the MCP server, and again via the watcher whenever HEAD advances (per ADR-0015 § "Lineage reindex trigger"). Iterates every commit in the repo whose diff touches `docs/*.md`, starting from `metadata.last_lineage_commit + 1` if present, else from the repo's first commit. For each commit:
 
 1. Compute the list of modified `.md` files under `docs/`.
 2. For each modified file, increment `documents.commit_count` by 1 (per ADR-0027 — this runs **before** the `modifiedFiles.length < 2` check so solo commits are counted for volatility).
