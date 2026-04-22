@@ -1,10 +1,10 @@
 import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
-import { join, dirname } from "path";
-import { openDb } from "mclaude-docs-mcp/db";
-import { indexAllDocs } from "mclaude-docs-mcp/content-indexer";
-import { runLineageScan } from "mclaude-docs-mcp/lineage-scanner";
-import { startWatcher } from "mclaude-docs-mcp/watcher";
+import { join, dirname, resolve } from "path";
+import { openDb } from "docs-mcp/db";
+import { indexAllDocs } from "docs-mcp/content-indexer";
+import { runLineageScan } from "docs-mcp/lineage-scanner";
+import { startWatcher } from "docs-mcp/watcher";
 
 /**
  * Walk up from startDir until we find a directory containing .git.
@@ -38,12 +38,17 @@ export interface BootResult {
  * 3. Run indexAllDocs to populate the index.
  * 4. Start the file watcher with an onReindex callback for SSE.
  *
+ * docsDir: if provided, overrides the default `<repoRoot>/docs/` directory.
+ *   Resolved relative to cwd; absolute paths accepted as-is.
+ *   When null, defaults to `join(repoRoot, "docs")` (ADR-0032).
+ *
  * Returns repoRoot, db, and a stopWatcher function.
  * Exits non-zero if no .git directory is found.
  */
 export function boot(
   dbPath: string | null,
-  onReindex: (changed: string[]) => void
+  onReindex: (changed: string[]) => void,
+  docsDir: string | null = null
 ): BootResult {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd);
@@ -55,14 +60,17 @@ export function boot(
   }
 
   const resolvedDbPath =
-    dbPath ?? join(repoRoot, "mclaude-docs-mcp", ".docs-index.db");
+    dbPath ?? join(repoRoot, ".agent", ".docs-index.db");
 
   const db = openDb(resolvedDbPath);
-  const docsDir = join(repoRoot, "docs");
+
+  // Resolve the docs directory. When null, fall back to <repoRoot>/docs.
+  // When a relative path, resolve against cwd (consistent with --db-path).
+  const resolvedDocsDir = docsDir != null ? resolve(cwd, docsDir) : join(repoRoot, "docs");
 
   // Initial index — run synchronously on boot
   try {
-    indexAllDocs(db, docsDir, repoRoot);
+    indexAllDocs(db, resolvedDocsDir, repoRoot);
   } catch (err) {
     console.error(`[dashboard] Initial index failed: ${err}`);
     // Non-fatal: continue, watcher will catch up
@@ -77,7 +85,7 @@ export function boot(
     // Non-fatal: dashboard still serves docs without lineage edges
   }
 
-  const stopWatcher = startWatcher(db, docsDir, repoRoot, onReindex);
+  const stopWatcher = startWatcher(db, resolvedDocsDir, repoRoot, onReindex);
 
   return { repoRoot, db, stopWatcher };
 }

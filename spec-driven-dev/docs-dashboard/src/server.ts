@@ -14,9 +14,10 @@ import {
 
 // ---- CLI flag parsing ----
 
-function parseArgs(argv: string[]): { port: number; dbPath: string | null } {
+function parseArgs(argv: string[]): { port: number; dbPath: string | null; docsDir: string | null } {
   let port = 4567;
   let dbPath: string | null = null;
+  let docsDir: string | null = null;
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--port" && argv[i + 1]) {
@@ -30,10 +31,13 @@ function parseArgs(argv: string[]): { port: number; dbPath: string | null } {
     } else if (argv[i] === "--db-path" && argv[i + 1]) {
       dbPath = argv[i + 1];
       i++;
+    } else if (argv[i] === "--docs-dir" && argv[i + 1]) {
+      docsDir = argv[i + 1];
+      i++;
     }
   }
 
-  return { port, dbPath };
+  return { port, dbPath, docsDir };
 }
 
 // ---- Startup banner ----
@@ -154,7 +158,7 @@ function handleStatic(url: URL): Response | null {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const { port, dbPath } = parseArgs(argv);
+  const { port, dbPath, docsDir } = parseArgs(argv);
 
   let db: Database;
   let repoRoot: string;
@@ -163,7 +167,7 @@ async function main() {
   try {
     ({ repoRoot, db, stopWatcher } = boot(dbPath, (changed: string[]) => {
       broadcast({ type: "reindex", changed });
-    }));
+    }, docsDir));
   } catch (err) {
     console.error(`[dashboard] Boot failed: ${err}`);
     process.exit(1);
@@ -245,7 +249,9 @@ async function main() {
   console.log(buildStartupBanner(server.port ?? port));
 }
 
-main().catch((err) => {
-  console.error(`[dashboard] Fatal: ${err}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(`[dashboard] Fatal: ${err}`);
+    process.exit(1);
+  });
+}
