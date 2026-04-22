@@ -266,7 +266,7 @@ describe("watcher HEAD change detection", () => {
 
     // Run initial lineage scan to set last_lineage_commit to this commit
     const { runLineageScan } = await import("../src/lineage-scanner.js");
-    runLineageScan(db, repo.repoRoot);
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
 
     const initialLineageCount = db
       .query<{ count: number }, []>("SELECT count(*) as count FROM lineage")

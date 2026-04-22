@@ -56,7 +56,7 @@ export function startWatcher(
     if (currentHead && currentHead !== lastHead) {
       lastHead = currentHead;
       try {
-        runLineageScan(db, repoRoot);
+        runLineageScan(db, repoRoot, docsDir);
       } catch (err) {
         console.warn(`[docs-mcp] Lineage scan error: ${err}`);
       }

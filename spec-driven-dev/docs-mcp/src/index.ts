@@ -96,7 +96,7 @@ try {
 
 // Initial lineage scan
 try {
-  runLineageScan(db, repoRoot);
+  runLineageScan(db, repoRoot, docsDir);
   console.error(`[docs-mcp] Initial lineage scan complete`);
 } catch (err) {
   console.error(`[docs-mcp] Initial lineage scan error: ${err}`);

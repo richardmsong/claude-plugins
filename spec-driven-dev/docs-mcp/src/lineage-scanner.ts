@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { spawnSync } from "child_process";
+import { relative } from "path";
 import { parseMarkdown } from "./parser.js";
 
 /**
@@ -47,18 +48,18 @@ function isRootCommit(repoRoot: string, commitHash: string): boolean {
 /**
  * Get the list of docs/*.md files modified in a commit.
  */
-function getModifiedDocFiles(repoRoot: string, commitHash: string): string[] {
+function getModifiedDocFiles(repoRoot: string, commitHash: string, relDocsDir: string): string[] {
   const root = isRootCommit(repoRoot, commitHash);
   const args = root
-    ? ["diff-tree", "--no-commit-id", "-r", "--name-only", "--root", commitHash, "--", "docs/*.md"]
-    : ["diff-tree", "--no-commit-id", "-r", "--name-only", commitHash, "--", "docs/*.md"];
+    ? ["diff-tree", "--no-commit-id", "-r", "--name-only", "--root", commitHash, "--", `${relDocsDir}/*.md`]
+    : ["diff-tree", "--no-commit-id", "-r", "--name-only", commitHash, "--", `${relDocsDir}/*.md`];
 
   const out = git(repoRoot, args);
   if (!out) return [];
   return out
     .trim()
     .split("\n")
-    .filter((f) => f.endsWith(".md") && f.startsWith("docs/"));
+    .filter((f) => f.endsWith(".md") && f.startsWith(relDocsDir + "/"));
 }
 
 /**
@@ -77,7 +78,7 @@ export interface DiffHunk {
 /**
  * Parse unified diff output to extract hunk positions per file.
  */
-export function parseDiffHunks(diffOutput: string): Map<string, DiffHunk[]> {
+export function parseDiffHunks(diffOutput: string, relDocsDir: string): Map<string, DiffHunk[]> {
   const result = new Map<string, DiffHunk[]>();
   let currentFile: string | null = null;
 
@@ -96,7 +97,7 @@ export function parseDiffHunks(diffOutput: string): Map<string, DiffHunk[]> {
     // We'll use the +new side line positions.
     if (currentFile && line.startsWith("@@")) {
       const hunkMatch = line.match(/@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
-      if (hunkMatch && currentFile.endsWith(".md") && currentFile.startsWith("docs/")) {
+      if (hunkMatch && currentFile.endsWith(".md") && currentFile.startsWith(relDocsDir + "/")) {
         const startLine = parseInt(hunkMatch[1], 10);
         const lineCount = hunkMatch[2] !== undefined ? parseInt(hunkMatch[2], 10) : 1;
         if (!result.has(currentFile)) result.set(currentFile, []);
@@ -111,15 +112,15 @@ export function parseDiffHunks(diffOutput: string): Map<string, DiffHunk[]> {
 /**
  * Get diff hunks for a commit.
  */
-function getCommitDiffHunks(repoRoot: string, commitHash: string): Map<string, DiffHunk[]> {
+function getCommitDiffHunks(repoRoot: string, commitHash: string, relDocsDir: string): Map<string, DiffHunk[]> {
   const root = isRootCommit(repoRoot, commitHash);
   const args = root
-    ? ["diff-tree", "-p", "--root", commitHash, "--", "docs/*.md"]
-    : ["diff", `${commitHash}~1..${commitHash}`, "--", "docs/*.md"];
+    ? ["diff-tree", "-p", "--root", commitHash, "--", `${relDocsDir}/*.md`]
+    : ["diff", `${commitHash}~1..${commitHash}`, "--", `${relDocsDir}/*.md`];
 
   const out = git(repoRoot, args);
   if (!out) return new Map();
-  return parseDiffHunks(out);
+  return parseDiffHunks(out, relDocsDir);
 }
 
 export interface SectionBoundary {
@@ -171,7 +172,9 @@ function upsertLineage(
  * Run the incremental lineage scan.
  * Processes commits from last_lineage_commit..HEAD (or full history on first run).
  */
-export function runLineageScan(db: Database, repoRoot: string): void {
+export function runLineageScan(db: Database, repoRoot: string, docsDir: string): void {
+  const relDocsDir = relative(repoRoot, docsDir).replace(/\\/g, "/");
+
   if (!isGitAvailable(repoRoot)) {
     console.info("[docs-mcp] Git not available — skipping lineage scan");
     return;
@@ -194,10 +197,10 @@ export function runLineageScan(db: Database, repoRoot: string): void {
   // Get commit list to process
   let commitArgs: string[];
   if (lastCommit) {
-    commitArgs = ["log", `${lastCommit}..HEAD`, "--reverse", "--format=%H", "--", "docs/*.md"];
+    commitArgs = ["log", `${lastCommit}..HEAD`, "--reverse", "--format=%H", "--", `${relDocsDir}/*.md`];
   } else {
     // Full history scan
-    commitArgs = ["log", "--reverse", "--format=%H", "--", "docs/*.md"];
+    commitArgs = ["log", "--reverse", "--format=%H", "--", `${relDocsDir}/*.md`];
   }
 
   const out = git(repoRoot, commitArgs);
@@ -211,7 +214,7 @@ export function runLineageScan(db: Database, repoRoot: string): void {
   console.info(`[docs-mcp] Scanning ${commits.length} commit(s) for lineage`);
 
   for (const commitHash of commits) {
-    processCommitForLineage(db, repoRoot, commitHash);
+    processCommitForLineage(db, repoRoot, commitHash, relDocsDir);
   }
 
   // Update last processed commit
@@ -221,8 +224,8 @@ export function runLineageScan(db: Database, repoRoot: string): void {
 /**
  * Process a single commit to extract cross-doc lineage.
  */
-export function processCommitForLineage(db: Database, repoRoot: string, commitHash: string): void {
-  const modifiedFiles = getModifiedDocFiles(repoRoot, commitHash);
+export function processCommitForLineage(db: Database, repoRoot: string, commitHash: string, relDocsDir: string): void {
+  const modifiedFiles = getModifiedDocFiles(repoRoot, commitHash, relDocsDir);
 
   // Tally commit_count for EVERY modified file, including solo commits, so
   // the per-doc volatility metric counts all edits (per ADR-0027).
@@ -239,7 +242,7 @@ export function processCommitForLineage(db: Database, repoRoot: string, commitHa
   }
 
   // Get diff hunks for all docs files in this commit
-  const hunkMap = getCommitDiffHunks(repoRoot, commitHash);
+  const hunkMap = getCommitDiffHunks(repoRoot, commitHash, relDocsDir);
 
   // For each modified file, get section boundaries at commit version
   interface FileSections {

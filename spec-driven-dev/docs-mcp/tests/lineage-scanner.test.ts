@@ -144,7 +144,7 @@ describe("parseDiffHunks", () => {
       " another unchanged",
     ].join("\n");
 
-    const result = parseDiffHunks(diff);
+    const result = parseDiffHunks(diff, "docs");
     expect(result.has("docs/adr-2026-04-10-foo.md")).toBe(true);
     const hunks = result.get("docs/adr-2026-04-10-foo.md")!;
     expect(hunks.length).toBe(1);
@@ -162,7 +162,7 @@ describe("parseDiffHunks", () => {
       " line",
     ].join("\n");
 
-    const result = parseDiffHunks(diff);
+    const result = parseDiffHunks(diff, "docs");
     expect(result.has("docs/adr-2026-04-10-a.md")).toBe(true);
     expect(result.has("docs/adr-2026-04-10-b.md")).toBe(true);
   });
@@ -176,7 +176,7 @@ describe("parseDiffHunks", () => {
       " another line",
     ].join("\n");
 
-    const result = parseDiffHunks(diff);
+    const result = parseDiffHunks(diff, "docs");
     const hunks = result.get("docs/adr-2026-04-10-foo.md")!;
     expect(hunks.length).toBe(2);
     expect(hunks[0].startLine).toBe(5);
@@ -194,13 +194,13 @@ describe("parseDiffHunks", () => {
       " line",
     ].join("\n");
 
-    const result = parseDiffHunks(diff);
+    const result = parseDiffHunks(diff, "docs");
     expect(result.has("src/index.ts")).toBe(false);
     expect(result.has("docs/adr-2026-04-10-foo.md")).toBe(true);
   });
 
   test("returns empty map for empty diff", () => {
-    const result = parseDiffHunks("");
+    const result = parseDiffHunks("", "docs");
     expect(result.size).toBe(0);
   });
 
@@ -212,7 +212,7 @@ describe("parseDiffHunks", () => {
       "+added line",
     ].join("\n");
 
-    const result = parseDiffHunks(diff);
+    const result = parseDiffHunks(diff, "docs");
     const hunks = result.get("docs/adr-2026-04-10-foo.md")!;
     expect(hunks.length).toBe(1);
     expect(hunks[0].startLine).toBe(10);
@@ -357,7 +357,7 @@ describe("runLineageScan", () => {
     );
     gitCommit(repo.repoRoot, "add nats doc");
 
-    runLineageScan(db, repo.repoRoot);
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
 
     const rows = db.query<{ count: number }, []>("SELECT count(*) as count FROM lineage").get()!;
     expect(rows.count).toBe(0);
@@ -375,7 +375,7 @@ describe("runLineageScan", () => {
     );
     gitCommit(repo.repoRoot, "add both docs");
 
-    runLineageScan(db, repo.repoRoot);
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
 
     // Should have cross-doc lineage edges
     const rows = db.query<{ count: number }, []>("SELECT count(*) as count FROM lineage").get()!;
@@ -393,7 +393,7 @@ describe("runLineageScan", () => {
     );
     gitCommit(repo.repoRoot, "add both docs");
 
-    runLineageScan(db, repo.repoRoot);
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
 
     const edgeAtoB = db
       .query<{ count: number }, [string, string, string, string]>(
@@ -422,7 +422,7 @@ describe("runLineageScan", () => {
     );
     gitCommit(repo.repoRoot, "add both docs");
 
-    runLineageScan(db, repo.repoRoot);
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
 
     // Second commit: modify both docs again
     writeFileSync(
@@ -435,7 +435,7 @@ describe("runLineageScan", () => {
     );
     gitCommit(repo.repoRoot, "update both docs");
 
-    runLineageScan(db, repo.repoRoot);
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
 
     const edge = db
       .query<{ commit_count: number }, [string, string, string, string]>(
@@ -450,7 +450,7 @@ describe("runLineageScan", () => {
     writeFileSync(join(repo.docsDir, "adr-2026-04-10-b.md"), "# B\n\n## Section B\n\nContent.\n");
     const hash = gitCommit(repo.repoRoot, "add docs");
 
-    runLineageScan(db, repo.repoRoot);
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
 
     const row = db
       .query<{ value: string }, []>(
@@ -464,7 +464,7 @@ describe("runLineageScan", () => {
   test("skips lineage scan when git not available", () => {
     const nonGitDir = mkdtempSync(join(tmpdir(), "not-a-git-"));
     try {
-      runLineageScan(db, nonGitDir); // should not throw
+      runLineageScan(db, nonGitDir, join(nonGitDir, "docs")); // should not throw
       const rows = db.query<{ count: number }, []>("SELECT count(*) as count FROM lineage").get()!;
       expect(rows.count).toBe(0);
     } finally {
@@ -483,7 +483,7 @@ describe("runLineageScan", () => {
     writeFileSync(join(repo.docsDir, "adr-solo.md"), "# Solo ADR\n\n## Overview\n\nSolo content.\n");
     gitCommit(repo.repoRoot, "solo commit");
 
-    runLineageScan(db, repo.repoRoot);
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
 
     const doc = db
       .query<{ commit_count: number }, [string]>(
@@ -514,7 +514,7 @@ describe("runLineageScan", () => {
     writeFileSync(join(repo.docsDir, "adr-beta.md"), "# Beta\n\n## Section B\n\nContent.\n");
     gitCommit(repo.repoRoot, "add both docs");
 
-    runLineageScan(db, repo.repoRoot);
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
 
     const alpha = db
       .query<{ commit_count: number }, [string]>("SELECT commit_count FROM documents WHERE path = ?")
