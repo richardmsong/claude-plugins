@@ -1,8 +1,9 @@
 # ADR: Doc-Level Lineage
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-21: accepted
+- 2026-04-22: implemented — retroactive promotion, all scope verified
 
 ## Overview
 

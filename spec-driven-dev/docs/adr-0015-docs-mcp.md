@@ -1,8 +1,9 @@
 # Docs MCP Server
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-17: accepted
+- 2026-04-22: implemented — retroactive promotion, all scope verified
 
 
 > **Note:** The `Category Classification` section of this ADR is superseded by `adr-0021-docs-plan-spec-refactor.md`. Current classifier: `adr-*` → `'adr'`, `spec-*` → `'spec'`, `feature-list*` → `'spec'`, everything else → `null`. The `'design'` category has been renamed to `'adr'`.
