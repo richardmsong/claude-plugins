@@ -1,8 +1,9 @@
 # ADR: Setup skill scaffolds CLAUDE.md and readRawDoc drops docs/ check
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-22: accepted
+- 2026-04-22: implemented — all scope CLEAN
 
 ## Overview
 
