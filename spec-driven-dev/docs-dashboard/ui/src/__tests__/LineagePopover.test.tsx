@@ -99,6 +99,8 @@ describe("LineagePopover", () => {
       expect(container.textContent).toContain("docs/spec-state-schema.md");
     });
     expect(container.textContent).toContain("3×");
+    // ADR rows should show ADR-NNNN prefix
+    expect(container.textContent).toContain("ADR-0015: Docs MCP");
     // Rows must NOT contain §heading segments
     expect(container.textContent).not.toContain("§");
   });
@@ -267,8 +269,9 @@ describe("LineagePopover — section-mode collapse", () => {
     fireEvent.mouseEnter(trigger);
 
     // Should show exactly 2 result rows (not 3)
+    // ADR rows use "ADR-NNNN: title" format
     await waitFor(() => {
-      expect(container.textContent).toContain("docs/adr-0015-docs-mcp.md");
+      expect(container.textContent).toContain("ADR-0015: Docs MCP");
     });
 
     expect(container.textContent).toContain("docs/spec-state-schema.md");
@@ -285,7 +288,7 @@ describe("LineagePopover — section-mode collapse", () => {
     const buttons = Array.from(container.querySelectorAll("button"));
     const rowBtns = buttons.filter(
       (b) =>
-        b.textContent?.includes("docs/adr-0015-docs-mcp.md") ||
+        b.textContent?.includes("ADR-0015: Docs MCP") ||
         b.textContent?.includes("docs/spec-state-schema.md")
     );
     expect(rowBtns.length).toBe(2);
@@ -328,8 +331,8 @@ describe("LineagePopover — section-mode collapse", () => {
     await waitFor(() => {
       expect(container.textContent).toContain("7×");
     });
-    // Collapsed row: 5+2=7
-    expect(container.textContent).toContain("docs/adr-0001-telemetry.md");
+    // Collapsed row: 5+2=7 — ADR rows display as "ADR-NNNN: title"
+    expect(container.textContent).toContain("ADR-0001: Telemetry");
   });
 
   it("sorts collapsed rows descending by count", async () => {
@@ -352,8 +355,9 @@ describe("LineagePopover — section-mode collapse", () => {
     });
 
     // adr-0015 (4) should appear before spec-state-schema (2)
+    // ADR rows display as "ADR-0015: Docs MCP"
     const text = container.textContent ?? "";
-    const idx4 = text.indexOf("docs/adr-0015-docs-mcp.md");
+    const idx4 = text.indexOf("ADR-0015: Docs MCP");
     const idx2 = text.indexOf("docs/spec-state-schema.md");
     expect(idx4).toBeLessThan(idx2);
   });
@@ -406,8 +410,8 @@ describe("LineagePopover — doc mode (heading=null)", () => {
       expect(container.textContent).toContain("docs/spec-state-schema.md");
     });
 
-    // Both rows should be present
-    expect(container.textContent).toContain("docs/adr-0015-docs-mcp.md");
+    // Both rows should be present — ADR rows use "ADR-NNNN: title" format
+    expect(container.textContent).toContain("ADR-0015: Docs MCP");
     // No §heading segments
     expect(container.textContent).not.toContain("§");
     // Counts from the raw result (no summing)

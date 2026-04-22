@@ -19,6 +19,8 @@ interface CollapsedRow {
   commit_count: number;
   last_commit: string;
   status: string | null;
+  category: string | null;
+  doc_title: string | null;
 }
 
 function docPathToHash(docPath: string): string {
@@ -40,7 +42,15 @@ function docPathToHash(docPath: string): string {
 function collapseByDoc(rows: LineageResult[]): CollapsedRow[] {
   const map = new Map<
     string,
-    { commit_count: number; last_commit: string; status: string | null; maxSingle: number; maxSingleFirst: number }
+    {
+      commit_count: number;
+      last_commit: string;
+      status: string | null;
+      category: string | null;
+      doc_title: string | null;
+      maxSingle: number;
+      maxSingleFirst: number;
+    }
   >();
 
   rows.forEach((r, idx) => {
@@ -50,6 +60,8 @@ function collapseByDoc(rows: LineageResult[]): CollapsedRow[] {
         commit_count: r.commit_count,
         last_commit: r.last_commit,
         status: r.status,
+        category: r.category,
+        doc_title: r.doc_title,
         maxSingle: r.commit_count,
         maxSingleFirst: idx,
       });
@@ -75,6 +87,8 @@ function collapseByDoc(rows: LineageResult[]): CollapsedRow[] {
       commit_count: v.commit_count,
       last_commit: v.last_commit,
       status: v.status,
+      category: v.category,
+      doc_title: v.doc_title,
     }))
     .sort((a, b) => b.commit_count - a.commit_count);
 }
@@ -88,7 +102,26 @@ function passThrough(rows: LineageResult[]): CollapsedRow[] {
     commit_count: r.commit_count,
     last_commit: r.last_commit,
     status: r.status,
+    category: r.category,
+    doc_title: r.doc_title,
   }));
+}
+
+/** Extract zero-padded ADR number from a doc_path like "some/prefix/adr-0033-slug.md". */
+function adrNumber(docPath: string): string | null {
+  const basename = docPath.split("/").pop() ?? "";
+  const match = basename.match(/^adr-(\d{4})/);
+  return match ? match[1] : null;
+}
+
+/** Format the display label for a lineage row. ADRs get "ADR-NNNN: title" prefix. */
+function rowLabel(row: CollapsedRow): string {
+  if (row.category === "adr") {
+    const num = adrNumber(row.doc_path);
+    const title = row.doc_title ?? row.doc_path;
+    return num ? `ADR-${num}: ${title}` : title;
+  }
+  return row.doc_path;
 }
 
 function statusStyle(status: string | null): React.CSSProperties {
@@ -229,7 +262,7 @@ export default function LineagePopover({
                 }}
               >
                 <span style={styles.count}>{r.commit_count}×</span>
-                <span style={styles.path}>{r.doc_path}</span>
+                <span style={styles.path}>{rowLabel(r)}</span>
               </button>
             ))}
           <button

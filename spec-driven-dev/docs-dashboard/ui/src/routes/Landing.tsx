@@ -32,6 +32,20 @@ function adrSlug(docPath: string): string {
   return docPath.replace(/^docs\//, "").replace(/\.md$/, "").replace(/^adr-/, "");
 }
 
+/** Extract zero-padded ADR number from a doc_path like "some/prefix/adr-0033-slug.md". */
+function adrNumber(docPath: string): string | null {
+  const basename = docPath.split("/").pop() ?? "";
+  const match = basename.match(/^adr-(\d{4})/);
+  return match ? match[1] : null;
+}
+
+/** Format ADR display label: "ADR-NNNN: <title>" or fallback to adrSlug. */
+function adrLabel(docPath: string, title: string | null | undefined): string {
+  const num = adrNumber(docPath);
+  const displayTitle = title ?? adrSlug(docPath);
+  return num ? `ADR-${num}: ${displayTitle}` : displayTitle;
+}
+
 function groupByDirectory(specs: ListDoc[]): Record<string, ListDoc[]> {
   const groups: Record<string, ListDoc[]> = {};
   for (const spec of specs) {
@@ -143,7 +157,7 @@ export default function Landing({ navigate, lastEvent }: LandingProps) {
                         onClick={() => navigate(`/adr/${adrSlug(adr.doc_path)}`)}
                       >
                         <span style={styles.docTitle}>
-                          {adr.title ?? adrSlug(adr.doc_path)}
+                          {adrLabel(adr.doc_path, adr.title)}
                         </span>
                         <span style={styles.docMeta}>
                           {adr.last_status_change ?? ""}

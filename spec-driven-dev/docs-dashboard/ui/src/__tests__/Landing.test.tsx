@@ -74,24 +74,24 @@ describe("Landing", () => {
   it("renders ADRs bucketed by status — draft ADR visible by default", async () => {
     const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
     await waitFor(() => {
-      // Draft bucket should be expanded by default — Feature A is visible
-      expect(container.textContent).toContain("Feature A");
+      // Draft bucket should be expanded by default — Feature A is visible with ADR number prefix
+      expect(container.textContent).toContain("ADR-0001: Feature A");
     });
   });
 
   it("draft bucket is expanded by default, accepted is collapsed", async () => {
     const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
     await waitFor(() => {
-      expect(container.textContent).toContain("Feature A");
+      expect(container.textContent).toContain("ADR-0001: Feature A");
     });
     // Feature B (accepted) should NOT be visible until expanded
-    expect(container.textContent).not.toContain("Feature B");
+    expect(container.textContent).not.toContain("ADR-0002: Feature B");
   });
 
   it("clicking a collapsed bucket expands it", async () => {
     const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
     await waitFor(() => {
-      expect(container.textContent).toContain("Feature A");
+      expect(container.textContent).toContain("ADR-0001: Feature A");
     });
 
     // Find and click the accepted bucket header (contains "accepted" text)
@@ -100,20 +100,20 @@ describe("Landing", () => {
     expect(acceptedBtn).not.toBeUndefined();
     fireEvent.click(acceptedBtn!);
 
-    // Feature B should now be visible
+    // Feature B should now be visible with ADR number prefix
     await waitFor(() => {
-      expect(container.textContent).toContain("Feature B");
+      expect(container.textContent).toContain("ADR-0002: Feature B");
     });
   });
 
   it("clicking an ADR navigates to /adr/<slug>", async () => {
     const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
     await waitFor(() => {
-      expect(container.textContent).toContain("Feature A");
+      expect(container.textContent).toContain("ADR-0001: Feature A");
     });
 
     const buttons = Array.from(container.querySelectorAll("button"));
-    const featureABtn = buttons.find((b) => b.textContent?.trim() === "Feature A" || b.textContent?.includes("Feature A"));
+    const featureABtn = buttons.find((b) => b.textContent?.includes("ADR-0001: Feature A"));
     expect(featureABtn).not.toBeUndefined();
     fireEvent.click(featureABtn!);
     expect(navigate).toHaveBeenCalledWith("/adr/0001-feature-a");
@@ -167,15 +167,15 @@ describe("Landing", () => {
 
     const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
 
-    // Draft bucket is expanded by default — both items should be visible immediately
+    // Draft bucket is expanded by default — both items should be visible immediately with ADR number prefix
     await waitFor(() => {
-      expect(container.textContent).toContain("Newer Draft");
-      expect(container.textContent).toContain("Older Draft");
+      expect(container.textContent).toContain("ADR-0011: Newer Draft");
+      expect(container.textContent).toContain("ADR-0010: Older Draft");
     });
 
     // Newer Draft should come first (most recent date first)
-    const idx1 = container.textContent!.indexOf("Newer Draft");
-    const idx2 = container.textContent!.indexOf("Older Draft");
+    const idx1 = container.textContent!.indexOf("ADR-0011: Newer Draft");
+    const idx2 = container.textContent!.indexOf("ADR-0010: Older Draft");
     expect(idx1).toBeLessThan(idx2);
   });
 });
