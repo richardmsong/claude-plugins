@@ -17,7 +17,7 @@ import {
   listDocs,
 } from "./tools.js";
 
-// ---- Determine repo root ----
+// ---- Determine docs root and git root ----
 
 /**
  * Parse --root <path> from process.argv.
@@ -57,53 +57,52 @@ function findGitRoot(startDir: string): string | null {
   }
 }
 
-let repoRoot: string;
-const explicitRoot = parseRootArg();
+// docsRoot: parent of docs/ — comes from --root or cwd fallback
+const docsRoot: string = parseRootArg() ?? process.cwd();
 
-if (explicitRoot) {
-  repoRoot = explicitRoot;
-} else {
-  const gitRoot = findGitRoot(process.cwd());
-  if (gitRoot) {
-    repoRoot = gitRoot;
-  } else {
-    repoRoot = process.cwd();
-    console.error(
-      `[docs-mcp] No .git directory found; lineage scanning disabled, docs dir must exist at ${repoRoot}/docs/`
-    );
-  }
+// gitRoot: actual git root discovered by walking up from docsRoot
+const gitRoot: string | null = findGitRoot(docsRoot);
+
+if (!gitRoot) {
+  console.error(
+    `[docs-mcp] No .git directory found walking up from ${docsRoot}; lineage scanning disabled`
+  );
 }
 
-const docsDir = join(repoRoot, "docs");
+const docsDir = join(docsRoot, "docs");
 
-// Ensure .agent/ directory exists for the DB
-const agentDir = join(repoRoot, ".agent");
+// Ensure .agent/ directory exists for the DB (always under docsRoot)
+const agentDir = join(docsRoot, ".agent");
 mkdirSync(agentDir, { recursive: true });
 const dbPath = join(agentDir, ".docs-index.db");
 
-console.error(`[docs-mcp] Starting. repoRoot=${repoRoot} dbPath=${dbPath}`);
+console.error(
+  `[docs-mcp] Starting. docsRoot=${docsRoot} gitRoot=${gitRoot ?? "(none)"} dbPath=${dbPath}`
+);
 
 // Initialize DB
 const db = openDb(dbPath);
 
-// Initial content index
+// Initial content index — use gitRoot as repoRoot so stored paths are git-root-relative
 try {
-  const changed = indexAllDocs(db, docsDir, repoRoot);
+  const changed = indexAllDocs(db, docsDir, gitRoot ?? docsRoot);
   console.error(`[docs-mcp] Initial content index: ${changed.length} file(s) reindexed`);
 } catch (err) {
   console.error(`[docs-mcp] Initial content index error: ${err}`);
 }
 
-// Initial lineage scan
-try {
-  runLineageScan(db, repoRoot, docsDir);
-  console.error(`[docs-mcp] Initial lineage scan complete`);
-} catch (err) {
-  console.error(`[docs-mcp] Initial lineage scan error: ${err}`);
+// Initial lineage scan — skipped if no git root
+if (gitRoot) {
+  try {
+    runLineageScan(db, gitRoot, docsDir);
+    console.error(`[docs-mcp] Initial lineage scan complete`);
+  } catch (err) {
+    console.error(`[docs-mcp] Initial lineage scan error: ${err}`);
+  }
 }
 
-// Start file watcher
-const stopWatcher = startWatcher(db, docsDir, repoRoot);
+// Start file watcher — pass gitRoot (or docsRoot fallback) as repoRoot
+const stopWatcher = startWatcher(db, docsDir, gitRoot ?? docsRoot);
 
 // Create MCP server
 const server = new McpServer({
