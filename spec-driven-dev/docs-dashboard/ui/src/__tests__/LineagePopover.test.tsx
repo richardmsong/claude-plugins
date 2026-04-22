@@ -363,6 +363,84 @@ describe("LineagePopover — section-mode collapse", () => {
   });
 });
 
+describe("LineagePopover — ADR row navigation with full doc_path (ADR-0035)", () => {
+  it("clicking an ADR row navigates to /adr/<full-doc_path-minus-.md>", async () => {
+    const nestedAdrRows = [
+      {
+        doc_path: "spec-driven-dev/docs/adr-0031-doc-level-lineage.md",
+        doc_title: "Doc Level Lineage",
+        category: "adr",
+        heading: "Overview",
+        status: "implemented",
+        commit_count: 4,
+        last_commit: "abc1234",
+      },
+    ];
+    (fetchLineage as ReturnType<typeof vi.fn>).mockResolvedValue(nestedAdrRows);
+
+    const { container } = render(
+      <LineagePopover
+        docPath="docs/adr-0035-fix-adr-route-nested-docs-dir.md"
+        heading="Fix"
+        navigate={navigate}
+      />
+    );
+
+    const trigger = container.querySelector("button")!;
+    fireEvent.mouseEnter(trigger);
+    await waitFor(() => {
+      expect(container.textContent).toContain("ADR-0031: Doc Level Lineage");
+    });
+
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const rowBtn = buttons.find((b) =>
+      b.textContent?.includes("ADR-0031: Doc Level Lineage")
+    );
+    expect(rowBtn).not.toBeUndefined();
+    fireEvent.click(rowBtn!);
+    // Full nested path used — matches new docPathToHash behavior
+    expect(navigate).toHaveBeenCalledWith(
+      "/adr/spec-driven-dev/docs/adr-0031-doc-level-lineage"
+    );
+  });
+
+  it("clicking a flat ADR row navigates to /adr/<full-doc_path-minus-.md>", async () => {
+    const flatAdrRows = [
+      {
+        doc_path: "docs/adr-0015-docs-mcp.md",
+        doc_title: "Docs MCP",
+        category: "adr",
+        heading: "Data Model",
+        status: "implemented",
+        commit_count: 3,
+        last_commit: "def5678",
+      },
+    ];
+    (fetchLineage as ReturnType<typeof vi.fn>).mockResolvedValue(flatAdrRows);
+
+    const { container } = render(
+      <LineagePopover
+        docPath="docs/adr-0027-docs-dashboard.md"
+        heading="Overview"
+        navigate={navigate}
+      />
+    );
+
+    const trigger = container.querySelector("button")!;
+    fireEvent.mouseEnter(trigger);
+    await waitFor(() => {
+      expect(container.textContent).toContain("ADR-0015: Docs MCP");
+    });
+
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const rowBtn = buttons.find((b) => b.textContent?.includes("ADR-0015: Docs MCP"));
+    expect(rowBtn).not.toBeUndefined();
+    fireEvent.click(rowBtn!);
+    // Full path: docs/adr-0015-docs-mcp (not the old 0015-docs-mcp slug)
+    expect(navigate).toHaveBeenCalledWith("/adr/docs/adr-0015-docs-mcp");
+  });
+});
+
 describe("LineagePopover — doc mode (heading=null)", () => {
   beforeEach(() => {
     (fetchLineage as ReturnType<typeof vi.fn>).mockResolvedValue(

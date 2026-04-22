@@ -154,7 +154,7 @@ export default function Landing({ navigate, lastEvent }: LandingProps) {
                     <li key={adr.doc_path} style={styles.bucketItem}>
                       <button
                         style={styles.docLink}
-                        onClick={() => navigate(`/adr/${adrSlug(adr.doc_path)}`)}
+                        onClick={() => navigate(`/adr/${adr.doc_path.replace(/\.md$/, "")}`)}
                       >
                         <span style={styles.docTitle}>
                           {adrLabel(adr.doc_path, adr.title)}

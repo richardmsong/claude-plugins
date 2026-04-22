@@ -106,7 +106,7 @@ describe("Landing", () => {
     });
   });
 
-  it("clicking an ADR navigates to /adr/<slug>", async () => {
+  it("clicking an ADR navigates to /adr/<doc_path-minus-.md>", async () => {
     const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
     await waitFor(() => {
       expect(container.textContent).toContain("ADR-0001: Feature A");
@@ -116,7 +116,34 @@ describe("Landing", () => {
     const featureABtn = buttons.find((b) => b.textContent?.includes("ADR-0001: Feature A"));
     expect(featureABtn).not.toBeUndefined();
     fireEvent.click(featureABtn!);
-    expect(navigate).toHaveBeenCalledWith("/adr/0001-feature-a");
+    // URL uses full doc_path minus .md extension (works for nested docs dirs too)
+    expect(navigate).toHaveBeenCalledWith("/adr/docs/adr-0001-feature-a");
+  });
+
+  it("clicking an ADR with nested doc_path navigates to full path route", async () => {
+    (fetchAdrs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        doc_path: "spec-driven-dev/docs/adr-0031-doc-level-lineage.md",
+        title: "Doc Level Lineage",
+        category: "adr",
+        status: "draft",
+        commit_count: 2,
+        last_status_change: "2026-04-20",
+        sections: [],
+      },
+    ]);
+
+    const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
+    await waitFor(() => {
+      expect(container.textContent).toContain("ADR-0031: Doc Level Lineage");
+    });
+
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const adrBtn = buttons.find((b) => b.textContent?.includes("ADR-0031: Doc Level Lineage"));
+    expect(adrBtn).not.toBeUndefined();
+    fireEvent.click(adrBtn!);
+    // Full nested path used, so the route can reconstruct doc_path correctly
+    expect(navigate).toHaveBeenCalledWith("/adr/spec-driven-dev/docs/adr-0031-doc-level-lineage");
   });
 
   it("renders spec groups by directory", async () => {

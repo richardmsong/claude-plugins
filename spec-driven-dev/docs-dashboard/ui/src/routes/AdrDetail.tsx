@@ -11,9 +11,8 @@ interface AdrDetailProps {
   lastEvent: SSEEvent | null;
 }
 
-// Reconstruct doc path from slug
 function slugToDocPath(slug: string): string {
-  return `docs/adr-${slug}.md`;
+  return `${slug}.md`;
 }
 
 export default function AdrDetail({ slug, navigate, lastEvent }: AdrDetailProps) {

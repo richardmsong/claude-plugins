@@ -24,11 +24,8 @@ interface CollapsedRow {
 }
 
 function docPathToHash(docPath: string): string {
-  // docs/adr-*.md → #/adr/<slug>
-  const adrMatch = docPath.match(/(?:^|.*\/)adr-(.+)\.md$/);
-  if (adrMatch) return `/adr/${adrMatch[1]}`;
-
-  // docs/**/spec-*.md → #/spec/<path>
+  const base = docPath.split("/").pop() ?? "";
+  if (base.startsWith("adr-")) return `/adr/${docPath.replace(/\.md$/, "")}`;
   return `/spec/${docPath}`;
 }
 

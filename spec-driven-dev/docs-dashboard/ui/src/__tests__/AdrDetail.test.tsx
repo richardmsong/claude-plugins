@@ -29,6 +29,57 @@ beforeEach(() => {
   (fetchLineage as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 });
 
+describe("AdrDetail — nested doc_path slug (ADR-0035)", () => {
+  it("calls fetchDoc with the nested path when slug is a full path", async () => {
+    const nestedDoc = {
+      doc_path: "spec-driven-dev/docs/adr-0031-doc-level-lineage.md",
+      title: "Doc Level Lineage",
+      category: "adr",
+      status: "implemented",
+      commit_count: 3,
+      raw_markdown: "# Doc Level Lineage\n\nContent here.",
+      sections: [],
+    };
+    (fetchDoc as ReturnType<typeof vi.fn>).mockResolvedValue(nestedDoc);
+
+    const { container } = render(
+      <AdrDetail
+        slug="spec-driven-dev/docs/adr-0031-doc-level-lineage"
+        navigate={navigate}
+        lastEvent={null}
+      />
+    );
+    await waitFor(() => {
+      expect(container.textContent).toContain("Doc Level Lineage");
+    });
+    // slugToDocPath appends .md — fetchDoc must receive the full nested path
+    expect(fetchDoc).toHaveBeenCalledWith(
+      "spec-driven-dev/docs/adr-0031-doc-level-lineage.md"
+    );
+  });
+
+  it("shows error for a nested path doc that is not found", async () => {
+    (fetchDoc as ReturnType<typeof vi.fn>).mockRejectedValue({
+      status: 404,
+      body: { error: "not found" },
+    });
+
+    const { container } = render(
+      <AdrDetail
+        slug="spec-driven-dev/docs/adr-0035-fix-adr-route-nested-docs-dir"
+        navigate={navigate}
+        lastEvent={null}
+      />
+    );
+    await waitFor(() => {
+      expect(container.textContent).toContain("Document not found");
+    });
+    expect(container.textContent).toContain(
+      "spec-driven-dev/docs/adr-0035-fix-adr-route-nested-docs-dir.md"
+    );
+  });
+});
+
 describe("AdrDetail — H1 lineage icon (ADR-0031)", () => {
   it("renders the H1 title", async () => {
     const { container } = render(
