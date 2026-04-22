@@ -88,7 +88,8 @@ Returns `LineageResult[]` (same shape as `docs-mcp`'s `get_lineage`). In doc mod
 
 Lives in `src/server.ts`. Manages a `Set<Writer>` of active client connections.
 
-- **Connect**: `ReadableStream` with `start` (registers writer, sends `hello`) and `cancel` (removes writer). `writer` is declared in the enclosing function scope so both `start` and `cancel` can reference the same value.
+- **Connect**: `ReadableStream` with `start` (registers writer, sends `hello`) and `cancel` (removes writer). `writer` and `heartbeatInterval` are declared in the enclosing function scope so both `start` and `cancel` can reference the same values.
+- **Heartbeat**: `start()` creates a `setInterval` that enqueues `:heartbeat\n\n` (an SSE comment, ignored by `EventSource`) every 15 seconds. This keeps the connection alive — without it, Bun closes the `ReadableStream` response when there is no more data to enqueue. The interval is per-connection and cleared in `cancel()` and on controller-closed errors (ADR-0037).
 - **Broadcast**: iterates `clients`, writes `data: {...}\n\n`; removes writers that throw (dirty disconnect).
 - **Events**: `{type:"hello"}` on connect; `{type:"reindex",changed:string[]}` on watcher callback.
 - Browser `EventSource` auto-reconnects; on reconnect the client receives a `hello` and triggers a full refetch.
