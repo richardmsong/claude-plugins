@@ -1,7 +1,9 @@
 ---
 name: spec-evaluator
 description: Spec compliance audit for one or all components. Spawns the spec-evaluator agent (fresh context, no conversation history) per component. Saves results to .agent/audits/.
+version: 1.0.0
 user_invocable: true
+argument-hint: [component-name]
 ---
 
 # Spec Evaluator

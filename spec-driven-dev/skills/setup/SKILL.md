@@ -1,3 +1,10 @@
+---
+name: setup
+description: One-time setup for the spec-driven-dev plugin. Compiles the docs-mcp binary, symlinks sdd-master, and initializes per-project config files. Safe to re-run.
+version: 1.0.0
+user_invocable: true
+---
+
 # Setup
 
 One-time setup for the `spec-driven-dev` plugin. Compiles the docs-mcp binary, symlinks `sdd-master` for CLI convenience, and initializes per-project config files.

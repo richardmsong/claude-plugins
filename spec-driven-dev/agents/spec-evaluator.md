@@ -2,14 +2,7 @@
 name: spec-evaluator
 description: Fresh-context spec compliance evaluator. Reads all ADRs + specs and all production code for a component, reports every gap where spec says X but code doesn't implement X. No conversation context inherited. Saves results to .agent/audits/.
 model: sonnet
-background: true
-tools:
-  - Read
-  - Glob
-  - Grep
-  - Write
-  - Bash
-  - Agent
+tools: Read, Glob, Grep, Write, Bash, Agent
 ---
 
 # Spec Evaluator
