@@ -92,11 +92,12 @@ function broadcast(event: { type: string; changed?: string[] }): void {
 function handleSSE(): Response {
   const encoder = new TextEncoder();
 
-  // `writer` must be declared OUTSIDE the ReadableStream options object.
-  // `start` and `cancel` are sibling callbacks — a `const writer` inside `start`
-  // is invisible to `cancel` (JavaScript scoping). Hoisting to this shared scope
-  // lets `cancel` remove the exact same reference `start` registered.
+  // `writer` and `heartbeatInterval` must be declared OUTSIDE the ReadableStream
+  // options object. `start` and `cancel` are sibling callbacks — a `const` inside
+  // `start` is invisible to `cancel` (JavaScript scoping). Hoisting to this shared
+  // scope lets `cancel` clean up the exact same references `start` registered.
   let writer: Writer | null = null;
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -111,9 +112,25 @@ function handleSSE(): Response {
       clients.add(writer);
       // Send hello immediately so the client knows it's connected
       writer.write(`data: ${JSON.stringify({ type: "hello" })}\n\n`);
+      // SSE comment heartbeat every 15 s — keeps the connection alive so Bun
+      // doesn't close the ReadableStream when there's nothing left to enqueue.
+      // SSE comments (lines starting with `:`) are silently ignored by the
+      // browser's EventSource API.
+      heartbeatInterval = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(":heartbeat\n\n"));
+        } catch {
+          // Controller is already closed (client gone); clear the interval.
+          if (heartbeatInterval) clearInterval(heartbeatInterval);
+        }
+      }, 15_000);
     },
     cancel() {
       // Fires when the client disconnects cleanly (tab close, etc.)
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
       if (writer) clients.delete(writer);
     },
   });

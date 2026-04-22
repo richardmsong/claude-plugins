@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
 
 // SSE broker is module-level state in server.ts. We test its logic
 // by extracting the relevant parts and testing them in isolation.
@@ -134,5 +134,122 @@ describe("SSE broker", () => {
     const msg = received[0];
     expect(msg.startsWith("data: ")).toBe(true);
     expect(msg.endsWith("\n\n")).toBe(true);
+  });
+});
+
+// ---- SSE heartbeat (ADR-0037) ----
+//
+// The heartbeat is a per-connection setInterval that enqueues `:heartbeat\n\n`
+// every 15 s into the ReadableStream controller. We test the logic directly
+// without the full ReadableStream plumbing by simulating the same pattern used
+// in server.ts: an `enqueue` function, an interval, and a cancel callback.
+
+interface HeartbeatController {
+  enqueue: (chunk: string) => void;
+}
+
+function createHeartbeatSession(intervalMs: number) {
+  const chunks: string[] = [];
+  let closed = false;
+
+  const controller: HeartbeatController = {
+    enqueue: (chunk: string) => {
+      if (closed) throw new Error("Controller already closed");
+      chunks.push(chunk);
+    },
+  };
+
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+
+  // Mirrors the `start()` callback in server.ts handleSSE()
+  heartbeatInterval = setInterval(() => {
+    try {
+      controller.enqueue(":heartbeat\n\n");
+    } catch {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+    }
+  }, intervalMs);
+
+  // Mirrors the `cancel()` callback in server.ts handleSSE()
+  function cancel() {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+    closed = true;
+  }
+
+  function closeController() {
+    closed = true;
+  }
+
+  return { chunks, cancel, closeController, getInterval: () => heartbeatInterval };
+}
+
+describe("SSE heartbeat (ADR-0037)", () => {
+  it("heartbeat comment uses SSE comment format (:heartbeat\\n\\n)", async () => {
+    // Use a very short interval to fire immediately in tests
+    const session = createHeartbeatSession(10);
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    session.cancel();
+
+    expect(session.chunks.length).toBeGreaterThan(0);
+    for (const chunk of session.chunks) {
+      expect(chunk).toBe(":heartbeat\n\n");
+    }
+  });
+
+  it("cancel() clears the interval so no more heartbeats are sent", async () => {
+    const session = createHeartbeatSession(20);
+
+    // Let one heartbeat fire
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const countAfterFirst = session.chunks.length;
+    expect(countAfterFirst).toBeGreaterThan(0);
+
+    // Cancel — interval must be cleared
+    session.cancel();
+    expect(session.getInterval()).toBeNull();
+
+    // Wait longer — no new chunks should arrive
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(session.chunks.length).toBe(countAfterFirst);
+  });
+
+  it("heartbeat stops gracefully when controller is already closed (dirty disconnect)", async () => {
+    const session = createHeartbeatSession(20);
+
+    // Simulate the controller closing before cancel() is called
+    session.closeController();
+
+    // The interval will fire and the enqueue will throw; the interval clears itself
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // After self-clearing, no further chunks should be enqueued; also, the
+    // process should not have crashed (the try/catch inside the interval handles it).
+    // We just verify the chunks list has at most 0 entries (since we closed before first fire).
+    expect(session.chunks.length).toBe(0);
+  });
+
+  it("heartbeat interval is independent per connection", async () => {
+    const session1 = createHeartbeatSession(20);
+    const session2 = createHeartbeatSession(20);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Cancel only session1
+    session1.cancel();
+    const count1 = session1.chunks.length;
+    const count2Before = session2.chunks.length;
+
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    // session1 stopped; session2 keeps going
+    expect(session1.chunks.length).toBe(count1);
+    expect(session2.chunks.length).toBeGreaterThan(count2Before);
+
+    session2.cancel();
   });
 });
