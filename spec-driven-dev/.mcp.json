@@ -1,0 +1,6 @@
+{
+  "docs": {
+    "command": "${CLAUDE_PLUGIN_ROOT}/bin/docs-mcp",
+    "args": ["--root", "${CLAUDE_PROJECT_DIR}"]
+  }
+}

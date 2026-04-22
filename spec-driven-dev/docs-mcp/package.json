@@ -1,19 +1,12 @@
 {
-  "name": "mclaude-docs-mcp",
+  "name": "docs-mcp",
   "version": "1.0.0",
-  "description": "MCP server for MClaude docs — SQLite/FTS5 search, section retrieval, and git lineage",
+  "description": "MCP server for project docs — SQLite/FTS5 search, section retrieval, and git lineage",
   "type": "module",
   "scripts": {
     "start": "bun run src/index.ts",
-    "test": "bun test"
-  },
-  "exports": {
-    "./parser": "./src/parser.ts",
-    "./db": "./src/db.ts",
-    "./content-indexer": "./src/content-indexer.ts",
-    "./lineage-scanner": "./src/lineage-scanner.ts",
-    "./watcher": "./src/watcher.ts",
-    "./tools": "./src/tools.ts"
+    "test": "bun test",
+    "build": "bun build --compile src/index.ts --outfile ../bin/docs-mcp"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",

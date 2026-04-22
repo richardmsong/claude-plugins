@@ -1,0 +1,16 @@
+{
+  "description": "Config-driven command blocklist for spec-driven-dev workflow",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/blocked-commands-hook.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

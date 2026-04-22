@@ -1,0 +1,7 @@
+{
+  "name": "spec-driven-dev",
+  "description": "Spec-driven development workflow: ADR authoring, design audit, spec compliance, and implementation orchestration with docs MCP indexer",
+  "author": {
+    "name": "Richard Song"
+  }
+}

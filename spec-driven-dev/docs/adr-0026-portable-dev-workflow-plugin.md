@@ -117,13 +117,13 @@ spec-driven-dev/
 
 ### docs-mcp changes
 
-- `index.ts`: replace hardcoded `resolve(join(scriptDir, "..", ".."))` with `--root` CLI arg parsing; fallback to walking up from CWD to find `.git`
+- `index.ts`: replace hardcoded `resolve(join(scriptDir, "..", ".."))` with `--root` CLI arg parsing; fallback to walking up from CWD to find `.git`. Walk-up algorithm: starting from `process.cwd()`, check each directory for a `.git` entry; if found, use that directory as repo root. Walk terminates at the filesystem root (`dirname(dir) === dir`). If no `.git` is found anywhere, log a warning to stderr (`"No .git directory found; lineage scanning disabled, docs dir must exist at <cwd>/docs/"`) and use CWD as the repo root — search and section retrieval still work if `<cwd>/docs/` contains markdown files; lineage scanning is skipped (no git history available). This matches the dashboard's `findRepoRoot` in `mclaude-docs-dashboard/src/boot.ts`, except the dashboard exits non-zero on failure while the MCP server degrades gracefully.
 - `package.json`: add build script: `"build": "bun build --compile src/index.ts --outfile ../bin/docs-mcp"`. The setup skill runs `cd docs-mcp && bun install && bun run build` to produce the binary at `${CLAUDE_PLUGIN_ROOT}/bin/docs-mcp`.
 - `.docs-index.db` created at `<project-root>/.agent/.docs-index.db` (not next to source)
 
 ### `.mcp.json` in plugin
 
-Uses flat-key format (no `"mcpServers"` wrapper) per the plugin `.mcp.json` convention:
+Uses flat-key format (no `"mcpServers"` wrapper) per the Claude Code plugin `.mcp.json` convention (see Claude Code plugin authoring docs — plugin-level `.mcp.json` uses top-level server names as keys, not the `"mcpServers"` wrapper that project `.mcp.json` files use):
 
 ```json
 {
@@ -138,7 +138,7 @@ Uses flat-key format (no `"mcpServers"` wrapper) per the plugin `.mcp.json` conv
 
 ### Pre-tool-use hook
 
-Declared in `hooks/hooks.json` (standard plugin hook format):
+Declared in `hooks/hooks.json` (Claude Code plugin hook format — see Claude Code plugin authoring docs; the `hooks` key at root, `PreToolUse`/`PostToolUse` event arrays, and `matcher`+`hooks` structure are the standard plugin hook schema):
 
 ```json
 {
@@ -162,7 +162,7 @@ Declared in `hooks/hooks.json` (standard plugin hook format):
 `blocked-commands-hook.sh` — the actual script:
 1. Checks for `$CLAUDE_PROJECT_DIR/.agent/blocked-commands.json` — if absent, exits 0 (no-op, project hasn't opted in)
 2. Reads stdin JSON and extracts the command string at `tool_input.command`
-3. Matches against each rule's regex pattern
+3. Matches against each rule's regex pattern. Patterns are matched with `grep -qE`, so they use ERE syntax. The hook wraps each pattern with a compound-command anchor: `(^|[;&|])\s*<pattern>\b` — this ensures commands are caught even when chained (e.g. `cd foo && helm upgrade ...`). Rule authors write only the command-specific portion; the anchor is prepended automatically.
 4. For `ban` rules: always denies by printing the hook deny response JSON and exiting 0
 5. For `guard` rules: denies unless `SDD_DEBUG=1` is set in the environment
 
@@ -205,6 +205,8 @@ mclaude adds project-specific guards (in its `.agent/blocked-commands.json`):
 
 **Migration from existing hook:** The current `pre-tool-use.sh` uses `LOCAL_DEPLOY=1` and `KUBECTL_MUTATE=1` as per-rule overrides. These are replaced by the single `SDD_DEBUG=1`. The old env vars are not honored — the mclaude CLAUDE.md and any scripts referencing them (e.g. `deploy-local-preview`) must be updated to use `SDD_DEBUG=1` instead. This is a clean break, not a backward-compatible migration.
 
+**SDD_DEBUG propagation mechanism:** Claude Code hooks execute as child processes of the Claude Code session and inherit its environment. Skills that need to bypass guard rules (e.g. `deploy-local-preview`) set `SDD_DEBUG=1` as an exported env var in the session before invoking Bash commands — for example, by prefixing commands with `SDD_DEBUG=1 helm upgrade ...` or by instructing the skill to `export SDD_DEBUG=1` early in its flow. The hook's `guard` check reads `${SDD_DEBUG:-}` from the inherited environment. This is the same mechanism the current hook uses with `LOCAL_DEPLOY` and `KUBECTL_MUTATE` — only the variable name changes.
+
 ### Skill and agent generalization
 
 Several skills and agents contain hardcoded mclaude-specific content that must be replaced with generic, convention-based patterns. The generic versions discover project structure at runtime rather than hardcoding component names.
@@ -234,7 +236,7 @@ Reads `.agent/master-config.json`:
 }
 ```
 
-Generates `--disallowedTools` for `Edit(<dir>)` and `Write(<dir>)` on each entry. Includes the Opus model probing logic from current `master.sh`, with the probe cache at `$HOME/.cache/sdd/master-model` (not the mclaude-specific `$HOME/.cache/mclaude/master-model`).
+Generates `--disallowedTools` by iterating each `source_dirs` entry and emitting two flags: `Edit(<entry>)` and `Write(<entry>)`, where `<entry>` is used verbatim (glob patterns like `mclaude-control-plane/**/*.go` are passed as-is inside the parens, matching how `claude --disallowedTools` works today in `master.sh`). Includes the Opus model probing logic from current `master.sh`, with the probe cache at `$HOME/.cache/sdd/master-model` (not the mclaude-specific `$HOME/.cache/mclaude/master-model`).
 
 ### mclaude project cleanup
 
@@ -249,7 +251,7 @@ After plugin extraction:
 - **Update** `CLAUDE.md` → trim workflow rules that the plugin now handles; keep mclaude-specific rules (CI, DNS, deploy). Add mclaude component list so plugin skills can discover components from CLAUDE.md.
 - **Update** `.claude/settings.json` → remove the project-level `PreToolUse` hook entry (plugin's `hooks/hooks.json` now provides it)
 - **Update** `scripts/master.sh` → replace inline `--disallowedTools` list with a call to `sdd-master` (reads `.agent/master-config.json`)
-- **Update** `scripts/droid.sh` → replace inline `--disabled-tools` list with reading `.agent/master-config.json` directly. `sdd-master` wraps `claude` only (uses `--disallowedTools`); `droid.sh` stays a separate script because the `droid` binary uses different flag names (`--disabled-tools`). Both scripts read the same config file; only the flag generation differs.
+- **Update** `scripts/droid.sh` → replace inline `--disabled-tools` list with reading `.agent/master-config.json` directly. `sdd-master` wraps `claude` only (uses `--disallowedTools`); `droid.sh` stays a separate script because the `droid` binary uses different flag names (`--disabled-tools`). Both scripts read the same config file and produce identical `Edit(<glob>)` / `Write(<glob>)` values — the `droid` binary accepts the same `Tool(glob)` syntax for `--disabled-tools` as `claude` does for `--disallowedTools` (verified: current `droid.sh` already passes these patterns successfully). Only the flag name differs.
 - **Update** deploy-local-preview skill → replace `LOCAL_DEPLOY=1` with `SDD_DEBUG=1`
 - **Create** `.agent/master-config.json` with mclaude source directories
 - **Create** `.agent/blocked-commands.json` with mclaude-specific guard rules added to defaults
@@ -266,7 +268,7 @@ No new persistent state beyond existing patterns:
 ## Error Handling
 
 - No `docs/` directory → docs MCP logs warning, returns empty results (no crash)
-- No `.git` → lineage scanning skipped; search and section retrieval still work
+- No `.git` found by walk-up → repo root defaults to CWD; lineage scanning skipped (no git history); search and section retrieval still work if `<cwd>/docs/` has markdown files. Warning logged to stderr.
 - No `.agent/blocked-commands.json` → hook exits silently (no-op) — project hasn't opted in
 - No `.agent/master-config.json` → `sdd-master` runs without `--disallowedTools` (master can edit anything)
 - `docs-mcp` binary not compiled → Claude Code logs MCP start failure; skills still work but without docs MCP tools. `/spec-driven-dev:setup` must be run first.
@@ -289,6 +291,7 @@ No secrets, tokens, or auth. The docs MCP reads the local filesystem only. The h
 - `mclaude-docs-mcp/` — removed (moved to plugin)
 - `.mcp.json` — docs entry removed
 - `CLAUDE.md` — trimmed; add mclaude component list for plugin skills
+- `docs/mclaude-docs-mcp/spec-docs-mcp.md` — update Runtime section (DB path changes from `<repoRoot>/mclaude-docs-mcp/.docs-index.db` to `<project-root>/.agent/.docs-index.db`; entrypoint changes from two-level ascent to `--root` arg with walk-up fallback)
 - `scripts/master.sh` — simplified to call `sdd-master`
 - `scripts/droid.sh` — replace inline `--disabled-tools` list with reading `.agent/master-config.json`
 - `deploy-local-preview` skill — replace `LOCAL_DEPLOY=1` with `SDD_DEBUG=1`

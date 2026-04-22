@@ -1,0 +1,56 @@
+#!/bin/bash
+# Launch a master/orchestrator Claude Code session with spec-driven-dev workflow.
+#
+# Master session: restricted from editing source files listed in
+# .agent/master-config.json — those are agent-only (dev-harness, etc.).
+#
+# If .agent/master-config.json doesn't exist, runs claude with no
+# disallowed tools (no master/agent separation configured).
+
+set -euo pipefail
+
+# --- Model probing ---
+# Prefer Opus 4.7 1M context if available on this machine/plan.
+# Result is cached per-machine; delete the cache file to re-probe.
+CACHE_FILE="$HOME/.cache/sdd/master-model"
+if [ -r "$CACHE_FILE" ]; then
+  MODEL=$(cat "$CACHE_FILE")
+else
+  MODEL="claude-opus-4-7[1m]"
+  timeout 10 claude --model "$MODEL" -p "probe" --max-turns 0 </dev/null &>/dev/null || MODEL="opus"
+  mkdir -p "$(dirname "$CACHE_FILE")"
+  printf '%s' "$MODEL" > "$CACHE_FILE"
+fi
+
+# --- Disallowed tools from config ---
+CONFIG=".agent/master-config.json"
+DISALLOWED_ARGS=()
+
+if [ -f "$CONFIG" ]; then
+  # Read each source_dirs entry and generate Edit(...) + Write(...) restrictions.
+  while IFS= read -r entry; do
+    [ -z "$entry" ] && continue
+    DISALLOWED_ARGS+=("Edit(${entry})" "Write(${entry})")
+  done < <(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        config = json.load(f)
+    for d in config.get('source_dirs', []):
+        print(d)
+except Exception as e:
+    print(f'# config parse error: {e}', file=sys.stderr)
+" "$CONFIG")
+fi
+
+# --- Launch claude ---
+if [ ${#DISALLOWED_ARGS[@]} -gt 0 ]; then
+  exec claude \
+    --model "$MODEL" \
+    --disallowedTools "${DISALLOWED_ARGS[@]}" \
+    "$@"
+else
+  exec claude \
+    --model "$MODEL" \
+    "$@"
+fi

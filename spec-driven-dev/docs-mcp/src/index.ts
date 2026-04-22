@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { join, dirname, resolve } from "path";
+import { join, dirname } from "path";
+import { existsSync, mkdirSync, statSync } from "fs";
 import { openDb } from "./db.js";
 import { indexAllDocs } from "./content-indexer.js";
 import { runLineageScan } from "./lineage-scanner.js";
@@ -16,11 +17,69 @@ import {
   listDocs,
 } from "./tools.js";
 
-// Determine repo root: two levels up from this file (mclaude-docs-mcp/src/index.ts)
-const scriptDir = dirname(new URL(import.meta.url).pathname);
-const repoRoot = resolve(join(scriptDir, "..", ".."));
+// ---- Determine repo root ----
+
+/**
+ * Parse --root <path> from process.argv.
+ * Returns the path if found, otherwise null.
+ */
+function parseRootArg(): string | null {
+  const args = process.argv;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--root" && i + 1 < args.length) {
+      return args[i + 1];
+    }
+  }
+  return null;
+}
+
+/**
+ * Walk up from startDir looking for a .git directory.
+ * Returns the directory containing .git, or null if none found.
+ */
+function findGitRoot(startDir: string): string | null {
+  let dir = startDir;
+  while (true) {
+    const gitDir = join(dir, ".git");
+    try {
+      if (existsSync(gitDir)) {
+        return dir;
+      }
+    } catch {
+      // Permission error or similar — skip
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      // Reached filesystem root
+      return null;
+    }
+    dir = parent;
+  }
+}
+
+let repoRoot: string;
+const explicitRoot = parseRootArg();
+
+if (explicitRoot) {
+  repoRoot = explicitRoot;
+} else {
+  const gitRoot = findGitRoot(process.cwd());
+  if (gitRoot) {
+    repoRoot = gitRoot;
+  } else {
+    repoRoot = process.cwd();
+    console.error(
+      `[docs-mcp] No .git directory found; lineage scanning disabled, docs dir must exist at ${repoRoot}/docs/`
+    );
+  }
+}
+
 const docsDir = join(repoRoot, "docs");
-const dbPath = join(scriptDir, "..", ".docs-index.db");
+
+// Ensure .agent/ directory exists for the DB
+const agentDir = join(repoRoot, ".agent");
+mkdirSync(agentDir, { recursive: true });
+const dbPath = join(agentDir, ".docs-index.db");
 
 console.error(`[docs-mcp] Starting. repoRoot=${repoRoot} dbPath=${dbPath}`);
 
