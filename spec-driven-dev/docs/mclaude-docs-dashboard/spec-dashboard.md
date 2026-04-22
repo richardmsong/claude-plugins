@@ -119,6 +119,15 @@ Collapses the `LineageResult[]` response from `/api/lineage` by `section_b_doc` 
 
 A `≡` icon is rendered next to the H1 title on every spec and ADR detail page, in addition to the per-H2 icons. Clicking/hovering calls `/api/lineage?doc=<p>` with no heading, returning doc-level aggregated rows. Popover row format is identical to the H2 collapsed row.
 
+## MarkdownView (`ui/src/components/MarkdownView.tsx`)
+
+Renders raw markdown to styled HTML using `marked` with a custom renderer. Scoped by a `.markdown-body` CSS class with a dark-theme typography stylesheet (`ui/src/components/markdown-body.css`) that provides spacing, font sizes, borders, and backgrounds for all standard markdown elements (h1–h6, p, ul, ol, li, table, th, td, pre, code, blockquote, hr, img). The stylesheet uses descendant selectors scoped to `.markdown-body` to avoid leaking into the dashboard chrome. Theme colors match the existing dashboard palette (`#0d1117` backgrounds, `#e2e8f0` text, `#63b3ed` links, `#2d3748` borders) (ADR-0039).
+
+The custom renderer also:
+- Applies `highlight.js` to fenced code blocks.
+- Rewrites relative `adr-*.md` and `spec-*.md` links to internal `#/adr/` and `#/spec/` hash routes.
+- Injects `LineagePopover` placeholders into H2 headings (hydrated after render via `createRoot`).
+
 ## UI Routes
 
 | Hash route | Component | Description |
