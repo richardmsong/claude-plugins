@@ -29,6 +29,7 @@ export default function MarkdownView({ markdown, docPath, navigate }: MarkdownVi
     // Use a fresh Marked instance per render — marked.use() mutates the global
     // instance (stacking extensions), so we must use new Marked() here.
     const markedInstance = new Marked({
+      breaks: true,
       renderer: {
         // Code blocks: apply highlight.js
         code(code: string, lang: string | undefined) {
