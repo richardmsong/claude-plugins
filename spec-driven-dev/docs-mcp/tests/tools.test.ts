@@ -289,10 +289,10 @@ describe("readRawDoc", () => {
     expect(() => readRawDoc(repoRoot, "docs/../../../etc/passwd")).toThrow();
   });
 
-  test("rejects path that resolves outside docs/ but inside repoRoot", () => {
-    // A file inside repoRoot but not inside repoRoot/docs/
+  test("reads a file inside repoRoot but outside docs/", () => {
     writeFileSync(join(repoRoot, "secret.md"), "secret content");
-    expect(() => readRawDoc(repoRoot, "secret.md")).toThrow(NotFoundError);
+    const content = readRawDoc(repoRoot, "secret.md");
+    expect(content).toBe("secret content");
   });
 
   test("reads a file in a subdirectory inside docs/", () => {

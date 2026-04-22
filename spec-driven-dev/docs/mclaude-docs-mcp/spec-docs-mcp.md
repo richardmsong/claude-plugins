@@ -10,7 +10,7 @@ Established by ADR-0015 (the v1 design), extended by ADR-0018 (status column + s
 
 - Bun (loads `.ts` files natively; no build step).
 - Single-process; stdio transport for MCP. No HTTP, no auth, no network.
-- Entrypoint: `docs-mcp/src/index.ts`. On boot: resolves repo root via `--root <dir>` CLI argument (required); opens the SQLite DB at `<repoRoot>/.agent/.docs-index.db`; runs `indexAllDocs`; runs `runLineageScan` (initial lineage derivation from `git log`); starts `startWatcher` for the process lifetime; registers the four MCP tools.
+- Entrypoint: `docs-mcp/src/index.ts`. On boot: resolves repo root via `--root <dir>` CLI argument (preferred) or by walking up from `process.cwd()` to find a `.git` directory (fallback); opens the SQLite DB at `<repoRoot>/.agent/.docs-index.db`; runs `indexAllDocs`; runs `runLineageScan` (initial lineage derivation from `git log`); starts `startWatcher` for the process lifetime; registers the four MCP tools. The MCP server always uses `<repoRoot>/docs/` as its docs directory; `--docs-dir` is dashboard-only (ADR-0032).
 - The dashboard (`docs-dashboard`) accepts a `--docs-dir <path>` flag (ADR-0032) to override the default `<repoRoot>/docs/` location. This is threaded through `boot() → indexAllDocs / startWatcher`.
 
 ## Data store

@@ -276,27 +276,19 @@ export class NotFoundError extends Error {
 }
 
 /**
- * Read the raw markdown content of a document in the docs/ tree.
+ * Read the raw markdown content of a document inside the repo.
  *
  * Security:
  * - The resolved path must remain inside repoRoot (rejects ".." escape).
- * - The resolved path must be inside <repoRoot>/docs/ (prevents reading
- *   non-doc files even if they are inside repoRoot).
  *
- * Throws NotFoundError if the file does not exist.
+ * Throws NotFoundError if the file does not exist or the path escapes repoRoot.
  */
 export function readRawDoc(repoRoot: string, docPath: string): string {
   const absRepoRoot = resolve(repoRoot);
-  const absDocsRoot = join(absRepoRoot, "docs");
   const absPath = resolve(absRepoRoot, docPath);
 
   // Must remain inside repoRoot
   if (!absPath.startsWith(absRepoRoot + "/") && absPath !== absRepoRoot) {
-    throw new NotFoundError(docPath);
-  }
-
-  // Must be inside <repoRoot>/docs/
-  if (!absPath.startsWith(absDocsRoot + "/") && absPath !== absDocsRoot) {
     throw new NotFoundError(docPath);
   }
 
