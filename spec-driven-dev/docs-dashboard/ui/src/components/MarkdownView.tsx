@@ -3,6 +3,7 @@ import { Marked } from "marked";
 import hljs from "highlight.js";
 import { createRoot } from "react-dom/client";
 import LineagePopover from "./LineagePopover";
+import "./markdown-body.css";
 
 // Convert a doc path to a hash route:
 // - **/adr-*.md -> #/adr/<full-path-without-extension>
