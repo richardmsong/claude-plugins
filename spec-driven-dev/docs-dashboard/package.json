@@ -12,7 +12,7 @@
     "test:ui": "cd ui && bun run test"
   },
   "dependencies": {
-    "mclaude-docs-mcp": "workspace:*"
+    "docs-mcp": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -11,14 +11,14 @@ import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { openDb } from "mclaude-docs-mcp/db";
+import { openDb } from "docs-mcp/db";
 
 // Track invocations of the mocked scanner
 let lineageScanCalls: { db: unknown; repoRoot: string }[] = [];
 
-// Mock mclaude-docs-mcp/lineage-scanner before boot.ts is imported so the
+// Mock docs-mcp/lineage-scanner before boot.ts is imported so the
 // static import in boot.ts resolves to this stub.
-mock.module("mclaude-docs-mcp/lineage-scanner", () => {
+mock.module("docs-mcp/lineage-scanner", () => {
   return {
     runLineageScan: (db: unknown, repoRoot: string) => {
       lineageScanCalls.push({ db, repoRoot });
@@ -33,7 +33,7 @@ mock.module("mclaude-docs-mcp/lineage-scanner", () => {
 });
 
 // Dynamic import of boot AFTER the mock is registered, so boot.ts's
-// static `import { runLineageScan } from "mclaude-docs-mcp/lineage-scanner"`
+// static `import { runLineageScan } from "docs-mcp/lineage-scanner"`
 // picks up the mocked version.
 const { boot } = await import("../src/boot");
 
@@ -132,7 +132,7 @@ describe("boot() calls runLineageScan", () => {
   it("continues boot even if runLineageScan throws (non-fatal policy)", () => {
     // Temporarily make the mock throw.
     let scanCallCount = 0;
-    mock.module("mclaude-docs-mcp/lineage-scanner", () => ({
+    mock.module("docs-mcp/lineage-scanner", () => ({
       runLineageScan: () => {
         scanCallCount++;
         throw new Error("simulated git error");

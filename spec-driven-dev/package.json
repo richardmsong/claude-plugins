@@ -1,0 +1,9 @@
+{
+  "name": "spec-driven-dev",
+  "private": true,
+  "workspaces": [
+    "docs-mcp",
+    "docs-dashboard",
+    "docs-dashboard/ui"
+  ]
+}

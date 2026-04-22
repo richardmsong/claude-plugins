@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
-import { openDb } from "mclaude-docs-mcp/db";
+import { openDb } from "docs-mcp/db";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdirSync, writeFileSync, rmSync } from "fs";
-import { indexFile } from "mclaude-docs-mcp/content-indexer";
+import { indexFile } from "docs-mcp/content-indexer";
 
 /**
  * Create a temporary in-memory-style DB for tests.

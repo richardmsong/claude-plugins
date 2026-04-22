@@ -3,4 +3,6 @@ node_modules/
 *.db-shm
 *.db-wal
 .agent/.docs-index.db*
+.agent/audits/
 bun.lock
+spec-driven-dev/bin/docs-mcp
