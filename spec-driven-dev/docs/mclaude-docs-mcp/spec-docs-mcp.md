@@ -103,9 +103,11 @@ The MCP entrypoint does not pass an `onReindex` callback — the MCP server is a
 
 ## Lineage scanner (`src/lineage-scanner.ts`)
 
-Runs on every boot of the MCP server, and again via the watcher whenever HEAD advances (per ADR-0015 § "Lineage reindex trigger"). Iterates every commit in the repo whose diff touches `docs/*.md`, starting from `metadata.last_lineage_commit + 1` if present, else from the repo's first commit. For each commit:
+Signature: `runLineageScan(db, repoRoot, docsDir)`. `docsDir` is the absolute path to the docs directory (same value passed to `indexAllDocs` and `startWatcher`). The scanner computes `relDocsDir = relative(repoRoot, docsDir)` to derive the repo-root-relative path (e.g. `spec-driven-dev/docs`) and uses `${relDocsDir}/*.md` as the git pathspec in all git commands (ADR-0036). When docs live at `<repoRoot>/docs/`, the pathspec is `docs/*.md` — identical to pre-ADR-0036 behavior.
 
-1. Compute the list of modified `.md` files under `docs/`.
+Runs on every boot of the MCP server, and again via the watcher whenever HEAD advances (per ADR-0015 § "Lineage reindex trigger"). Iterates every commit in the repo whose diff touches `${relDocsDir}/*.md`, starting from `metadata.last_lineage_commit + 1` if present, else from the repo's first commit. For each commit:
+
+1. Compute the list of modified `.md` files under `relDocsDir`.
 2. For each modified file, increment `documents.commit_count` by 1 (per ADR-0027 — this runs **before** the `modifiedFiles.length < 2` check so solo commits are counted for volatility).
 3. If `modifiedFiles.length < 2`, return (no pairs to emit).
 4. Otherwise, parse each file at this commit's SHA, expand each file to its list of H2 sections modified in the diff (via line-range intersection), and for every ordered pair (section_a, section_b) across distinct files upsert a `lineage` row: `INSERT … ON CONFLICT DO UPDATE SET commit_count = commit_count + 1, last_commit = <short hash>`.
