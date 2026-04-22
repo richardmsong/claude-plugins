@@ -1,8 +1,9 @@
 # ADR: Default all ADR status buckets to expanded
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-22: accepted
+- 2026-04-22: implemented — all scope CLEAN
 
 ## Overview
 
