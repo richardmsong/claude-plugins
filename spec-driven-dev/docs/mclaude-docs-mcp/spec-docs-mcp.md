@@ -181,7 +181,7 @@ Exported from `src/tools.ts` for workspace consumers (the dashboard, per ADR-002
 
 ### `readRawDoc(repoRoot, docPath): string`
 
-Joins `repoRoot + docPath`, verifies the resolved path remains inside `repoRoot` (rejects `..` escape), verifies the resolved path is inside `<repoRoot>/docs/`, calls `fs.readFileSync(path, "utf8")`, returns the file contents. Throws `NotFoundError` if the file is missing. Not exposed as an MCP tool.
+Joins `repoRoot + docPath`, verifies the resolved path remains inside `repoRoot` (rejects `..` escape), calls `fs.readFileSync(path, "utf8")`, returns the file contents. Throws `NotFoundError` if the file is missing or the path escapes `repoRoot`. Not exposed as an MCP tool. Per ADR-0033, the previous `<repoRoot>/docs/` containment check was removed — doc paths may live in any subdirectory since ADR-0032 made the docs directory configurable.
 
 ## Package exports
 

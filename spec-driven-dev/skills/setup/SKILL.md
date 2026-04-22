@@ -27,7 +27,9 @@ which claude # install: npm install -g @anthropic-ai/claude-code
 1. Compile docs-mcp binary
 2. Symlink sdd-master to ~/.local/bin/
 3. Initialize per-project config files (if absent)
-4. Verify
+4. Scaffold CLAUDE.md (if absent)
+5. Bootstrap default permissions in .claude/settings.json
+6. Verify
 ```
 
 ---
@@ -115,7 +117,99 @@ If the file already exists, print: `".agent/master-config.json already exists �
 
 ---
 
-## Step 4 — Verify
+## Step 4 — Scaffold CLAUDE.md
+
+If `$CLAUDE_PROJECT_DIR/CLAUDE.md` does not exist, create it with the core SDD workflow rules:
+
+```markdown
+# Project Rules
+
+## All changes — /feature-change first
+
+**Never write implementation code directly for any app change.**
+Every change — feature, bug fix, refactor, config, UI tweak, backend change — goes through `/feature-change` first.
+
+The loop: `/feature-change` checks the spec → updates spec if needed → commits spec → calls dev-harness → implements and tests.
+
+For bug fixes where the spec is already correct, `/feature-change` skips the spec update and goes straight to dev-harness.
+
+## New feature detected → invoke /plan-feature immediately
+
+When the user describes anything that looks like a potential new feature, jump straight into `/plan-feature` — don't wait for the full picture, don't rely on keeping it in memory.
+
+Planning context is lost when you get compacted or switched out. The ADR on disk is the durable form. Start `/plan-feature` on the first mention, even mid-conversation, even if there are still open questions — drafts are first-class and can be paused, committed, and resumed.
+
+Heuristic: if the user says something like "maybe we should…", "what if…", "could we add…", "I want to…", or describes a capability the app doesn't have yet → that's `/plan-feature`. Don't ask permission; just start the skill and let the Q&A surface the rest.
+
+## Parallelism — use subagents for independent work
+
+When requests can be parallelized, use subagents extensively rather than handling them sequentially.
+
+Launch multiple agents in a single message when their work is independent. Don't serialize tasks that can overlap.
+```
+
+If the file already exists, print: `"CLAUDE.md already exists — skipping (preserving customizations)"`
+
+Tell the user: `"Review CLAUDE.md and add project-specific rules (component lists, deploy commands, etc.)"`
+
+---
+
+## Step 5 — Bootstrap default permissions
+
+Read or create `$CLAUDE_PROJECT_DIR/.claude/settings.json`. Merge the following `allowedTools` entries into the existing array (do not duplicate entries that already exist):
+
+```json
+{
+  "permissions": {
+    "allowedTools": [
+      "Edit",
+      "Write",
+      "mcp__plugin_spec-driven-dev_docs__search_docs",
+      "mcp__plugin_spec-driven-dev_docs__get_section",
+      "mcp__plugin_spec-driven-dev_docs__get_lineage",
+      "mcp__plugin_spec-driven-dev_docs__list_docs",
+      "Bash(bun *)",
+      "Bash(bun test*)",
+      "Bash(bunx *)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git status*)",
+      "Bash(git stash*)",
+      "Bash(git checkout*)",
+      "Bash(git branch*)",
+      "Bash(git rev-parse*)",
+      "Bash(git ls-tree*)",
+      "Bash(git cat-file*)",
+      "Bash(git show*)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(mkdir *)",
+      "Bash(rm -rf /tmp/*)",
+      "Bash(curl -s *)"
+    ]
+  }
+}
+```
+
+These permissions are required for:
+- **Edit/Write**: dev-harness and spec-evaluator subagents run without supervision and cannot prompt for permission
+- **docs MCP tools**: read-only doc operations should never require approval
+- **Bash patterns**: test runners (bun test), git operations, and filesystem exploration are core to the workflow
+
+If `.claude/settings.json` already exists with an `allowedTools` array, merge only entries that are not already present. Do not remove existing entries.
+
+Print: `"Default permissions configured in .claude/settings.json"`
+
+---
+
+## Step 6 — Verify
 
 Run these checks and report results:
 
@@ -126,5 +220,7 @@ Run these checks and report results:
 | sdd-master on PATH | `which sdd-master` | Callable from CLI |
 | blocked-commands config | `test -f .agent/blocked-commands.json` | Config present |
 | master config | `test -f .agent/master-config.json` | Config present |
+| CLAUDE.md | `test -f CLAUDE.md` | Workflow rules present |
+| permissions | `test -f .claude/settings.json` | Default permissions configured |
 
 Report pass/fail for each. Any failure is non-fatal — the plugin still works for skills and hooks; only the failed capability is degraded.
