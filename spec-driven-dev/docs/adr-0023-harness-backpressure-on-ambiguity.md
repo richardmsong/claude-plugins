@@ -1,8 +1,9 @@
 # ADR: Harness Loops Backpressure on Spec Ambiguity
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-20: accepted
+- 2026-04-22: implemented — backpressure rules codified in feature-change and plan-feature skills
 
 ## Overview
 
