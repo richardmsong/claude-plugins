@@ -15,7 +15,7 @@ Established by ADR-0015 (the v1 design), extended by ADR-0018 (status column + s
 
 ## Data store
 
-SQLite file at `<repoRoot>/.agent/.docs-index.db`, opened in WAL mode with foreign keys on. Schema lives in the `SCHEMA_SQL` constant in `src/db.ts`. Schema version is tracked in the `metadata` table under key `schema_version`; on mismatch or corruption, `openDb` deletes the file and rebuilds from scratch. Current version: `"3"` (ADR-0027).
+SQLite file at `<repoRoot>/.agent/.docs-index.db`, opened in WAL mode with foreign keys on. Schema lives in the `SCHEMA_SQL` constant in `src/db.ts`. Schema version is tracked in the `metadata` table under key `schema_version`; on mismatch or corruption, `openDb` deletes the file and rebuilds from scratch. Current version: `"4"` (ADR-0040 added `blame_lines` table).
 
 ### Tables
 
@@ -218,6 +218,7 @@ Joins `repoRoot + docPath`, verifies the resolved path remains inside `repoRoot`
   "./db": "./src/db.ts",
   "./content-indexer": "./src/content-indexer.ts",
   "./lineage-scanner": "./src/lineage-scanner.ts",
+  "./blame-scanner": "./src/blame-scanner.ts",
   "./watcher": "./src/watcher.ts",
   "./tools": "./src/tools.ts"
 }
