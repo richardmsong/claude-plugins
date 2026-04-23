@@ -133,7 +133,7 @@ Runs on every boot of the MCP server, and again via the watcher whenever HEAD ad
 1. Compute the list of modified `.md` files under `relDocsDir`.
 2. For each modified file, increment `documents.commit_count` by 1 (per ADR-0027 — this runs **before** the `modifiedFiles.length < 2` check so solo commits are counted for volatility).
 3. If `modifiedFiles.length < 2`, return (no pairs to emit).
-4. Otherwise, parse each file at this commit's SHA, expand each file to its list of H2 sections modified in the diff (via line-range intersection), and for every ordered pair (section_a, section_b) across distinct files upsert a `lineage` row: `INSERT … ON CONFLICT DO UPDATE SET commit_count = commit_count + 1, last_commit = <full commit hash>`.
+4. Otherwise, parse each file at this commit's SHA, expand each file to its list of H2 sections modified in the diff (via line-range intersection), and for every ordered pair (section_a, section_b) across distinct files **where at least one file is an ADR** (`adr-*.md`), upsert a `lineage` row: `INSERT … ON CONFLICT DO UPDATE SET commit_count = commit_count + 1, last_commit = <full commit hash>`. Spec↔spec pairs are skipped — lineage tracks decision provenance (ADR → spec), not coincidental co-edits (ADR-0042).
 5. Update `metadata.last_lineage_commit` to the full commit hash.
 
 Incremental rescan: subsequent runs start where the previous run left off.
