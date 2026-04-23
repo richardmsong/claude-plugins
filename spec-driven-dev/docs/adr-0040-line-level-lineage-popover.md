@@ -1,9 +1,10 @@
 # ADR: Line-level lineage popover
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-22: draft
 - 2026-04-22: accepted — paired with spec-dashboard.md, spec-docs-mcp.md
+- 2026-04-23: implemented — all scope CLEAN
 
 ## Overview
 
