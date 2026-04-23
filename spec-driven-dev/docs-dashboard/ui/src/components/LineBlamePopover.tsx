@@ -13,7 +13,7 @@ interface LineBlamePopoverProps {
   isUncommitted: boolean;
   /** Section-level lineage heading (used for uncommitted fallback label). */
   sectionHeading?: string | null;
-  /** Position hint for the popover (e.g., from a mouse event). */
+  /** Position hint for the popover, anchored to the hovered block's bounding rect. */
   anchorTop: number;
   anchorLeft: number;
   /** Doc path (for fetching diffs). */
@@ -24,6 +24,17 @@ interface LineBlamePopoverProps {
   onPin: () => void;
   /** Called when user dismisses (Esc or outside click). */
   onDismiss: () => void;
+  /**
+   * Called when the mouse enters the popover. The parent uses this to maintain
+   * the block's highlighted state (hover bridge — moving block → popover must
+   * not dismiss).
+   */
+  onMouseEnter?: () => void;
+  /**
+   * Called when the mouse leaves the popover entirely. The parent uses this to
+   * clear the highlighted state when the cursor moves to empty space.
+   */
+  onMouseLeave?: () => void;
 }
 
 interface DiffState {
@@ -56,6 +67,8 @@ export default function LineBlamePopover({
   pinned,
   onPin,
   onDismiss,
+  onMouseEnter,
+  onMouseLeave,
 }: LineBlamePopoverProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Per-ADR diff expansion state: key = doc_path
@@ -128,7 +141,14 @@ export default function LineBlamePopover({
   };
 
   return (
-    <div ref={containerRef} style={popoverStyle} role="dialog" aria-label="Line blame">
+    <div
+      ref={containerRef}
+      style={popoverStyle}
+      role="dialog"
+      aria-label="Line blame"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
       <div style={styles.header}>
         {isUncommitted ? (
           <span style={styles.headerTitle}>

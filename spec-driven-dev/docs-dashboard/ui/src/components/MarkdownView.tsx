@@ -82,13 +82,14 @@ interface MarkdownViewProps {
   blameBlocks?: BlameBlock[];
   /** Line numbers with no blame (working copy changes). */
   uncommittedLines?: number[];
-  /** Called when the user hovers a rendered block. */
+  /** Called when the user hovers a rendered block. Passes the element's bounding rect
+   *  so callers can anchor the popover to the block element (not the cursor). */
   onBlockHover?: (
     block: BlameBlock | null,
     isUncommitted: boolean,
     lineStart: number,
     lineEnd: number,
-    event: MouseEvent,
+    rect: DOMRect,
   ) => void;
   /** Called when the user stops hovering a block. */
   onBlockLeave?: () => void;
@@ -239,11 +240,14 @@ export default function MarkdownView({
         const lineEnd = parseInt(el.getAttribute(LINE_END_ATTR) ?? "0", 10);
         if (!lineStart) continue;
 
-        el.addEventListener("mouseenter", (e) => {
+        el.addEventListener("mouseenter", () => {
           el.style.backgroundColor = HOVER_BG;
           const block = findBlameBlock(lineStart, lineEnd, blameBlocks);
           const uncommitted = isRangeUncommitted(lineStart, lineEnd, uncommittedLines);
-          onBlockHover(block, uncommitted, lineStart, lineEnd, e as MouseEvent);
+          // Pass the element's bounding rect so the caller can anchor the popover
+          // to the block element (no gap between block and popover).
+          const rect = el.getBoundingClientRect();
+          onBlockHover(block, uncommitted, lineStart, lineEnd, rect);
         });
         el.addEventListener("mouseleave", () => {
           el.style.backgroundColor = "";

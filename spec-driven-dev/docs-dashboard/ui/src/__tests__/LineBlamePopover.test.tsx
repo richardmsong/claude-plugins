@@ -286,4 +286,82 @@ describe("LineBlamePopover", () => {
     );
     expect(container.textContent).toContain("No co-committed ADRs");
   });
+
+  it("uses anchorTop and anchorLeft for positioning (bounding rect anchor)", () => {
+    const { container } = render(
+      <LineBlamePopover
+        block={mockBlock}
+        isUncommitted={false}
+        anchorTop={300}
+        anchorLeft={150}
+        docPath="spec-driven-dev/docs/adr-0040-line-level-lineage-popover.md"
+        pinned={false}
+        onPin={onPin}
+        onDismiss={onDismiss}
+      />
+    );
+    const popover = container.firstElementChild as HTMLElement;
+    expect(popover.style.top).toBe("300px");
+    expect(popover.style.left).toBe("150px");
+  });
+
+  it("calls onMouseEnter when mouse enters the popover", () => {
+    const onMouseEnter = vi.fn();
+    const { container } = render(
+      <LineBlamePopover
+        block={mockBlock}
+        isUncommitted={false}
+        anchorTop={100}
+        anchorLeft={200}
+        docPath="spec-driven-dev/docs/adr-0040-line-level-lineage-popover.md"
+        pinned={false}
+        onPin={onPin}
+        onDismiss={onDismiss}
+        onMouseEnter={onMouseEnter}
+      />
+    );
+    const popover = container.firstElementChild as HTMLElement;
+    fireEvent.mouseEnter(popover);
+    expect(onMouseEnter).toHaveBeenCalled();
+  });
+
+  it("calls onMouseLeave when mouse leaves the popover", () => {
+    const onMouseLeave = vi.fn();
+    const { container } = render(
+      <LineBlamePopover
+        block={mockBlock}
+        isUncommitted={false}
+        anchorTop={100}
+        anchorLeft={200}
+        docPath="spec-driven-dev/docs/adr-0040-line-level-lineage-popover.md"
+        pinned={false}
+        onPin={onPin}
+        onDismiss={onDismiss}
+        onMouseLeave={onMouseLeave}
+      />
+    );
+    const popover = container.firstElementChild as HTMLElement;
+    fireEvent.mouseLeave(popover);
+    expect(onMouseLeave).toHaveBeenCalled();
+  });
+
+  it("hover bridge props are optional (no crash when omitted)", () => {
+    // Should not throw when onMouseEnter/onMouseLeave are not provided
+    const { container } = render(
+      <LineBlamePopover
+        block={mockBlock}
+        isUncommitted={false}
+        anchorTop={100}
+        anchorLeft={200}
+        docPath="spec-driven-dev/docs/adr-0040-line-level-lineage-popover.md"
+        pinned={false}
+        onPin={onPin}
+        onDismiss={onDismiss}
+      />
+    );
+    const popover = container.firstElementChild as HTMLElement;
+    // These should not throw even without handlers
+    expect(() => fireEvent.mouseEnter(popover)).not.toThrow();
+    expect(() => fireEvent.mouseLeave(popover)).not.toThrow();
+  });
 });

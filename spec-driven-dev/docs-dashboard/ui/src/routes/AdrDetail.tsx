@@ -100,7 +100,7 @@ export default function AdrDetail({ slug, navigate, lastEvent }: AdrDetailProps)
       isUncommitted: boolean,
       lineStart: number,
       lineEnd: number,
-      event: MouseEvent,
+      rect: DOMRect,
     ) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -111,13 +111,15 @@ export default function AdrDetail({ slug, navigate, lastEvent }: AdrDetailProps)
 
       debounceRef.current = setTimeout(() => {
         if (popover?.pinned) return;
+        // Anchor to the block element's bounding rect — overlap by 4px so there is
+        // no gap between the block and the popover (prevents dismiss on mouse transition).
         setPopover({
           block,
           isUncommitted,
           lineStart,
           lineEnd,
-          top: event.clientY + 12,
-          left: event.clientX,
+          top: rect.bottom - 4,
+          left: rect.left,
           pinned: false,
         });
       }, 300);
@@ -139,13 +141,15 @@ export default function AdrDetail({ slug, navigate, lastEvent }: AdrDetailProps)
       setHoveredBlockIndex(blockIndex);
       const block = blameData?.blocks[blockIndex] ?? null;
       if (block) {
+        // Anchor to the gutter annotation element's bounding rect
+        const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
         setPopover({
           block,
           isUncommitted: false,
           lineStart: block.line_start,
           lineEnd: block.line_end,
-          top: event.clientY + 12,
-          left: event.clientX,
+          top: rect.top,
+          left: rect.right - 4,
           pinned: popover?.pinned ?? false,
         });
       }
@@ -166,6 +170,19 @@ export default function AdrDetail({ slug, navigate, lastEvent }: AdrDetailProps)
     setPopover(null);
     setHoveredBlockIndex(null);
   }, []);
+
+  // Hover bridge: entering the popover keeps the block highlighted.
+  // Leaving the popover (to empty space) dismisses if not pinned.
+  const handlePopoverMouseEnter = useCallback(() => {
+    // Cancel any pending debounce — don't re-trigger popover from scratch
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    // hoveredBlockIndex is already set; nothing else needed
+  }, []);
+
+  const handlePopoverMouseLeave = useCallback(() => {
+    setHoveredBlockIndex(null);
+    if (!popover?.pinned) setPopover(null);
+  }, [popover]);
 
   if (loading) return <div style={styles.loading}>Loading…</div>;
   if (error) return <div style={styles.error}>{error}</div>;
@@ -224,6 +241,8 @@ export default function AdrDetail({ slug, navigate, lastEvent }: AdrDetailProps)
           pinned={popover.pinned}
           onPin={handlePin}
           onDismiss={handleDismiss}
+          onMouseEnter={handlePopoverMouseEnter}
+          onMouseLeave={handlePopoverMouseLeave}
         />
       )}
     </article>
