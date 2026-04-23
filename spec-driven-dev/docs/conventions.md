@@ -49,6 +49,7 @@ The `.agent/` directory at the repo root holds runtime state for the plugin and 
 ```
 .agent/
   .docs-index.db       # SQLite FTS5 index (runtime, gitignored)
+  .master-sessions     # registered master session IDs (runtime, gitignored)
   blocked-commands.json # hook config — committed
   master-config.json   # master/agent separation config — committed
   audits/              # design-audit and spec-evaluator output
