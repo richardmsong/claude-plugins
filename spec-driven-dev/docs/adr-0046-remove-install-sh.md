@@ -1,8 +1,9 @@
 # ADR: Remove install.sh
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-23: accepted
+- 2026-04-23: implemented — install.sh deleted, references removed
 
 ## Overview
 
