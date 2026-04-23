@@ -1,9 +1,10 @@
 # ADR: Agent-Abstract Plugin Packaging
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-23: draft
 - 2026-04-23: accepted
+- 2026-04-23: implemented — all scope CLEAN
 
 ## Overview
 
