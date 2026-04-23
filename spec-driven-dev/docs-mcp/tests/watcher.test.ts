@@ -64,6 +64,19 @@ function makeTestDb(): Database {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE blame_lines (
+      id INTEGER PRIMARY KEY,
+      doc_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+      line_start INTEGER NOT NULL,
+      line_end INTEGER NOT NULL,
+      "commit" TEXT NOT NULL,
+      author TEXT NOT NULL,
+      date TEXT NOT NULL,
+      summary TEXT NOT NULL
+    );
+
+    CREATE INDEX blame_lines_doc_line ON blame_lines (doc_id, line_start);
   `);
 
   return db;

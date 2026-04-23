@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync, unlinkSync } from "fs";
 
-const SCHEMA_VERSION = "3";
+const SCHEMA_VERSION = "4";
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS documents (
@@ -62,6 +62,19 @@ CREATE TABLE IF NOT EXISTS metadata (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS blame_lines (
+  id INTEGER PRIMARY KEY,
+  doc_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  line_start INTEGER NOT NULL,
+  line_end INTEGER NOT NULL,
+  commit TEXT NOT NULL,
+  author TEXT NOT NULL,
+  date TEXT NOT NULL,
+  summary TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS blame_lines_doc_line ON blame_lines (doc_id, line_start);
 `;
 
 export function openDb(dbPath: string): Database {

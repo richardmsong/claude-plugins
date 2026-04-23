@@ -3,6 +3,7 @@ import { existsSync } from "fs";
 import { join, relative } from "path";
 import { indexFile, indexAllDocs } from "./content-indexer.js";
 import { runLineageScan, getHeadCommit } from "./lineage-scanner.js";
+import { blameFile } from "./blame-scanner.js";
 
 const DEBOUNCE_MS = 100;
 const POLL_INTERVAL_MS = 5000;
@@ -36,7 +37,14 @@ export function startWatcher(
       try {
         const reindexed = indexFile(db, fullPath, repoRoot);
         if (reindexed) {
-          changedPaths.push(relative(repoRoot, fullPath).replace(/\\/g, "/"));
+          const relPath = relative(repoRoot, fullPath).replace(/\\/g, "/");
+          changedPaths.push(relPath);
+          // Re-blame the changed file
+          try {
+            blameFile(db, repoRoot, fullPath);
+          } catch (err) {
+            console.warn(`[docs-mcp] blame error for ${fullPath}: ${err}`);
+          }
         }
       } catch (err) {
         console.warn(`[docs-mcp] Error indexing ${fullPath}: ${err}`);
@@ -45,7 +53,16 @@ export function startWatcher(
       // Re-stat all docs files
       try {
         const reindexed = indexAllDocs(db, docsDir, repoRoot);
-        for (const p of reindexed) changedPaths.push(p);
+        for (const p of reindexed) {
+          changedPaths.push(p);
+          // Re-blame each changed file
+          const fullPath = join(repoRoot, p);
+          try {
+            blameFile(db, repoRoot, fullPath);
+          } catch (err) {
+            console.warn(`[docs-mcp] blame error for ${p}: ${err}`);
+          }
+        }
       } catch (err) {
         console.warn(`[docs-mcp] Error during full reindex: ${err}`);
       }

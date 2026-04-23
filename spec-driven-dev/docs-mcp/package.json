@@ -13,6 +13,7 @@
     "./db": "./src/db.ts",
     "./content-indexer": "./src/content-indexer.ts",
     "./lineage-scanner": "./src/lineage-scanner.ts",
+    "./blame-scanner": "./src/blame-scanner.ts",
     "./watcher": "./src/watcher.ts",
     "./tools": "./src/tools.ts"
   },

@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, statSync } from "fs";
 import { openDb } from "./db.js";
 import { indexAllDocs } from "./content-indexer.js";
 import { runLineageScan } from "./lineage-scanner.js";
+import { runBlameScan } from "./blame-scanner.js";
 import { startWatcher } from "./watcher.js";
 import {
   SearchDocsSchema,
@@ -98,6 +99,14 @@ if (gitRoot) {
     console.error(`[docs-mcp] Initial lineage scan complete`);
   } catch (err) {
     console.error(`[docs-mcp] Initial lineage scan error: ${err}`);
+  }
+
+  // Initial blame scan — runs after lineage scan, requires git root
+  try {
+    runBlameScan(db, gitRoot, docsDir);
+    console.error(`[docs-mcp] Initial blame scan complete`);
+  } catch (err) {
+    console.error(`[docs-mcp] Initial blame scan error: ${err}`);
   }
 }
 
