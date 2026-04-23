@@ -36,6 +36,8 @@ The goal: separate the plugin's core data from any specific agent's install mech
 | Package manifest | No manifest — convention + well-known files | `.agent/` = skills/agents (scanned). `.mcp.json` = MCP servers (auto-discovered). Directory structure IS the format. |
 | Agent detection | Env var detection | Check CLAUDE_PLUGIN_ROOT (Claude), DROID_HOME (Droid), etc. Falls back to prompt. |
 | Droid v1 scope | Stub now, flesh out later | `droid/sdd/` with symlinks and README. No Droid-specific metadata or setup yet. Demonstrates the pattern. |
+| Binary distribution | Pre-built in CI/CD, committed to repo | `src/sdd/bin/docs-mcp` is compiled in CI and committed. No `bun` dependency for end users. `/setup` no longer compiles — it just configures. Self-dev recompiles locally only when MCP source changes. |
+| Self-development | Project-local `/local-setup` skill for developer workflow | Plugin install provides hooks, MCP, and skills via `${CLAUDE_PLUGIN_ROOT}`. `/local-setup` (`.agent/skills/local-setup/SKILL.md`) creates local `.agent/` symlinks that override the installed plugin with working-tree paths. Only needed for self-dev — end users never see this skill. |
 
 ## User Flow
 
@@ -50,12 +52,35 @@ The goal: separate the plugin's core data from any specific agent's install mech
    ```
 2. `/plugin install spec-driven-dev@agent-plugins`
 3. Claude reads `.claude-plugin/marketplace.json` → finds plugin at `claude/sdd/` → installs
-4. Run `/setup` in target project → compiles binary, symlinks skills/agents, scaffolds CLAUDE.md, bootstraps permissions
+4. Run `/setup` in target project → symlinks skills/agents, configures MCP, scaffolds CLAUDE.md, bootstraps permissions (binary is pre-built — no compilation needed)
+
+### Self-development (dogfooding)
+
+Working on the plugin repo itself — edits to skills, agents, guards, and MCP source need to be reflected immediately, without pushing and re-installing.
+
+**The problem**: `/plugin install` from GitHub clones the repo to Claude's internal plugin storage (`~/.claude/plugins/` or equivalent). `${CLAUDE_PLUGIN_ROOT}` resolves to *that* clone, not the developer's working tree. Edits in the working tree aren't visible through the plugin.
+
+**The solution**: a project-local `/local-setup` skill (`.agent/skills/local-setup/SKILL.md`) that creates local `.agent/` symlinks pointing into the working tree's `src/sdd/`. Local `.agent/skills/` takes precedence over plugin-provided skills, so the working tree's skill definitions override the installed copy.
+
+**Bootstrap**:
+1. Install the plugin once: `/plugin install spec-driven-dev@agent-plugins` — this provides hooks, MCP, and the initial skill set (including `/local-setup`, which is already in the repo)
+2. Run `/local-setup` inside the repo — this creates:
+   - `.agent/skills/<name>` → `src/sdd/.agent/skills/<name>` (shared skills)
+   - `.agent/skills/setup` → `claude/sdd/skills/setup` (Claude-specific setup)
+   - `.agent/agents/<name>` → `src/sdd/.agent/agents/<name>`
+   - `spec-driven-config.json` (blocked commands + source dirs)
+   - `CLAUDE.md` with SDD markers
+
+**Why a separate skill**: `/setup` is shipped with the plugin and designed for end-user target projects — it resolves paths via `${CLAUDE_PLUGIN_ROOT}`. `/local-setup` is project-local, already knows the repo layout, and creates symlinks that point at the working tree instead of the installed plugin clone.
+
+**After bootstrap**: all local files are untracked (`.agent/`, `.mcp.json` are gitignored). Edits to skills, agents, or guard scripts in `src/sdd/` are immediately reflected via symlinks. MCP source changes require `bun run build` in `src/sdd/docs-mcp/` to recompile the binary locally (CI builds the binary for release, but self-dev iterates locally).
+
+**Hooks**: the installed plugin still provides `hooks/hooks.json` which registers the Claude I/O wrappers. Those wrappers call through to `src/sdd/hooks/guards/` via relative paths from `${CLAUDE_PLUGIN_ROOT}`. For self-development, this means hook guard logic points at the *installed* copy, not the working tree. This is acceptable — guard scripts change rarely, and `/plugin install` can be re-run to pick up changes.
 
 ### Droid user (future)
 1. Install via Droid's native mechanism (reads `.droid-plugin/marketplace.json` at root)
 2. Droid finds plugin at `droid/sdd/` → installs
-3. Run Droid's equivalent setup → compiles binary, symlinks, scaffolds context
+3. Run Droid's equivalent setup → configures MCP, symlinks, scaffolds context (binary is pre-built)
 
 ## Component Changes
 
@@ -98,6 +123,10 @@ agent-plugins/
 │       ├── .claude-plugin/
 │       │   └── plugin.json               # Claude metadata
 │       ├── .mcp.json                     # Claude MCP config
+│       ├── bin/
+│       │   ├── docs-mcp -> ../../../src/sdd/bin/docs-mcp
+│       │   └── sdd-master -> ../../../src/sdd/bin/sdd-master
+│       ├── context.md -> ../../src/sdd/context.md
 │       ├── hooks/
 │       │   ├── hooks.json                # Claude hook registration
 │       │   ├── blocked-commands-hook.sh  # Claude I/O wrapper
@@ -172,33 +201,18 @@ Contains everything that isn't platform-specific. This directory is never instal
 
 `${CLAUDE_PLUGIN_ROOT}` resolves to the plugin source directory — the directory pointed to by `"source"` in the marketplace descriptor. In the current layout, marketplace says `"source": "./spec-driven-dev"` and `${CLAUDE_PLUGIN_ROOT}` resolves to `spec-driven-dev/`. In the new layout, marketplace says `"source": "./claude/sdd"` so `${CLAUDE_PLUGIN_ROOT}` resolves to `claude/sdd/`.
 
-**Plugin-level `.mcp.json`** uses the flat-key format (no `"mcpServers"` wrapper) — this is the Claude Code plugin `.mcp.json` convention, distinct from the project-level `.mcp.json` which uses `"mcpServers": { ... }`:
+**Plugin-level `.mcp.json`** uses the flat-key format (no `"mcpServers"` wrapper) — this is the Claude Code plugin `.mcp.json` convention:
 
 ```json
 {
   "docs": {
-    "command": "${CLAUDE_PLUGIN_ROOT}/../../src/sdd/bin/docs-mcp",
-    "args": ["--root", "${CLAUDE_PLUGIN_ROOT}/../../src/sdd"]
+    "command": "${CLAUDE_PLUGIN_ROOT}/bin/docs-mcp",
+    "args": ["--root", "${CLAUDE_PROJECT_DIR}"]
   }
 }
 ```
 
-The `--root` arg must point to `src/sdd/` (not `claude/sdd/`) because that's where `docs/` lives with ADRs and specs. The `../../` traversal from `claude/sdd/` reaches the repo root, then descends into `src/sdd/`.
-
-When setting up a **target project**, the setup skill writes the project-level `.mcp.json` format (with `"mcpServers"` wrapper) using resolved absolute paths:
-
-```json
-{
-  "mcpServers": {
-    "docs": {
-      "command": "/absolute/path/to/src/sdd/bin/docs-mcp",
-      "args": ["--root", "/absolute/path/to/target-project"]
-    }
-  }
-}
-```
-
-The two formats serve different contexts: plugin-level (flat keys, ${CLAUDE_PLUGIN_ROOT} variables) for self-development; project-level (mcpServers wrapper, absolute paths) for target projects.
+`${CLAUDE_PLUGIN_ROOT}/bin/docs-mcp` resolves via the symlink `claude/sdd/bin/docs-mcp` → `src/sdd/bin/docs-mcp`. `${CLAUDE_PROJECT_DIR}` resolves to whatever project the user has open, so the docs MCP automatically reads that project's `docs/` directory. No per-project MCP configuration needed — the plugin handles it.
 
 **`hooks/hooks.json`** — Claude hook registration pointing to Claude I/O wrappers. `${CLAUDE_PLUGIN_ROOT}` resolves to `claude/sdd/`, so these paths reference files within the platform package:
 ```json
@@ -253,30 +267,24 @@ Guard scripts are agent-neutral executables with a simple contract:
 | Aspect | Contract |
 |--------|----------|
 | Input | First positional argument (`$1`) is the value to check: command string for blocked-commands, file path for source-guard |
-| Config | Reads config from `$CLAUDE_PROJECT_DIR/.agent/` (blocked-commands.json, master-config.json) |
+| Config | Reads config from `$CLAUDE_PROJECT_DIR/spec-driven-config.json` |
 | Allow | Exit 0, no stdout |
-| Deny | Exit 1, reason message on stderr |
+| Deny | Exit 1, reason message on stderr. Message must direct users to `/feature-change` as the correct workflow entry point. |
 | No config file | Exit 0 (no-op — project hasn't opted in) |
 
 This interface is the boundary between agent-neutral logic and agent-specific I/O. Each platform's wrapper translates its native hook I/O to this contract.
 
-**`skills/setup/SKILL.md`** — Claude-specific setup skill (self-contained, does everything):
+**`skills/setup/SKILL.md`** — Claude-specific setup skill. The plugin already provides skills, agents, MCP, and hooks — setup handles only the project-specific config that the plugin can't provide generically:
 
 **Path resolution:**
-- `PLATFORM_ROOT`: `${CLAUDE_PLUGIN_ROOT}` if set (running as installed plugin). This is the primary mechanism — when a user installs the plugin and runs `/setup`, `${CLAUDE_PLUGIN_ROOT}` is always set by Claude Code to the plugin's source directory (`claude/sdd/`).
-- Fallback (development only): if `${CLAUDE_PLUGIN_ROOT}` is unset, the skill must be running from within the repo directly (not via an installed plugin). Use the known repo structure: resolve the SKILL.md's real path (following symlinks with `realpath`), then walk up from `claude/sdd/skills/setup/SKILL.md` → 3 levels → `claude/sdd/`. Using `realpath` is critical because the target project's `.agent/skills/setup/` may be a symlink to the plugin — `realpath` resolves through the symlink to the actual file in `claude/sdd/`.
-- `SRC_ROOT`: `${PLATFORM_ROOT}/../../src/sdd` — the canonical source directory. The `../../` traversal from `claude/sdd/` reaches the repo root, then descends into `src/sdd/`.
-- `TARGET`: `${CLAUDE_PROJECT_DIR}` if set, otherwise current working directory
+- `PLATFORM_ROOT`: `${CLAUDE_PLUGIN_ROOT}` if set (running as installed plugin). Fallback (development only): resolve SKILL.md's real path via `realpath` and walk up 3 levels.
+- `TARGET`: `${CLAUDE_PROJECT_DIR}` if set, otherwise current working directory.
 
 **Steps:**
-1. Resolve `PLATFORM_ROOT` and `SRC_ROOT` as above. Verify `SRC_ROOT/.agent/skills/` exists; if not, fail with "Cannot find canonical source at src/sdd/ — ensure the full repo is cloned."
-2. Compile docs-mcp binary: `cd "${SRC_ROOT}/docs-mcp" && bun install && bun run build`
-3. Symlink skills from `SRC_ROOT/.agent/skills/` and agents from `SRC_ROOT/.agent/agents/` into `TARGET/.agent/`
-4. Symlink sdd-master (`SRC_ROOT/bin/sdd-master`) to `~/.local/bin/`
-5. Configure MCP in `TARGET/.mcp.json` — resolve `SRC_ROOT/bin/docs-mcp` to absolute path and write it
-6. Scaffold CLAUDE.md: read `SRC_ROOT/context.md`, wrap in `<!-- sdd:begin -->` / `<!-- sdd:end -->` markers, inject into `TARGET/CLAUDE.md`
-7. Bootstrap permissions in `TARGET/.claude/settings.json`
-8. Initialize `TARGET/.agent/blocked-commands.json` and `TARGET/.agent/master-config.json`
+1. Write `TARGET/spec-driven-config.json` (if absent) — merged config for blocked commands and source-dir write protection
+2. Scaffold CLAUDE.md: read `PLATFORM_ROOT/context.md` (symlinked from `src/sdd/context.md`), wrap in `<!-- sdd:begin -->` / `<!-- sdd:end -->` markers, inject into `TARGET/CLAUDE.md`
+3. Bootstrap permissions in `TARGET/.claude/settings.json`
+4. Symlink sdd-master (`PLATFORM_ROOT/bin/sdd-master`) to `~/.local/bin/`
 
 ### droid/sdd/ — Droid platform package (stub)
 
@@ -345,7 +353,7 @@ No new data model. The plugin's data is the directory structure itself. Each pla
 | Failure | Behavior |
 |---------|----------|
 | Broken symlinks (partial clone) | Setup fails: "Symlinks to src/sdd/ not found — ensure the full repo is cloned" |
-| Missing `bun` | Setup fails: "bun required to compile docs-mcp. Install: `curl -fsSL https://bun.sh/install \| bash`" |
+| Missing binary | MCP server fails to start. Binary is pre-built in CI and symlinked into `claude/sdd/bin/`; end users never need `bun`. |
 | Unknown agent | Env var detection finds no match → setup prompts user to specify agent |
 | Droid user installs stub | README explains Droid support is pending; core data is accessible at `src/sdd/` |
 
@@ -371,6 +379,8 @@ Same as current: guard scripts enforce command blocklists and source file write 
 - Update marketplace descriptors at root
 - Rename repo to `agent-plugins`
 - Update README
+- CI/CD pipeline to compile `docs-mcp` and commit binary to `src/sdd/bin/`
+- Project-local `/local-setup` skill (`.agent/skills/local-setup/SKILL.md`) for self-development
 
 ### Deferred
 - Droid platform package (full setup skill, metadata, hook registration)
