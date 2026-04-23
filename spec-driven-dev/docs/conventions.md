@@ -49,7 +49,6 @@ The `.agent/` directory at the repo root holds runtime state for the plugin and 
 ```
 .agent/
   .docs-index.db       # SQLite FTS5 index (runtime, gitignored)
-  .master-sessions     # registered master session IDs (runtime, gitignored)
   blocked-commands.json # hook config — committed
   master-config.json   # master/agent separation config — committed
   audits/              # design-audit and spec-evaluator output
@@ -62,10 +61,29 @@ The `.agent/` directory at the repo root holds runtime state for the plugin and 
 
 ## CLAUDE.md
 
-The project's `CLAUDE.md` file (at the repo root) provides project-specific context that the plugin's skills use at runtime. Useful content includes:
+The project's `CLAUDE.md` file (at the repo root) provides project-specific context that the plugin's skills use at runtime.
+
+### SDD-managed section
+
+The setup skill injects a marker-delimited block containing the core SDD workflow rules:
+
+```markdown
+<!-- sdd:begin -->
+# Project Rules
+...workflow rules injected by /setup...
+<!-- sdd:end -->
+```
+
+- **On first run**: setup creates CLAUDE.md with the SDD section.
+- **On re-run**: setup replaces everything between `<!-- sdd:begin -->` and `<!-- sdd:end -->` with the latest version of the workflow rules. Content outside the markers is preserved.
+- The markers are HTML comments — invisible in rendered markdown.
+
+### Project-specific content
+
+Content outside the SDD markers is user-owned. Useful additions include:
 
 - **Component list**: A list of components in the project, so skills like `/feature-change` and `/spec-evaluator` can discover what to audit.
 - **Project-specific rules**: CI constraints, deployment targets, DNS conventions, etc.
 - **Workflow overrides**: Any project-specific deviations from the default spec-driven workflow.
 
-The plugin does not require any specific format in `CLAUDE.md` -- it reads it as free-form context. But listing components explicitly helps skills discover the project structure faster.
+Place project-specific content **after** the `<!-- sdd:end -->` marker.
