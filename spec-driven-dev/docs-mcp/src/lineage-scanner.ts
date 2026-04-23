@@ -169,6 +169,15 @@ function upsertLineage(
 }
 
 /**
+ * Returns true if filePath's basename matches the ADR naming convention
+ * (adr-*.md). Used to restrict lineage edges to ADR-to-spec pairs (ADR-0042).
+ */
+function isAdrFile(filePath: string): boolean {
+  const basename = filePath.split("/").pop() ?? filePath;
+  return basename.startsWith("adr-") && basename.endsWith(".md");
+}
+
+/**
  * Run the incremental lineage scan.
  * Processes commits from last_lineage_commit..HEAD (or full history on first run).
  */
@@ -274,11 +283,15 @@ export function processCommitForLineage(db: Database, repoRoot: string, commitHa
 
   if (fileData.length < 2) return;
 
-  // Generate cross-doc pairs for every combination of touched sections
+  // Generate cross-doc pairs for every combination of touched sections.
+  // ADR-0042: only emit lineage edges where at least one file is an ADR.
   for (let i = 0; i < fileData.length; i++) {
     for (let j = i + 1; j < fileData.length; j++) {
       const a = fileData[i];
       const b = fileData[j];
+
+      // Skip pairs where neither file is an ADR (e.g. spec-to-spec pairs).
+      if (!isAdrFile(a.filePath) && !isAdrFile(b.filePath)) continue;
 
       for (const headingA of a.touchedHeadings) {
         for (const headingB of b.touchedHeadings) {

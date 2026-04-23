@@ -526,4 +526,40 @@ describe("runLineageScan", () => {
     expect(alpha!.commit_count).toBe(1);
     expect(beta!.commit_count).toBe(1);
   });
+
+  test("skips spec-to-spec lineage edges (ADR-0042)", () => {
+    // Two spec-*.md files committed together: no lineage edges should be emitted
+    writeFileSync(
+      join(repo.docsDir, "spec-foo.md"),
+      `# Spec Foo\n\n## Overview\n\nSpec foo overview.\n`
+    );
+    writeFileSync(
+      join(repo.docsDir, "spec-bar.md"),
+      `# Spec Bar\n\n## Overview\n\nSpec bar overview.\n`
+    );
+    gitCommit(repo.repoRoot, "add two spec files");
+
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
+
+    const rows = db.query<{ count: number }, []>("SELECT count(*) as count FROM lineage").get()!;
+    expect(rows.count).toBe(0);
+  });
+
+  test("emits edges for ADR-to-spec pairs (ADR-0042)", () => {
+    // One adr-*.md and one spec-*.md committed together: lineage edges must be emitted
+    writeFileSync(
+      join(repo.docsDir, "adr-2026-04-23-example.md"),
+      `# ADR Example\n\n## Decision\n\nDecision content.\n`
+    );
+    writeFileSync(
+      join(repo.docsDir, "spec-example.md"),
+      `# Spec Example\n\n## Requirements\n\nRequirements content.\n`
+    );
+    gitCommit(repo.repoRoot, "add adr and spec");
+
+    runLineageScan(db, repo.repoRoot, repo.docsDir);
+
+    const rows = db.query<{ count: number }, []>("SELECT count(*) as count FROM lineage").get()!;
+    expect(rows.count).toBeGreaterThan(0);
+  });
 });
