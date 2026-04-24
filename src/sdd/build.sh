@@ -153,11 +153,8 @@ for wrapper in "$OUT/hooks/blocked-commands-hook.sh" "$OUT/hooks/source-guard-ho
   mv "$wrapper.tmp" "$wrapper"
 done
 
-# 11. Copy context.md and sdd-master
+# 11. Copy context.md
 cp "$SRC/context.md" "$OUT/context.md"
-mkdir -p "$OUT/bin"
-cp "$SRC/bin/sdd-master" "$OUT/bin/sdd-master"
-chmod +x "$OUT/bin/sdd-master"
 
 # 12. Validate critical files exist
 echo "Validating build..."
