@@ -6,3 +6,4 @@ src/sdd/bin/
 .agent/.docs-index.db*
 .agent/audits/
 .playwright-mcp
+src/sdd/docs-dashboard/ui/dist/*
