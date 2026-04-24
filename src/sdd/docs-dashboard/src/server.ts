@@ -166,9 +166,9 @@ function handleStatic(url: URL): Response | null {
     return new Response(Bun.file(indexPath));
   }
 
-  // UI not built yet — return a minimal placeholder
+  // UI build failed or dist missing — return a minimal fallback
   return new Response(
-    `<!doctype html><html><body><p>UI not built. Run: cd ui && bun run build</p></body></html>`,
+    `<!doctype html><html><body><p>UI build failed. Check server logs for details.</p></body></html>`,
     { headers: { "Content-Type": "text/html" } }
   );
 }
@@ -203,6 +203,27 @@ async function main() {
     db.close();
     process.exit(0);
   });
+
+  // Auto-build UI if dist/index.html is missing
+  const indexHtml = join(UI_DIST, "index.html");
+  if (!existsSync(indexHtml)) {
+    console.log("[docs-dashboard] Building UI...");
+    try {
+      const buildProc = Bun.spawn(["bun", "run", "build"], {
+        cwd: join(import.meta.dir, "../ui"),
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      const exitCode = await buildProc.exited;
+      if (exitCode === 0) {
+        console.log("[docs-dashboard] UI built successfully");
+      } else {
+        console.error(`[docs-dashboard] UI build failed (exit ${exitCode}) — API still available, SPA will show fallback`);
+      }
+    } catch (err) {
+      console.error(`[docs-dashboard] UI build error: ${err} — API still available, SPA will show fallback`);
+    }
+  }
 
   const server = Bun.serve({
     hostname: "0.0.0.0",
