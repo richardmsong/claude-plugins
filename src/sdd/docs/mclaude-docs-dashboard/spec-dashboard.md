@@ -10,13 +10,14 @@ Established by ADR-0027. Extended by ADR-0028 (bind `0.0.0.0`), ADR-0029 (`runLi
 
 - Bun (loads `.ts` files natively; no build step).
 - Entrypoint: `docs-dashboard/src/server.ts`. On boot:
-  1. `findRepoRoot(cwd)` — walks up from `process.cwd()` until a `.git` directory is found; exits non-zero if not found.
-  2. Auto-build UI: if `ui/dist/index.html` does not exist, run `bun run build` in the `ui/` directory (ADR-0049). Log the build. On failure, log the error and continue — the API still works, and the SPA catch-all returns a build-failure fallback page.
-  3. `openDb(resolvedDbPath)` — opens the shared SQLite index in WAL mode; path defaults to `<repoRoot>/.agent/.docs-index.db`, overridden by `--db-path`.
-  4. `indexAllDocs(db, resolvedDocsDir, repoRoot)` — populates the doc index.
-  5. `runLineageScan(db, repoRoot)` — populates lineage from `git log` (ADR-0029).
-  6. `runBlameScan(db, repoRoot, resolvedDocsDir)` — populates `blame_lines` from `git blame` (ADR-0040). Non-fatal on error.
-  7. `startWatcher(db, resolvedDocsDir, repoRoot, onReindex)` — watches `resolvedDocsDir` for changes; `onReindex` broadcasts SSE events.
+  1. Resolve **docsRoot** via the same priority chain as docs-mcp (ADR-0050): `resolveDocsRoot(--root, CLAUDE_PROJECT_DIR, cwd)`. Import `resolveDocsRoot` from `docs-mcp/src/resolve-docs-root.ts`. The docs directory is `<docsRoot>/docs/`.
+  2. Discover **gitRoot** by calling `findGitRoot(docsRoot)` — walks up from docsRoot to find `.git`. If not found, lineage scanning is skipped.
+  3. Auto-build UI: if `ui/dist/index.html` does not exist, run `bun run build` in the `ui/` directory (ADR-0049). Log the build. On failure, log the error and continue — the API still works, and the SPA catch-all returns a build-failure fallback page.
+  4. `openDb(resolvedDbPath)` — opens the shared SQLite index in WAL mode; path defaults to `<docsRoot>/.agent/.docs-index.db`, overridden by `--db-path`.
+  5. `indexAllDocs(db, docsDir, gitRoot)` — populates the doc index.
+  6. `runLineageScan(db, gitRoot)` — populates lineage from `git log` (ADR-0029).
+  7. `runBlameScan(db, gitRoot, docsDir)` — populates `blame_lines` from `git blame` (ADR-0040). Non-fatal on error.
+  8. `startWatcher(db, docsDir, gitRoot, onReindex)` — watches docsDir for changes; `onReindex` broadcasts SSE events.
 - Default port `4567`; overridden by `--port <n>`.
 - Binds to `0.0.0.0` (all interfaces, ADR-0028) — reachable from Tailnet peers.
 - The startup banner prints:
@@ -31,8 +32,8 @@ Established by ADR-0027. Extended by ADR-0028 (bind `0.0.0.0`), ADR-0029 (`runLi
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--port <n>` | `4567` | HTTP listen port. Fails fast if in use. |
-| `--db-path <path>` | `<repoRoot>/.agent/.docs-index.db` | SQLite index path. |
-| `--docs-dir <path>` | `<repoRoot>/docs` | Directory to index. Resolved relative to `cwd`; absolute paths accepted. (ADR-0032) |
+| `--root <dir>` | (none) | Docs root — parent of `docs/`. Same semantics as docs-mcp `--root`. Resolved via `resolveDocsRoot(--root, CLAUDE_PROJECT_DIR, cwd)` (ADR-0050). |
+| `--db-path <path>` | `<docsRoot>/.agent/.docs-index.db` | SQLite index path override. |
 
 ## Logic-Duplication Rule
 
