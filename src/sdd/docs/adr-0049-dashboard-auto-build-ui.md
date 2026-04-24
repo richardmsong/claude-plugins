@@ -1,8 +1,9 @@
 # ADR: docs-dashboard auto-builds UI on startup
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-24: accepted
+- 2026-04-24: implemented — all scope CLEAN
 
 ## Overview
 
