@@ -7,11 +7,7 @@
       "Write",
       "Update",
       "mcp__docs__*",
-      "mcp__spec-driven-dev_*",
-      "mcp__plugin_spec-driven-dev_docs__*"
+      "mcp__spec-driven-dev_*"
     ]
-  },
-  "enabledPlugins": {
-    "spec-driven-dev@agent-plugins": true
   }
 }

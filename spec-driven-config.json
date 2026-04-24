@@ -1,5 +1,12 @@
 {
-  "source_dirs": ["**/src/**"],
+  "source_dirs": [
+    "src/sdd/docs-mcp/**",
+    "src/sdd/docs-dashboard/**",
+    "src/sdd/bin/**",
+    "src/sdd/hooks/**",
+    "src/sdd/build.sh",
+    "src/sdd/package.json"
+  ],
   "blocked_commands": [
     {
       "pattern": "gh\\s+run\\s+watch",
