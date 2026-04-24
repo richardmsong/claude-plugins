@@ -3,9 +3,7 @@
     "command": "bun",
     "args": [
       "run",
-      "${CLAUDE_PLUGIN_ROOT}/docs-mcp/src/index.ts",
-      "--root",
-      "src/sdd"
+      "${CLAUDE_PLUGIN_ROOT}/docs-mcp/src/index.ts"
     ]
   }
 }
