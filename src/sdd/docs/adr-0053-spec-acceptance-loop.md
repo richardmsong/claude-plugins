@@ -1,9 +1,10 @@
 # ADR: Spec acceptance loop — verified spec edits before co-commit
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-24: draft
 - 2026-04-24: accepted
+- 2026-04-24: implemented — all scope CLEAN (meta-process ADR: agent/skill files updated)
 
 ## Overview
 
