@@ -1,6 +1,6 @@
 ---
 name: feature-change
-description: Universal entry point for any change to the project — new features, bug fixes, refactors, config changes, anything. Authors an ADR for the request, updates impacted specs, and runs dev-harness -> spec-evaluator loop until CLEAN. Handles spec backpressure via /plan-feature rules.
+description: Universal entry point for any change to the project — new features, bug fixes, refactors, config changes, anything. Authors an ADR for the request, updates impacted specs (verified by spec-evaluator), and runs dev-harness -> implementation-evaluator loop until CLEAN. Handles spec backpressure via /plan-feature rules.
 version: 1.0.0
 user_invocable: true
 argument-hint: <description of the change>
@@ -58,8 +58,9 @@ Use `list_docs` to discover all available specs and ADRs in the project.
 2. Classify the change (A/B/C/D)
 3. Author a new ADR: docs/adr-NNNN-<slug>.md (status: accepted from the start)
 4. Update impacted specs (if any) — same working tree
+4b. Spec-edit verification loop: run /spec-evaluator on the ADR until CLEAN
 5. Commit ADR + spec edits together (single spec commit)
-6. dev-harness -> spec-evaluator loop per component (until CLEAN)
+6. dev-harness -> implementation-evaluator loop per component (until CLEAN)
 7. Flip ADR status from `accepted` -> `implemented` (append history line).
    Commit the status-only update.
 8. Validate (SPA changes only)
@@ -164,6 +165,25 @@ If only one spec is impacted, update it. If several are, update all in the same 
 
 ---
 
+## Step 4b — Spec-edit verification loop
+
+After editing specs, verify that every ADR decision is reflected in the specs before committing. Run `/spec-evaluator docs/adr-NNNN-<slug>.md` and loop until CLEAN:
+
+```
+Loop:
+  1. Run /spec-evaluator docs/adr-NNNN-<slug>.md
+  2. If gaps with direction SPEC→FIX: fix the spec, go to (1)
+  3. If gaps with direction ADR→FIX: fix the ADR (still in current workstream — editable per backpressure rules), go to (1)
+  4. If gaps with direction UNCLEAR: ask the user via AskUserQuestion, fix the appropriate side, go to (1)
+  5. If CLEAN: proceed to Step 5
+```
+
+The spec-evaluator agent has no conversation context — it reads only the ADR and the specs. This ensures unbiased verification that the spec edits capture everything the ADR decided.
+
+**Skip this step if the ADR's Impact says no specs are touched** — the spec-evaluator will still verify the claim, but if the ADR is class A (bug fix) or class D (refactor) with genuinely no spec impact, expect a fast CLEAN.
+
+---
+
 ## Step 5 — Commit (single spec commit)
 
 Stage both the new ADR and any spec edits, then commit once:
@@ -179,14 +199,14 @@ Only `docs/` is staged in this commit. Code changes go through the dev-harness i
 
 ---
 
-## Step 6 — dev-harness -> spec-evaluator loop (exhaustive)
+## Step 6 — dev-harness -> implementation-evaluator loop (exhaustive)
 
 For each affected component, invoke the dev-harness agent **and keep re-invoking until all gaps are closed**:
 
 ```
 Loop:
   1. Agent(subagent_type="dev-harness", prompt="<component> — audit the entire component against every accepted/implemented ADR and every docs/**/spec-*.md that references it. Close every drift. Prioritize: <description>. Any spec ambiguity = STOP and backpressure, never a guess.")
-  2. When the agent returns, run /spec-evaluator <component>
+  2. When the agent returns, run /implementation-evaluator <component>
   3. If gaps remain:
      a. CODE gap, direction CODE->FIX (spec is correct, code doesn't implement it):
         -> Agent(subagent_type="dev-harness", prompt="<component> — continue full-component audit. Close these remaining gaps: <list>. Any spec ambiguity = STOP and backpressure.")
@@ -203,7 +223,7 @@ The dev-harness agent has `maxTurns=500` and is instructed to keep going until a
 
 ### Handling backpressure
 
-When dev-harness or spec-evaluator reports a gap that is actually a spec or ADR problem (ambiguity, missing detail, contradiction), follow the rules from `/plan-feature`:
+When dev-harness or implementation-evaluator reports a gap that is actually a spec or ADR problem (ambiguity, missing detail, contradiction), follow the rules from `/plan-feature`:
 
 1. **Classify**: factual error -> fix directly. Missing detail with obvious answer -> fill in. Design decision needed -> ask the user via `AskUserQuestion`.
 2. **Edit** the relevant doc(s):
@@ -215,7 +235,7 @@ When dev-harness or spec-evaluator reports a gap that is actually a spec or ADR 
 
 ### Rules
 
-- **Never report a task complete until the spec-evaluator returns CLEAN**
+- **Never report a task complete until the implementation-evaluator returns CLEAN**
 - One failing evaluator gap = one more dev-harness pass (or one spec/ADR update)
 - Evaluator runs after EVERY dev-harness pass, not just the first
 - **Never deprioritize any gap** — every gap gets handled immediately
@@ -226,7 +246,7 @@ When dev-harness or spec-evaluator reports a gap that is actually a spec or ADR 
 
 ## Step 7 — Promote ADR to `implemented`
 
-Once every affected component's spec-evaluator returns CLEAN for the scope of this ADR:
+Once every affected component's implementation-evaluator returns CLEAN for the scope of this ADR:
 
 1. Edit the ADR's header:
    - Change `**Status**: accepted` -> `**Status**: implemented`.
@@ -240,7 +260,7 @@ git commit -m "spec(<slug>): promote ADR to implemented"
 
 The status flip is intentionally a separate commit so lineage lookup distinguishes "shape the spec" (the `draft -> accepted` co-commit) from "lands in code" (the `accepted -> implemented` ADR-only commit).
 
-For meta-process ADRs (skill rewrites, workflow changes) where there is no runtime code to evaluate via spec-evaluator, promote to `implemented` once the described behavior is in place (e.g. the skill file is updated, the workflow is codified). Every ADR should eventually reach `implemented`.
+For meta-process ADRs (skill rewrites, workflow changes) where there is no runtime code to evaluate via implementation-evaluator, promote to `implemented` once the described behavior is in place (e.g. the skill file is updated, the workflow is codified). Every ADR should eventually reach `implemented`.
 
 ---
 

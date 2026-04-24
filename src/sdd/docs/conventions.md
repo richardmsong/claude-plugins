@@ -51,7 +51,7 @@ The `.agent/` directory at the repo root holds runtime state for the plugin and 
   .docs-index.db       # SQLite FTS5 index (runtime, gitignored)
   blocked-commands.json # hook config — committed
   master-config.json   # master/agent separation config — committed
-  audits/              # design-audit and spec-evaluator output
+  audits/              # design-audit, spec-evaluator, and implementation-evaluator output
   bugs/                # bug reports filed by /file-bug
 ```
 
@@ -82,7 +82,7 @@ The setup skill injects a marker-delimited block containing the core SDD workflo
 
 Content outside the SDD markers is user-owned. Useful additions include:
 
-- **Component list**: A list of components in the project, so skills like `/feature-change` and `/spec-evaluator` can discover what to audit.
+- **Component list**: A list of components in the project, so skills like `/feature-change` and `/implementation-evaluator` can discover what to audit.
 - **Project-specific rules**: CI constraints, deployment targets, DNS conventions, etc.
 - **Workflow overrides**: Any project-specific deviations from the default spec-driven workflow.
 

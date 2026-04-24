@@ -182,4 +182,4 @@ CLEAN — no blocking gaps found.
 
 Design documents are written in the context of a conversation — the author has full context from Q&A sessions and implicitly relies on decisions discussed but not written down. A context-free evaluator catches those gaps. This is the same principle as code review: fresh eyes find what the author can't see.
 
-The audit log preserves the history of what was found and how it was resolved. This serves the same purpose as the spec-evaluator's `.agent/audits/` logs: traceability of decisions and fixes across rounds.
+The audit log preserves the history of what was found and how it was resolved. This serves the same purpose as the implementation-evaluator's `.agent/audits/` logs: traceability of decisions and fixes across rounds.

@@ -45,7 +45,7 @@ Find the specific file(s) and line(s) where the behavior diverges from the spec.
 
 ### Step 3 — Check for existing findings
 
-Check `.agent/bugs/` for duplicates and `.agent/audits/` for spec-evaluator results that already identified this gap:
+Check `.agent/bugs/` for duplicates and `.agent/audits/` for implementation-evaluator results that already identified this gap:
 
 ```bash
 ls .agent/bugs/

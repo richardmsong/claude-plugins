@@ -8,7 +8,7 @@ When the user asks for **any change** — feature, bug fix, refactor, config, UI
 
 Heuristic: if the user says "fix", "change", "update", "refactor", "remove", "add X to Y", "make X do Y", or describes any modification to how the system behaves → that's `/feature-change`. Don't ask permission; invoke the skill immediately.
 
-The loop: `/feature-change` reads specs → classifies → authors ADR → updates spec if needed → commits spec → calls dev-harness → implements and tests.
+The loop: `/feature-change` reads specs → classifies → authors ADR → updates spec → spec-evaluator verifies spec alignment → commits spec → calls dev-harness → implementation-evaluator verifies code → done.
 
 ## New feature detected → invoke /plan-feature immediately
 

@@ -65,6 +65,7 @@ Examples:
 4. Finalize the ADR (remove any remaining stubs) and stage impacted spec
    edits (still under `Status: draft`).
 5. Design audit (/design-audit) until CLEAN
+5b. Spec-edit verification loop: run /spec-evaluator on the ADR until CLEAN
 6. Flip the ADR status from `draft` -> `accepted` (append a history line with
    today's date). Commit ADR + spec edits together (single spec commit).
 7. Hand off to /feature-change
@@ -287,6 +288,25 @@ Do not commit or hand off until the audit passes.
 
 ---
 
+## Step 5b — Spec-edit verification loop
+
+After the design audit passes, verify that every ADR decision is reflected in the specs. Run `/spec-evaluator docs/adr-NNNN-<slug>.md` and loop until CLEAN:
+
+```
+Loop:
+  1. Run /spec-evaluator docs/adr-NNNN-<slug>.md
+  2. If gaps with direction SPEC→FIX: fix the spec, go to (1)
+  3. If gaps with direction ADR→FIX: fix the ADR (still draft — editable in place), go to (1)
+  4. If gaps with direction UNCLEAR: ask the user via AskUserQuestion, fix the appropriate side, go to (1)
+  5. If CLEAN: proceed to Step 6
+```
+
+The spec-evaluator agent has no conversation context — it reads only the ADR and the specs. This ensures that the spec edits genuinely capture everything the ADR decided, not just what the master session remembered to include.
+
+Do not promote to `accepted` or commit until the spec-evaluator returns CLEAN.
+
+---
+
 ## Step 6 — Promote to `accepted` and commit (single spec commit)
 
 Before committing, edit the ADR's header to flip the status:
@@ -381,7 +401,7 @@ git commit -m "spec(<area>): <what changed and why>"
 
 ## Backpressure from dev-harness
 
-During implementation, `/feature-change` runs the dev-harness -> spec-evaluator loop. Sometimes the dev-harness agent discovers that the ADR or a spec is ambiguous, incomplete, or wrong. This is **backpressure** — the implementation pushes back on the spec.
+During implementation, `/feature-change` runs the dev-harness -> implementation-evaluator loop. Sometimes the dev-harness agent discovers that the ADR or a spec is ambiguous, incomplete, or wrong. This is **backpressure** — the implementation pushes back on the spec.
 
 When `/feature-change` encounters backpressure, the doc update follows these rules:
 
@@ -412,7 +432,7 @@ git commit -m "spec(<area>): <what changed — backpressure from dev-harness>"
 
 ### 4. Return to `/feature-change`
 
-Which re-invokes dev-harness with the updated spec. The loop continues until spec-evaluator returns CLEAN.
+Which re-invokes dev-harness with the updated spec. The loop continues until implementation-evaluator returns CLEAN.
 
 ---
 
