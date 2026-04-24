@@ -1,8 +1,9 @@
 # ADR: Setup skill writes plugin-scoped MCP allow pattern
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-24: accepted
+- 2026-04-24: implemented — all scope CLEAN
 
 ## Overview
 
