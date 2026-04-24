@@ -53,7 +53,7 @@ export function handleSpecs(db: Database): Response {
  * GET /api/doc?path=<p>
  * Returns: DocResponse — metadata + raw_markdown + sections.
  */
-export function handleDoc(db: Database, repoRoot: string, url: URL): Response {
+export function handleDoc(db: Database, repoRoot: string | null, url: URL): Response {
   const docPath = url.searchParams.get("path");
   if (!docPath) {
     return badRequest("Missing required query param: path");
@@ -68,6 +68,9 @@ export function handleDoc(db: Database, repoRoot: string, url: URL): Response {
 
   // Read raw markdown
   let rawMarkdown: string;
+  if (!repoRoot) {
+    return json({ error: "git root not available; cannot read doc" }, 503);
+  }
   try {
     rawMarkdown = readRawDoc(repoRoot, docPath);
   } catch (err) {
@@ -207,7 +210,7 @@ interface BlameBlock {
  * When since or ref params are provided, blame is computed on demand via
  * git blame instead of reading from the cached table.
  */
-export function handleBlame(db: Database, repoRoot: string, url: URL): Response {
+export function handleBlame(db: Database, repoRoot: string | null, url: URL): Response {
   const docPath = url.searchParams.get("doc");
   if (!docPath) {
     return badRequest("Missing required query param: doc");
@@ -229,6 +232,9 @@ export function handleBlame(db: Database, repoRoot: string, url: URL): Response 
 
   // When since or ref is provided, compute blame on demand from git
   if (since || ref) {
+    if (!repoRoot) {
+      return json({ blocks: [], uncommitted_lines: [] });
+    }
     return handleBlameOnDemand(db, repoRoot, docPath, docId, since, ref);
   }
 
@@ -282,7 +288,7 @@ export function handleBlame(db: Database, repoRoot: string, url: URL): Response 
   }
 
   // Determine uncommitted lines: lines not present in blame_lines.
-  const uncommittedLines = findUncommittedLines(repoRoot, docPath, blameRows);
+  const uncommittedLines = repoRoot ? findUncommittedLines(repoRoot, docPath, blameRows) : [];
 
   return json({ blocks, uncommitted_lines: uncommittedLines });
 }
@@ -465,7 +471,7 @@ function findUncommittedLines(
  * overlap the requested [line_start, line_end] range.
  * Returns: { diff: string }
  */
-export function handleDiff(repoRoot: string, url: URL): Response {
+export function handleDiff(repoRoot: string | null, url: URL): Response {
   const docPath = url.searchParams.get("doc");
   const commit = url.searchParams.get("commit");
   const lineStartParam = url.searchParams.get("line_start");
@@ -485,6 +491,10 @@ export function handleDiff(repoRoot: string, url: URL): Response {
   // Validate commit hash (must be hex string)
   if (!/^[0-9a-f]{4,40}$/i.test(commit)) {
     return badRequest("Invalid commit hash");
+  }
+
+  if (!repoRoot) {
+    return json({ diff: "" });
   }
 
   const absPath = `${repoRoot}/${docPath}`;

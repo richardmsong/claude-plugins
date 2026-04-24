@@ -38,7 +38,7 @@ export function createTestRepo(docs: Record<string, string>): {
   );
   const docsDir = join(repoRoot, "docs");
   mkdirSync(docsDir, { recursive: true });
-  // Create a fake .git directory so findRepoRoot works
+  // Create a fake .git directory so findGitRoot works
   mkdirSync(join(repoRoot, ".git"));
 
   for (const [filename, content] of Object.entries(docs)) {

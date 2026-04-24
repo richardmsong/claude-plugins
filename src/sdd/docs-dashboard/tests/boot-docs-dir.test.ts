@@ -1,19 +1,18 @@
 /**
- * Tests for the --docs-dir CLI flag threaded through parseArgs → boot (ADR-0032).
+ * Tests for the --root flag and resolveDocsRoot integration (ADR-0050).
  *
  * Strategy:
  * - Mock only docs-mcp/watcher (to capture the docsDir arg and avoid real FS watchers).
  * - Mock docs-mcp/lineage-scanner (to avoid real git invocations).
- * - Let docs-mcp/content-indexer and docs-mcp/db run for real (avoids leaking mocks
- *   that break graph-queries.test.ts and routes.test.ts, both of which rely on the
- *   real indexFile via seedTestDb).
- * - Verify that boot() passes the expected resolved docsDir to startWatcher.
+ * - Let docs-mcp/content-indexer and docs-mcp/db run for real.
+ * - Verify that boot() passes the expected docsDir (derived from docsRoot) to startWatcher.
  */
 
 import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "fs";
-import { join, resolve } from "path";
+import { join } from "path";
 import { tmpdir } from "os";
+import { resolveDocsRoot } from "docs-mcp/resolve-docs-root";
 
 // Track calls to startWatcher so we can verify what docsDir was passed.
 let startWatcherCalls: { docsDir: string }[] = [];
@@ -23,7 +22,7 @@ mock.module("docs-mcp/watcher", () => ({
   startWatcher: (
     _db: unknown,
     docsDir: string,
-    _repoRoot: string,
+    _gitRoot: unknown,
     _onReindex?: unknown
   ): (() => void) => {
     startWatcherCalls.push({ docsDir });
@@ -44,11 +43,10 @@ mock.module("docs-mcp/lineage-scanner", () => ({
 // Dynamic import AFTER mocks are registered, so boot.ts picks up the mocked modules.
 const { boot } = await import("../src/boot");
 
-describe("boot() docsDir parameter (ADR-0032)", () => {
+describe("boot() docsRoot parameter (ADR-0050)", () => {
   let repoRoot: string;
   let dbPath: string;
   let stopWatcher: (() => void) | null = null;
-  let origCwd: () => string;
 
   beforeEach(() => {
     startWatcherCalls = [];
@@ -68,13 +66,9 @@ describe("boot() docsDir parameter (ADR-0032)", () => {
     );
 
     dbPath = join(repoRoot, "test.db");
-
-    origCwd = process.cwd;
-    process.cwd = () => repoRoot;
   });
 
   afterEach(() => {
-    process.cwd = origCwd;
     if (stopWatcher) {
       stopWatcher();
       stopWatcher = null;
@@ -82,8 +76,8 @@ describe("boot() docsDir parameter (ADR-0032)", () => {
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
-  it("uses <repoRoot>/docs as default when docsDir is null", () => {
-    const result = boot(dbPath, () => {}, null);
+  it("uses <docsRoot>/docs as the docs directory", () => {
+    const result = boot(repoRoot, dbPath, () => {});
     stopWatcher = result.stopWatcher;
 
     const expectedDocsDir = join(repoRoot, "docs");
@@ -91,61 +85,64 @@ describe("boot() docsDir parameter (ADR-0032)", () => {
     expect(startWatcherCalls[0].docsDir).toBe(expectedDocsDir);
   });
 
-  it("uses <repoRoot>/docs as default when docsDir is omitted (default param)", () => {
-    const result = boot(dbPath, () => {});
+  it("uses a nested docsRoot when passed explicitly", () => {
+    // Create a sub-project root with its own docs/
+    const subRoot = join(repoRoot, "spec-driven-dev");
+    mkdirSync(join(subRoot, "docs"), { recursive: true });
+    writeFileSync(
+      join(subRoot, "docs", "adr-0001-sub.md"),
+      "# Sub ADR\n\n**Status**: accepted\n\n## Overview\n\nSub.\n",
+      "utf8"
+    );
+
+    const result = boot(subRoot, dbPath, () => {});
     stopWatcher = result.stopWatcher;
 
-    const expectedDocsDir = join(repoRoot, "docs");
+    const expectedDocsDir = join(subRoot, "docs");
+    expect(startWatcherCalls).toHaveLength(1);
     expect(startWatcherCalls[0].docsDir).toBe(expectedDocsDir);
-  });
-
-  it("passes an absolute docsDir through unchanged", () => {
-    // Create a separate docs directory at an absolute path.
-    const altDocsDir = join(repoRoot, "spec-driven-dev", "docs");
-    mkdirSync(altDocsDir, { recursive: true });
-
-    const result = boot(dbPath, () => {}, altDocsDir);
-    stopWatcher = result.stopWatcher;
-
-    expect(startWatcherCalls[0].docsDir).toBe(altDocsDir);
-  });
-
-  it("resolves a relative docsDir against cwd", () => {
-    // cwd is repoRoot; "sub/docs" should resolve to join(repoRoot, "sub/docs").
-    const relDocsDir = "sub/docs";
-    const expectedAbsDocsDir = resolve(repoRoot, relDocsDir);
-    mkdirSync(expectedAbsDocsDir, { recursive: true });
-
-    const result = boot(dbPath, () => {}, relDocsDir);
-    stopWatcher = result.stopWatcher;
-
-    expect(startWatcherCalls[0].docsDir).toBe(expectedAbsDocsDir);
-  });
-
-  it("passes an absolute path unmodified (not re-resolved against cwd)", () => {
-    const altDocsDir = join(repoRoot, "absolute-docs");
-    mkdirSync(altDocsDir, { recursive: true });
-
-    const result = boot(dbPath, () => {}, altDocsDir);
-    stopWatcher = result.stopWatcher;
-
-    // An absolute path must not be re-joined with cwd.
-    expect(startWatcherCalls[0].docsDir).toBe(altDocsDir);
-    // Must not accidentally be join(cwd, altDocsDir).
-    expect(startWatcherCalls[0].docsDir).not.toBe(join(repoRoot, altDocsDir));
   });
 });
 
-// ---- parseArgs contract tests ----
-// parseArgs is private to server.ts, so we verify its contract by testing the
-// flag-parsing logic directly against the documented spec (ADR-0032 Decision table).
+// ---- resolveDocsRoot contract tests ----
+// These verify the priority chain: --root > CLAUDE_PROJECT_DIR > cwd.
 
-describe("parseArgs --docs-dir flag contract (ADR-0032)", () => {
-  // Replicate the parseArgs logic to test the expected behaviour surface.
-  function simulateParseArgs(argv: string[]): { port: number; dbPath: string | null; docsDir: string | null } {
+describe("resolveDocsRoot priority chain (ADR-0050)", () => {
+  it("returns rawRoot when it is absolute", () => {
+    const result = resolveDocsRoot("/my/docs/root", undefined, "/cwd");
+    expect(result).toBe("/my/docs/root");
+  });
+
+  it("resolves relative rawRoot against CLAUDE_PROJECT_DIR when set", () => {
+    const result = resolveDocsRoot("sub/sdd", "/project/dir", "/cwd");
+    expect(result).toBe("/project/dir/sub/sdd");
+  });
+
+  it("resolves relative rawRoot against cwd when CLAUDE_PROJECT_DIR is not set", () => {
+    const result = resolveDocsRoot("sub/sdd", undefined, "/cwd");
+    expect(result).toBe("/cwd/sub/sdd");
+  });
+
+  it("returns CLAUDE_PROJECT_DIR when rawRoot is null and env var is set", () => {
+    const result = resolveDocsRoot(null, "/project/dir", "/cwd");
+    expect(result).toBe("/project/dir");
+  });
+
+  it("returns cwd when rawRoot is null and CLAUDE_PROJECT_DIR is not set", () => {
+    const result = resolveDocsRoot(null, undefined, "/cwd");
+    expect(result).toBe("/cwd");
+  });
+});
+
+// ---- parseArgs --root flag contract tests ----
+// Verify the --root flag parsing logic matches the spec (ADR-0050).
+
+describe("parseArgs --root flag contract (ADR-0050)", () => {
+  // Replicate the parseArgs logic from server.ts.
+  function simulateParseArgs(argv: string[]): { port: number; dbPath: string | null; root: string | null } {
     let port = 4567;
     let dbPath: string | null = null;
-    let docsDir: string | null = null;
+    let root: string | null = null;
 
     for (let i = 0; i < argv.length; i++) {
       if (argv[i] === "--port" && argv[i + 1]) {
@@ -157,43 +154,48 @@ describe("parseArgs --docs-dir flag contract (ADR-0032)", () => {
       } else if (argv[i] === "--db-path" && argv[i + 1]) {
         dbPath = argv[i + 1];
         i++;
-      } else if (argv[i] === "--docs-dir" && argv[i + 1]) {
-        docsDir = argv[i + 1];
+      } else if (argv[i] === "--root" && argv[i + 1]) {
+        root = argv[i + 1];
         i++;
       }
     }
 
-    return { port, dbPath, docsDir };
+    return { port, dbPath, root };
   }
 
-  it("--docs-dir <path> sets docsDir to the provided path", () => {
-    const { docsDir } = simulateParseArgs(["--docs-dir", "/some/custom/docs"]);
-    expect(docsDir).toBe("/some/custom/docs");
+  it("--root <path> sets root to the provided path", () => {
+    const { root } = simulateParseArgs(["--root", "/some/custom/root"]);
+    expect(root).toBe("/some/custom/root");
   });
 
-  it("omitting --docs-dir leaves docsDir null", () => {
-    const { docsDir } = simulateParseArgs(["--port", "4567", "--db-path", "/some/db.db"]);
-    expect(docsDir).toBeNull();
+  it("omitting --root leaves root null", () => {
+    const { root } = simulateParseArgs(["--port", "4567", "--db-path", "/some/db.db"]);
+    expect(root).toBeNull();
   });
 
-  it("--docs-dir works alongside --port and --db-path", () => {
-    const { port, dbPath, docsDir } = simulateParseArgs([
+  it("--root works alongside --port and --db-path", () => {
+    const { port, dbPath, root } = simulateParseArgs([
       "--port", "9000",
       "--db-path", "/tmp/test.db",
-      "--docs-dir", "spec-driven-dev/docs",
+      "--root", "spec-driven-dev",
     ]);
     expect(port).toBe(9000);
     expect(dbPath).toBe("/tmp/test.db");
-    expect(docsDir).toBe("spec-driven-dev/docs");
+    expect(root).toBe("spec-driven-dev");
   });
 
-  it("--docs-dir accepts a relative path (resolution happens in boot)", () => {
-    const { docsDir } = simulateParseArgs(["--docs-dir", "relative/docs/path"]);
-    expect(docsDir).toBe("relative/docs/path");
+  it("--root accepts a relative path (resolution happens via resolveDocsRoot)", () => {
+    const { root } = simulateParseArgs(["--root", "relative/sdd"]);
+    expect(root).toBe("relative/sdd");
   });
 
-  it("--docs-dir accepts an absolute path", () => {
-    const { docsDir } = simulateParseArgs(["--docs-dir", "/absolute/docs/path"]);
-    expect(docsDir).toBe("/absolute/docs/path");
+  it("--root accepts an absolute path", () => {
+    const { root } = simulateParseArgs(["--root", "/absolute/sdd"]);
+    expect(root).toBe("/absolute/sdd");
+  });
+
+  it("--docs-dir is NOT recognized (replaced by --root)", () => {
+    const { root } = simulateParseArgs(["--docs-dir", "/some/docs"]);
+    expect(root).toBeNull();
   });
 });

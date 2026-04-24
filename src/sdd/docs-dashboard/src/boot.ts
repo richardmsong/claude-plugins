@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
-import { join, dirname, resolve } from "path";
+import { join, dirname } from "path";
 import { openDb } from "docs-mcp/db";
 import { indexAllDocs } from "docs-mcp/content-indexer";
 import { runLineageScan } from "docs-mcp/lineage-scanner";
@@ -9,13 +9,18 @@ import { startWatcher } from "docs-mcp/watcher";
 
 /**
  * Walk up from startDir until we find a directory containing .git.
- * Returns the repo root path, or null if not found.
+ * Returns the git root path, or null if not found.
  */
-export function findRepoRoot(startDir: string): string | null {
+export function findGitRoot(startDir: string): string | null {
   let dir = startDir;
   while (true) {
-    if (existsSync(join(dir, ".git"))) {
-      return dir;
+    const gitDir = join(dir, ".git");
+    try {
+      if (existsSync(gitDir)) {
+        return dir;
+      }
+    } catch {
+      // Permission error or similar — skip
     }
     const parent = dirname(dir);
     if (parent === dir) {
@@ -27,51 +32,46 @@ export function findRepoRoot(startDir: string): string | null {
 }
 
 export interface BootResult {
-  repoRoot: string;
+  gitRoot: string | null;
   db: Database;
   stopWatcher: () => void;
 }
 
 /**
  * Initialize the dashboard:
- * 1. Walk up from cwd to find the repo root (.git directory).
- * 2. Open the shared SQLite index in WAL mode (dbPath may be null → use default).
- * 3. Run indexAllDocs to populate the index.
+ * 1. Open the shared SQLite index in WAL mode (dbPath may be null → defaults to
+ *    <docsRoot>/.agent/.docs-index.db per ADR-0050).
+ * 2. Run indexAllDocs to populate the index.
+ * 3. Run lineage and blame scans.
  * 4. Start the file watcher with an onReindex callback for SSE.
  *
- * docsDir: if provided, overrides the default `<repoRoot>/docs/` directory.
- *   Resolved relative to cwd; absolute paths accepted as-is.
- *   When null, defaults to `join(repoRoot, "docs")` (ADR-0032).
+ * docsRoot: the already-resolved docs root (parent of docs/).
+ * dbPath: explicit override for the SQLite index path; null = use default.
  *
- * Returns repoRoot, db, and a stopWatcher function.
- * Exits non-zero if no .git directory is found.
+ * Returns gitRoot (may be null if no .git found), db, and a stopWatcher function.
  */
 export function boot(
+  docsRoot: string,
   dbPath: string | null,
-  onReindex: (changed: string[]) => void,
-  docsDir: string | null = null
+  onReindex: (changed: string[]) => void
 ): BootResult {
-  const cwd = process.cwd();
-  const repoRoot = findRepoRoot(cwd);
-  if (!repoRoot) {
-    console.error(
-      `Error: no .git directory found walking up from ${cwd}. Cannot operate without a repo.`
+  const gitRoot = findGitRoot(docsRoot);
+  if (!gitRoot) {
+    console.warn(
+      `[dashboard] No .git directory found walking up from ${docsRoot}; lineage and blame scanning disabled`
     );
-    process.exit(1);
   }
 
   const resolvedDbPath =
-    dbPath ?? join(repoRoot, ".agent", ".docs-index.db");
+    dbPath ?? join(docsRoot, ".agent", ".docs-index.db");
 
   const db = openDb(resolvedDbPath);
 
-  // Resolve the docs directory. When null, fall back to <repoRoot>/docs.
-  // When a relative path, resolve against cwd (consistent with --db-path).
-  const resolvedDocsDir = docsDir != null ? resolve(cwd, docsDir) : join(repoRoot, "docs");
+  const docsDir = join(docsRoot, "docs");
 
   // Initial index — run synchronously on boot
   try {
-    indexAllDocs(db, resolvedDocsDir, repoRoot);
+    indexAllDocs(db, docsDir, gitRoot);
   } catch (err) {
     console.error(`[dashboard] Initial index failed: ${err}`);
     // Non-fatal: continue, watcher will catch up
@@ -80,7 +80,7 @@ export function boot(
   // Populate lineage from git log so the dashboard is self-sufficient
   // even when docs-mcp has never run against this DB (ADR-0029).
   try {
-    runLineageScan(db, repoRoot, resolvedDocsDir);
+    runLineageScan(db, gitRoot, docsDir);
   } catch (err) {
     console.error(`[dashboard] Lineage scan failed: ${err}`);
     // Non-fatal: dashboard still serves docs without lineage edges
@@ -88,13 +88,13 @@ export function boot(
 
   // Populate blame data for line-level lineage popover (ADR-0040).
   try {
-    runBlameScan(db, repoRoot, resolvedDocsDir);
+    runBlameScan(db, gitRoot, docsDir);
   } catch (err) {
     console.error(`[dashboard] Blame scan failed: ${err}`);
     // Non-fatal: dashboard still serves docs without blame data
   }
 
-  const stopWatcher = startWatcher(db, resolvedDocsDir, repoRoot, onReindex);
+  const stopWatcher = startWatcher(db, docsDir, gitRoot, onReindex);
 
-  return { repoRoot, db, stopWatcher };
+  return { gitRoot, db, stopWatcher };
 }

@@ -15,7 +15,8 @@
     "./lineage-scanner": "./src/lineage-scanner.ts",
     "./blame-scanner": "./src/blame-scanner.ts",
     "./watcher": "./src/watcher.ts",
-    "./tools": "./src/tools.ts"
+    "./tools": "./src/tools.ts",
+    "./resolve-docs-root": "./src/resolve-docs-root.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",

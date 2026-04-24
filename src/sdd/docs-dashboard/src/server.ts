@@ -2,6 +2,7 @@ import { join } from "path";
 import { existsSync } from "fs";
 import { networkInterfaces } from "os";
 import { Database } from "bun:sqlite";
+import { resolveDocsRoot } from "docs-mcp/resolve-docs-root";
 import { boot } from "./boot.js";
 import {
   handleAdrs,
@@ -16,10 +17,10 @@ import {
 
 // ---- CLI flag parsing ----
 
-function parseArgs(argv: string[]): { port: number; dbPath: string | null; docsDir: string | null } {
+function parseArgs(argv: string[]): { port: number; dbPath: string | null; root: string | null } {
   let port = 4567;
   let dbPath: string | null = null;
-  let docsDir: string | null = null;
+  let root: string | null = null;
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--port" && argv[i + 1]) {
@@ -33,13 +34,13 @@ function parseArgs(argv: string[]): { port: number; dbPath: string | null; docsD
     } else if (argv[i] === "--db-path" && argv[i + 1]) {
       dbPath = argv[i + 1];
       i++;
-    } else if (argv[i] === "--docs-dir" && argv[i + 1]) {
-      docsDir = argv[i + 1];
+    } else if (argv[i] === "--root" && argv[i + 1]) {
+      root = argv[i + 1];
       i++;
     }
   }
 
-  return { port, dbPath, docsDir };
+  return { port, dbPath, root };
 }
 
 // ---- Startup banner ----
@@ -177,34 +178,12 @@ function handleStatic(url: URL): Response | null {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const { port, dbPath, docsDir } = parseArgs(argv);
+  const { port, dbPath, root } = parseArgs(argv);
 
-  let db: Database;
-  let repoRoot: string;
-  let stopWatcher: () => void;
+  // Step 1: Resolve docsRoot via priority chain (ADR-0050)
+  const docsRoot = resolveDocsRoot(root, process.env.CLAUDE_PROJECT_DIR, process.cwd());
 
-  try {
-    ({ repoRoot, db, stopWatcher } = boot(dbPath, (changed: string[]) => {
-      broadcast({ type: "reindex", changed });
-    }, docsDir));
-  } catch (err) {
-    console.error(`[dashboard] Boot failed: ${err}`);
-    process.exit(1);
-  }
-
-  // Graceful shutdown
-  process.on("SIGINT", () => {
-    stopWatcher();
-    db.close();
-    process.exit(0);
-  });
-  process.on("SIGTERM", () => {
-    stopWatcher();
-    db.close();
-    process.exit(0);
-  });
-
-  // Auto-build UI if dist/index.html is missing
+  // Step 3: Auto-build UI if dist/index.html is missing (before openDb per spec)
   const indexHtml = join(UI_DIST, "index.html");
   if (!existsSync(indexHtml)) {
     console.log("[docs-dashboard] Building UI...");
@@ -224,6 +203,31 @@ async function main() {
       console.error(`[docs-dashboard] UI build error: ${err} — API still available, SPA will show fallback`);
     }
   }
+
+  let db: Database;
+  let gitRoot: string | null;
+  let stopWatcher: () => void;
+
+  try {
+    ({ gitRoot, db, stopWatcher } = boot(docsRoot, dbPath, (changed: string[]) => {
+      broadcast({ type: "reindex", changed });
+    }));
+  } catch (err) {
+    console.error(`[dashboard] Boot failed: ${err}`);
+    process.exit(1);
+  }
+
+  // Graceful shutdown
+  process.on("SIGINT", () => {
+    stopWatcher();
+    db.close();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    stopWatcher();
+    db.close();
+    process.exit(0);
+  });
 
   const server = Bun.serve({
     hostname: "0.0.0.0",
@@ -252,7 +256,7 @@ async function main() {
         return handleSpecs(db);
       }
       if (req.method === "GET" && url.pathname === "/api/doc") {
-        return handleDoc(db, repoRoot, url);
+        return handleDoc(db, gitRoot, url);
       }
       if (req.method === "GET" && url.pathname === "/api/lineage") {
         return handleLineage(db, url);
@@ -264,10 +268,10 @@ async function main() {
         return handleGraph(db, url);
       }
       if (req.method === "GET" && url.pathname === "/api/blame") {
-        return handleBlame(db, repoRoot, url);
+        return handleBlame(db, gitRoot, url);
       }
       if (req.method === "GET" && url.pathname === "/api/diff") {
-        return handleDiff(repoRoot, url);
+        return handleDiff(gitRoot, url);
       }
 
       // Static SPA
