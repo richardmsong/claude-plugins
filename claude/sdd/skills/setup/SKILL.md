@@ -168,7 +168,7 @@ Read or create `${TARGET}/.claude/settings.json`. Merge the following `allow` en
       "Edit",
       "Write",
       "Update",
-      "mcp__docs__*"
+      "mcp__plugin_spec-driven-dev_docs__*"
     ]
   }
 }
