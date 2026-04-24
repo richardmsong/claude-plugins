@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude I/O wrapper for blocked-commands guard
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-GUARD="$SCRIPT_DIR/../../../src/sdd/hooks/guards/blocked-commands.sh"
+GUARD="${CLAUDE_PLUGIN_ROOT}/hooks/guards/blocked-commands.sh"
 INPUT=$(cat)
 COMMAND=$(python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('tool_input',{}).get('command',''))" <<< "$INPUT")
 [ -z "$COMMAND" ] && exit 0

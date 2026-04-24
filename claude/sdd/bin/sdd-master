@@ -1,1 +1,23 @@
-../../../src/sdd/bin/sdd-master
+#!/bin/bash
+# Launch a master/orchestrator Claude Code session with spec-driven-dev workflow.
+#
+# Source-file guard is enforced by a PreToolUse hook (source-guard-hook.sh),
+# not --disallowedTools (which cascades to subagents and blocks them too).
+# Subagents carry an agent_type field; the hook lets them through unconditionally.
+
+set -euo pipefail
+
+# --- Model probing ---
+CACHE_FILE="$HOME/.cache/sdd/master-model"
+if [ -r "$CACHE_FILE" ]; then
+  MODEL=$(cat "$CACHE_FILE")
+else
+  MODEL="claude-opus-4-7[1m]"
+  timeout 10 claude --model "$MODEL" -p "probe" --max-turns 0 </dev/null &>/dev/null || MODEL="opus"
+  mkdir -p "$(dirname "$CACHE_FILE")"
+  printf '%s' "$MODEL" > "$CACHE_FILE"
+fi
+
+mkdir -p .agent
+
+exec claude --model "$MODEL" "$@"
