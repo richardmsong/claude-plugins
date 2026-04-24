@@ -8,30 +8,58 @@ Established by ADR-0027. Extended by ADR-0028 (bind `0.0.0.0`), ADR-0029 (`runLi
 
 ## Runtime
 
-- Bun (loads `.ts` files natively; no build step in self-dev mode). In distributed installs (plugin package), the dashboard server runs from a pre-built JS bundle at `dist/docs-dashboard.js` produced by `build.sh` (ADR-0051).
-- Entrypoint: `docs-dashboard/src/server.ts`. On boot:
-  1. Resolve **docsRoot** via the same priority chain as docs-mcp (ADR-0050): `resolveDocsRoot(--root, CLAUDE_PROJECT_DIR, cwd)`. Import `resolveDocsRoot` from `docs-mcp/src/resolve-docs-root.ts`. The docs directory is `<docsRoot>/docs/`.
-  2. Auto-build UI: if `ui/dist/index.html` does not exist **and** `CLAUDE_PLUGIN_ROOT` is not set (self-dev mode), run `bun run build` in the `ui/` directory (ADR-0049). Log the build. On failure, log the error and continue — the API still works, and the SPA catch-all returns a build-failure fallback page. When `CLAUDE_PLUGIN_ROOT` is set (distributed install), the UI is pre-built at `dist/ui/` by `build.sh` (ADR-0051); the auto-build step is skipped.
-  3. Discover **gitRoot** by calling `findGitRoot(docsRoot)` — walks up from docsRoot to find `.git`. If not found, lineage and blame scanning are skipped; dashboard still serves docs.
-  4. `openDb(resolvedDbPath)` — opens the shared SQLite index in WAL mode; path defaults to `<docsRoot>/.agent/.docs-index.db`, overridden by `--db-path`.
-  5. `indexAllDocs(db, docsDir, gitRoot)` — populates the doc index.
-  6. `runLineageScan(db, gitRoot, docsDir)` — populates lineage from `git log` (ADR-0029).
-  7. `runBlameScan(db, gitRoot, docsDir)` — populates `blame_lines` from `git blame` (ADR-0040). Non-fatal on error.
-  8. `startWatcher(db, docsDir, gitRoot, onReindex)` — watches docsDir for changes; `onReindex` broadcasts SSE events.
-- Default port `4567`; overridden by `--port <n>`.
-- Binds to `0.0.0.0` (all interfaces, ADR-0028) — reachable from Tailnet peers.
-- The startup banner prints:
+### Two-process layout
+
+`/dashboard` launches two background processes via a single bash wrapper (`docs-dashboard/dashboard.sh`):
+
+1. **Backend** — the Bun server (this spec). Serves `/api/*` and `/events`; does NOT serve any static UI content. Entrypoint is `dist/docs-dashboard.js` in plugin installs (bundled by `build.sh`) or `docs-dashboard/src/server.ts` in local-dev (source). Bun runs either.
+2. **Vite dev server** — serves the UI source from `docs-dashboard/ui/` with HMR. Vite's `server.proxy` forwards `/api` and `/events` to the backend port, which the wrapper passes in via the `BACKEND_PORT` environment variable (default 4567).
+
+The wrapper installs a `trap` on EXIT/SIGINT/SIGTERM that kills both children, so killing the wrapper cleans up the whole tree.
+
+### Ports
+
+- Backend starts at 4567, scanning upward if taken (`--port <n>` overrides the start). Default flag in spec below.
+- Vite starts at 5173, scanning upward if taken. No CLI override (the wrapper does this). Vite is launched with `--strictPort` so it binds to exactly the port the wrapper chose — the wrapper is the single source of truth for port selection.
+- The URL printed to the user is the Vite URL — that's the HMR entry point. The backend URL is logged as "do not open directly."
+
+### Backend boot sequence
+
+The backend is a pure API + SSE server. On boot (entrypoint `docs-dashboard/src/server.ts` or the `dist/docs-dashboard.js` bundle):
+
+1. Resolve **docsRoot** via the same priority chain as docs-mcp (ADR-0050): `resolveDocsRoot(--root, CLAUDE_PROJECT_DIR, cwd)`. Import `resolveDocsRoot` from `docs-mcp/src/resolve-docs-root.ts`. The docs directory is `<docsRoot>/docs/`.
+2. Discover **gitRoot** by calling `findGitRoot(docsRoot)` — walks up from docsRoot to find `.git`. If not found, lineage and blame scanning are skipped; the API still serves docs.
+3. `openDb(resolvedDbPath)` — opens the shared SQLite index in WAL mode; path defaults to `<docsRoot>/.agent/.docs-index.db`, overridden by `--db-path`.
+4. `indexAllDocs(db, docsDir, gitRoot)` — populates the doc index.
+5. `runLineageScan(db, gitRoot, docsDir)` — populates lineage from `git log` (ADR-0029).
+6. `runBlameScan(db, gitRoot, docsDir)` — populates `blame_lines` from `git blame` (ADR-0040). Non-fatal on error.
+7. `startWatcher(db, docsDir, gitRoot, onReindex)` — watches docsDir for changes; `onReindex` broadcasts SSE events.
+
+The backend has no static-file handler. Any non-`/api/*`, non-`/events` request returns 404. UI serving is entirely Vite's job.
+
+### Vite dev server
+
+- Reads `BACKEND_PORT` from environment (default 4567) to build its proxy targets.
+- Proxies `/api` and `/events` to `http://127.0.0.1:$BACKEND_PORT`.
+- UI source tree ships with both install routes; plugin install copies it into `claude/sdd/docs-dashboard/ui/` via `build.sh`.
+- First run of `/dashboard` after install runs `bun install` in the UI dir if `node_modules/` is missing.
+
+### Bind and banner
+
+- Backend binds to `0.0.0.0` (all interfaces, ADR-0028) — reachable from Tailnet peers.
+- Backend startup banner prints:
   ```
   Dashboard ready:
     http://127.0.0.1:<port>/
     http://<non-loopback-ipv4>:<port>/   (one line per non-loopback IPv4 interface)
   ```
+  (Retained for the backend's internal use; the user-facing URL is the wrapper's Vite URL.)
 
 ## CLI Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--port <n>` | `4567` | HTTP listen port. Fails fast if in use. |
+| `--port <n>` | `4567` | Starting port for the backend port scan. The wrapper (`docs-dashboard/dashboard.sh`) scans upward if the port is taken and passes the chosen port to the backend via `--port`. The backend itself still fails fast on `EADDRINUSE` — but that only fires in the race where the port became taken between the wrapper's scan and the backend's bind. |
 | `--root <dir>` | (none) | Docs root — parent of `docs/`. Same semantics as docs-mcp `--root`. Resolved via `resolveDocsRoot(--root, CLAUDE_PROJECT_DIR, cwd)` (ADR-0050). |
 | `--db-path <path>` | `<docsRoot>/.agent/.docs-index.db` | SQLite index path override. |
 
@@ -61,7 +89,6 @@ HTTP handlers are thin wrappers: unmarshal parameters, call the function, JSON-e
 | GET | `/api/blame?doc=<p>[&since=<date>&ref=<branch>]` | Per-block blame+lineage data. Self-joins `blame_lines` on commit to find co-modified ADRs. Optional `since`/`ref` for range-filtered blame (computed on demand). | `blame-queries.ts` |
 | GET | `/api/diff?doc=<p>&commit=<hash>&line_start=<n>&line_end=<n>` | Unified diff hunk from a specific commit overlapping the requested line range. | `git show` + hunk extraction |
 | GET | `/events` | SSE stream; emits `{type:"hello"}` on connect and `{type:"reindex",changed:[...]}` on watcher fires. | SSE broker in `server.ts` |
-| GET | `/` and `/assets/*` | Static SPA bundle from `ui/dist/`. | Bun static file serving |
 
 ### `/api/doc` Response Shape
 
@@ -216,7 +243,15 @@ The custom renderer also:
 | `.docs-index.db` missing or corrupt | `openDb` rebuilds; UI shows "Loading…" until index returns. |
 | Schema version mismatch | `openDb` deletes and rebuilds; same flow. |
 | `fs.watch` throws | Fall back to polling every 5 s (handled in `docs-mcp/watcher.ts`). |
-| Port in use | Fail fast: `Error: port <n> is in use. Use --port <n> or stop the other process.` |
+| Backend port race (taken between wrapper scan and bind) | Backend exits with `Error: port <n> is in use. Use --port <n> or stop the other process.`; wrapper's readiness poll times out on it (see below). |
+| Backend readiness timeout (30 s) | Wrapper prints last 20 lines of backend log to stderr and exits non-zero. EXIT trap kills Vite and removes log files. |
+| Vite readiness timeout (30 s) | Wrapper prints last 20 lines of Vite log to stderr and exits non-zero. EXIT trap kills backend and removes log files. |
+| Backend crashes mid-session | `kill -0` poll loop notices the dead PID and exits. EXIT trap fires: Vite killed, log files removed. Wrapper exits non-zero. User reruns `/dashboard`. |
+| Vite crashes mid-session | Mirror of the above. |
+| User edits `server.ts` | Backend does NOT auto-restart. User reruns `/dashboard`. (Deferred: `bun --watch` for backend HMR.) |
+| User edits `ui/**` | Vite HMR picks it up automatically; no rerun needed. |
+| `bun` not on PATH | Wrapper prints `bun is required. Install: curl -fsSL https://bun.sh/install \| bash` and exits non-zero before launching anything. |
+| `lsof` or `nc` not on PATH | Wrapper prints an install hint and exits non-zero before launching anything. |
 | `/api/doc` or `/api/lineage` unknown path | HTTP 404, JSON `{error:"not found",path}`. |
 | FTS5 query syntax error | HTTP 400 with error message. |
 | SSE disconnect | Browser auto-reconnects; `hello` triggers full refetch. |
