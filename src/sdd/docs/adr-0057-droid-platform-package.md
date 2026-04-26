@@ -1,8 +1,9 @@
 # ADR: Droid platform package — full implementation
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-25: accepted
+- 2026-04-25: implemented — all scope CLEAN
 
 ## Overview
 
