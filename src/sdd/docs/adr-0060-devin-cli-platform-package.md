@@ -22,7 +22,7 @@ These are Devin CLI constraints that affect the SDD workflow. They don't block t
 
 5. **No official marketplace/plugin system.** Distribution is manual — users copy files into `.agents/skills/` and `.claude/agents/`. No `devin plugin install` equivalent.
 
-6. **`.claude/agents/` import does not translate frontmatter.** Devin imports `.claude/agents/*.md` files but does not translate Claude-specific frontmatter fields (`tools: "*"`, `maxTurns`, `run_in_background`). SDD agents use these fields. The dev-harness profile fails to load on Devin with the current agent definitions. The build step must produce Devin-native agent files with `allowed-tools`, `permissions`, and standard fields — or agents must be placed in `.devin/agents/<name>/AGENT.md` format.
+6. **Agent files need Devin-native frontmatter.** Canonical agents use Claude format (`tools: "*"`, `maxTurns`). The Devin build step must rewrite frontmatter to Devin format (`allowed-tools`, `permissions`) and place agents in `.devin/agents/<name>/AGENT.md` subdirectory format. This is normal build-step work, same as model slug rewriting.
 
 ## Motivation
 
