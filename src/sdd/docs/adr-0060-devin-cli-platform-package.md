@@ -8,6 +8,20 @@
 
 Add Devin CLI (Devin for Terminal) as a first-class platform in the agent-plugins monorepo, alongside Claude Code and Droid. This creates `devin/sdd/` — a platform package containing a Devin-specific setup skill, hook wrappers, MCP configuration, and symlinks/copies of the shared canonical source from `src/sdd/`.
 
+### Known platform limitations
+
+These are Devin CLI constraints that affect the SDD workflow. They don't block the platform package but degrade the experience compared to Claude Code.
+
+1. **Hook `block`/`deny` kills the agent's turn.** When a PreToolUse hook returns `block` or `deny`, the agent goes silent — it cannot see the reason, recover, or try an alternative. The user must manually nudge the agent to continue. On Claude Code, the agent sees the block reason and adapts in the same turn. This means source-guard and blocked-commands hooks require human supervision on Devin. **Raise with Devin team.**
+
+2. **No `DEVIN_PLUGIN_ROOT` environment variable.** Devin exposes `DEVIN_PROJECT_DIR` but has no equivalent of `CLAUDE_PLUGIN_ROOT` for referencing plugin assets. Hook wrappers and MCP configs must use paths relative to the project root or `$SCRIPT_DIR`.
+
+3. **No subagent context in hook input.** Devin's PreToolUse hook stdin includes `tool_name` and `tool_input` but no `agent_type` or `subagent_type` field. Source-guard hooks cannot distinguish master-session edits from dev-harness subagent edits. Enforcement relies on AGENTS.md rules and Devin's per-agent permission system.
+
+4. **Subagents cannot nest.** Devin subagents cannot spawn sub-subagents. Non-issue for the current SDD workflow (master session drives the loop), but limits future designs where evaluators might invoke dev-harness directly.
+
+5. **No official marketplace/plugin system.** Distribution is manual — users copy files into `.agents/skills/` and `.claude/agents/`. No `devin plugin install` equivalent.
+
 ## Motivation
 
 Devin CLI is a terminal-based AI coding agent that supports the same extensibility primitives the SDD workflow relies on: skills (`SKILL.md`), custom subagents (`AGENT.md`), MCP servers, lifecycle hooks, and project rules (`AGENTS.md`). The existing three-layer architecture (ADR-0047) was designed to make adding new platforms mechanical — Droid (ADR-0057) proved the pattern. Devin CLI is the next platform to onboard.
