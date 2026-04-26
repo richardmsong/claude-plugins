@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Devin I/O wrapper for source-guard
-# Reads Devin's JSON stdin, extracts file_path, calls shared guard, outputs Devin JSON
+# Devin I/O wrapper for source-guard — DEBUG VERSION
+# Dumps full stdin to a file for inspection, then runs the guard
 
 export CLAUDE_PROJECT_DIR="${DEVIN_PROJECT_DIR:-.}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -9,6 +9,12 @@ GUARD="$SCRIPT_DIR/guards/source-guard.sh"
 [ ! -f "$GUARD" ] && exit 0
 
 INPUT=$(cat)
+
+# DEBUG: dump full hook input to file
+echo "--- $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" >> /tmp/devin-hook-input.log
+echo "$INPUT" >> /tmp/devin-hook-input.log
+echo "" >> /tmp/devin-hook-input.log
+
 FILE_PATH=$(python3 -c "
 import json, sys
 d = json.loads(sys.stdin.read())

@@ -22,6 +22,8 @@ These are Devin CLI constraints that affect the SDD workflow. They don't block t
 
 5. **No official marketplace/plugin system.** Distribution is manual — users copy files into `.agents/skills/` and `.claude/agents/`. No `devin plugin install` equivalent.
 
+6. **`.claude/agents/` import does not translate frontmatter.** Devin imports `.claude/agents/*.md` files but does not translate Claude-specific frontmatter fields (`tools: "*"`, `maxTurns`, `run_in_background`). SDD agents use these fields. The dev-harness profile fails to load on Devin with the current agent definitions. The build step must produce Devin-native agent files with `allowed-tools`, `permissions`, and standard fields — or agents must be placed in `.devin/agents/<name>/AGENT.md` format.
+
 ## Motivation
 
 Devin CLI is a terminal-based AI coding agent that supports the same extensibility primitives the SDD workflow relies on: skills (`SKILL.md`), custom subagents (`AGENT.md`), MCP servers, lifecycle hooks, and project rules (`AGENTS.md`). The existing three-layer architecture (ADR-0047) was designed to make adding new platforms mechanical — Droid (ADR-0057) proved the pattern. Devin CLI is the next platform to onboard.
