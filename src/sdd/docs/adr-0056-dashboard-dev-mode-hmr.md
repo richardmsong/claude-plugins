@@ -1,9 +1,10 @@
 # ADR: Dashboard dev mode with Vite HMR; no prebuild
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-24: draft
 - 2026-04-24: accepted — paired with spec-dashboard.md (Runtime, CLI Flags, Error Handling sections updated)
+- 2026-04-27: implemented — all scope CLEAN
 
 ## Overview
 

@@ -14,13 +14,13 @@ These are Devin CLI constraints that affect the SDD workflow. They don't block t
 
 1. **Hook `block`/`deny` kills the agent's turn.** When a PreToolUse hook returns `block` or `deny`, the agent goes silent — it cannot see the reason, recover, or try an alternative. The user must manually nudge the agent to continue. On Claude Code, the agent sees the block reason and adapts in the same turn. This means source-guard and blocked-commands hooks require human supervision on Devin. **Raise with Devin team.**
 
-2. **No `DEVIN_PLUGIN_ROOT` environment variable.** Devin exposes `DEVIN_PROJECT_DIR` but has no equivalent of `CLAUDE_PLUGIN_ROOT` for referencing plugin assets. Hook wrappers and MCP configs must use paths relative to the project root or `$SCRIPT_DIR`.
+2. **No plugin root environment variable — and none needed.** Devin has no marketplace or plugin system, so there is no installed plugin directory and no equivalent of `CLAUDE_PLUGIN_ROOT` or `DROID_PLUGIN_ROOT`. All plugin assets (hooks, dist, config) live directly in the project tree (`.devin/`, `.agents/`), so hook commands and MCP configs use plain project-relative paths (e.g. `bash .devin/hooks/blocked-commands-hook.sh`). `DEVIN_PROJECT_DIR` is set automatically by Devin CLI and resolves to the project root.
 
 3. **No subagent context in hook input.** Devin's PreToolUse hook stdin includes `tool_name` and `tool_input` but no `agent_type` or `subagent_type` field. Source-guard hooks cannot distinguish master-session edits from dev-harness subagent edits. Enforcement relies on AGENTS.md rules and Devin's per-agent permission system.
 
 4. **Subagents cannot nest.** Devin subagents cannot spawn sub-subagents. Non-issue for the current SDD workflow (master session drives the loop), but limits future designs where evaluators might invoke dev-harness directly.
 
-5. **No official marketplace/plugin system.** Distribution is manual — users copy files into `.agents/skills/` and `.claude/agents/`. No `devin plugin install` equivalent.
+5. **No official marketplace/plugin system.** Distribution is manual — users copy files into `.devin/skills/`, `.agents/skills/`, and `.claude/agents/`. No `devin plugin install` equivalent. Because there is no plugin install path, there is no plugin root env var — all references are project-relative (see limitation #2).
 
 ## Motivation
 
@@ -35,7 +35,7 @@ Devin CLI also natively reads `.agents/` directories and `AGENTS.md`, and can im
 | Directory location | `devin/sdd/` | Follows the `<platform>/sdd/` convention from ADR-0047. |
 | Marketplace descriptor | Not applicable — no `.devin-plugin/` at repo root | Devin CLI has no official marketplace/plugin system. Distribution is via `.devin/skills/` or `.agents/skills/` directory copy. |
 | Distribution strategy | `.agents/skills/` for skills, `.claude/agents/` for agents | Skills go to `.agents/skills/` (cross-tool standard). Agents go to `.claude/agents/` (Devin imports flat `.md` files from this path). |
-| Plugin root env var | Use `DEVIN_PROJECT_DIR` + relative paths from `$SCRIPT_DIR` | Devin CLI exposes `DEVIN_PROJECT_DIR` but has no `DEVIN_PLUGIN_ROOT` equivalent. Hook wrappers must use `$SCRIPT_DIR` for self-referencing. |
+| Plugin root env var | Not needed — project-relative paths only | Devin has no marketplace/plugin system, so there is no installed plugin directory and no plugin root env var. All assets live in the project tree; hook commands use plain relative paths (e.g. `bash .devin/hooks/blocked-commands-hook.sh`). `DEVIN_PROJECT_DIR` is set automatically. |
 | Context injection file | `AGENTS.md` | Devin CLI natively loads `AGENTS.md` from project root (same as Droid). No separate file needed. |
 | Hook registration format | `.devin/hooks.v1.json` or `hooks` key in `.devin/config.json` | Devin CLI supports both. `hooks.v1.json` is recommended as standalone. |
 | Hook output format | Exit 0 + `{"decision": "block", "reason": "..."}` on stdout | Wrappers use exit 0 + JSON block. Guard scripts exit 1 on deny, so wrappers translate exit 1 → exit 0 + JSON block. |
@@ -157,7 +157,8 @@ devin/sdd/
 **Hook wrappers** translate Devin's JSON stdin/stdout to the agent-neutral guard script contract:
 - Bridge `DEVIN_PROJECT_DIR` → `CLAUDE_PROJECT_DIR` (guards read the latter)
 - Parse Devin's JSON to extract `tool_input.command` (blocked-commands)
-- Guard scripts exit 1 on deny; wrappers translate exit 1 → exit 0 + `{"decision": "block", "reason": "<text>"}`
+- Guard scripts exit 1 on deny; wrappers translate exit 1 → exit 0 + `{"decision": "block", "reason": "<text>"}`. (Devin treats exit 1 as a non-blocking error — only exit 2 natively blocks. The wrapper uses exit 0 + JSON to ensure the block decision is communicated cleanly.)
+- All guard paths are project-relative (e.g. `.devin/hooks/guards/blocked-commands.sh`) — no plugin root env var needed since Devin has no marketplace/plugin system
 - **Known Devin platform issue:** Both `block` and `deny` kill the agent's turn — it goes silent and requires user intervention to continue. This is a Devin CLI bug/limitation to raise with the Devin team. The correct behavior (as Claude Code does) is to let the agent see the block reason and continue its turn with an alternative approach. Despite this limitation, hooks still use `block` — a dead turn is better than letting a guarded action through.
 - **workflow-reminder wrapper** wraps guard stdout in `{"add_context": "<text>"}` (Devin's context injection format, unlike Claude's plain-text stdout)
 
@@ -172,7 +173,7 @@ Add a Devin build target that:
 6. Copies compiled `dist/` assets (docs-mcp.js, docs-dashboard.js, ui/)
 7. Copies `context.md`
 8. Writes `hooks.v1.json` (flat Devin schema, as shown above)
-9. Writes hook wrapper scripts with `$SCRIPT_DIR`-relative paths to guards
+9. Writes hook wrapper scripts with project-relative paths to guards (no plugin root needed — see limitation #2)
 
 ### `src/sdd/.agent/skills/local-setup/SKILL.md` (MODIFIED)
 
