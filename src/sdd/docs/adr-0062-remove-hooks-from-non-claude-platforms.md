@@ -1,9 +1,10 @@
 # ADR: Remove hooks from Factory/Droid and Devin platform packages
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-27: draft
 - 2026-04-27: accepted
+- 2026-04-27: implemented — all scope CLEAN
 
 ## Overview
 
