@@ -1,23 +1,17 @@
 // @bun
 var __defProp = Object.defineProperty;
-var __returnValue = (v) => v;
-function __exportSetter(name, newValue) {
-  this[name] = __returnValue.bind(null, newValue);
-}
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, {
       get: all[name],
       enumerable: true,
       configurable: true,
-      set: __exportSetter.bind(all, name)
+      set: (newValue) => all[name] = () => newValue
     });
 };
 var __require = import.meta.require;
 
 // docs-dashboard/src/server.ts
-import { join as join5 } from "path";
-import { existsSync as existsSync6 } from "fs";
 import { networkInterfaces } from "os";
 
 // docs-mcp/src/resolve-docs-root.ts
@@ -5430,50 +5424,10 @@ function handleSSE() {
     }
   });
 }
-var UI_DIST = process.env.CLAUDE_PLUGIN_ROOT ? join5(process.env.CLAUDE_PLUGIN_ROOT, "dist/ui") : join5(import.meta.dir, "../ui/dist");
-function handleStatic(url) {
-  if (url.pathname.startsWith("/assets/")) {
-    const filePath = join5(UI_DIST, url.pathname);
-    if (existsSync6(filePath)) {
-      return new Response(Bun.file(filePath));
-    }
-    return new Response("Not Found", { status: 404 });
-  }
-  const indexPath = join5(UI_DIST, "index.html");
-  if (existsSync6(indexPath)) {
-    return new Response(Bun.file(indexPath));
-  }
-  return new Response(`<!doctype html><html><body><p>UI build failed. Check server logs for details.</p></body></html>`, { headers: { "Content-Type": "text/html" } });
-}
 async function main() {
   const argv = process.argv.slice(2);
   const { port, dbPath, root } = parseArgs(argv);
   const docsRoot = resolveDocsRoot(root, process.env.CLAUDE_PROJECT_DIR, process.cwd());
-  const indexHtml = join5(UI_DIST, "index.html");
-  if (!process.env.CLAUDE_PLUGIN_ROOT) {
-    if (!existsSync6(indexHtml)) {
-      console.log("[docs-dashboard] Building UI...");
-      try {
-        const buildProc = Bun.spawn(["bun", "run", "build"], {
-          cwd: join5(import.meta.dir, "../ui"),
-          stdout: "inherit",
-          stderr: "inherit"
-        });
-        const exitCode = await buildProc.exited;
-        if (exitCode === 0) {
-          console.log("[docs-dashboard] UI built successfully");
-        } else {
-          console.error(`[docs-dashboard] UI build failed (exit ${exitCode}) \u2014 API still available, SPA will show fallback`);
-        }
-      } catch (err) {
-        console.error(`[docs-dashboard] UI build error: ${err} \u2014 API still available, SPA will show fallback`);
-      }
-    }
-  } else {
-    if (!existsSync6(indexHtml)) {
-      console.error("[docs-dashboard] Pre-built UI missing at dist/ui/ \u2014 SPA will show fallback. Re-run build.sh to fix.");
-    }
-  }
   let db;
   let gitRoot;
   let stopWatcher;
@@ -5533,9 +5487,6 @@ async function main() {
       if (req.method === "GET" && url.pathname === "/api/diff") {
         return handleDiff(gitRoot, url);
       }
-      const staticResponse = handleStatic(url);
-      if (staticResponse)
-        return staticResponse;
       return new Response(JSON.stringify({ error: "not found" }), {
         status: 404,
         headers: { "Content-Type": "application/json" }

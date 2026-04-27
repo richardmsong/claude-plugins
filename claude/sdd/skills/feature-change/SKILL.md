@@ -221,7 +221,7 @@ The invocation prompt gives the harness *priority*, not *scope*. The harness alw
 
 The dev-harness agent has `maxTurns=500` and is instructed to keep going until all gaps are closed. If it hits context limits and returns with gaps remaining, **re-invoke it immediately** with the remaining gap list. Each re-invocation picks up from the last commit and continues.
 
-**Waiting for agents:** Always launch dev-harness and evaluator agents with `run_in_background: true`. You will receive an automatic completion notification when they finish — **do not poll or monitor their progress**. No `grep`-ing output files, no `tail`-ing transcripts, no counting messages. Just launch the agent and wait for the notification. If you have independent work (e.g. a second component to evaluate), do that while waiting. Otherwise, tell the user what's running and stop until notified.
+**Launching agents:** Always spawn subagents in the background so the main session is not blocked. On Claude Code, use `run_in_background: true`. On Droid/Factory, launch multiple independent `Task` calls in a single message so they run in parallel. When components are independent, launch all their dev-harness agents simultaneously rather than sequentially. You will receive completion notifications — **do not poll or monitor progress**. No `grep`-ing output files, no `tail`-ing transcripts, no counting messages. If you have independent work (e.g. a second component to evaluate), do that while waiting. Otherwise, tell the user what's running and stop until notified.
 
 ### Handling backpressure
 
