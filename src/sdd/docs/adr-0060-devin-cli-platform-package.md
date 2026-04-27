@@ -34,13 +34,13 @@ Devin CLI also natively reads `.agents/` directories and `AGENTS.md`, and can im
 |----------|--------|-----------|
 | Directory location | `devin/sdd/` | Follows the `<platform>/sdd/` convention from ADR-0047. |
 | Marketplace descriptor | Not applicable — no `.devin-plugin/` at repo root | Devin CLI has no official marketplace/plugin system. Distribution is via `.devin/skills/` or `.agents/skills/` directory copy. |
-| Distribution strategy | `.agents/` standard directory | Cross-tool compatible — Devin, Claude Code, Cursor, and others all scan `.agents/skills/` natively. Most future-proof. Users copy (or symlink) into `.agents/skills/` and `.agents/agents/`. |
+| Distribution strategy | `.agents/skills/` for skills, `.claude/agents/` for agents | Skills go to `.agents/skills/` (cross-tool standard). Agents go to `.claude/agents/` (Devin imports flat `.md` files from this path). |
 | Plugin root env var | Use `DEVIN_PROJECT_DIR` + relative paths from `$SCRIPT_DIR` | Devin CLI exposes `DEVIN_PROJECT_DIR` but has no `DEVIN_PLUGIN_ROOT` equivalent. Hook wrappers must use `$SCRIPT_DIR` for self-referencing. |
 | Context injection file | `AGENTS.md` | Devin CLI natively loads `AGENTS.md` from project root (same as Droid). No separate file needed. |
 | Hook registration format | `.devin/hooks.v1.json` or `hooks` key in `.devin/config.json` | Devin CLI supports both. `hooks.v1.json` is recommended as standalone. |
 | Hook output format | Exit 0 + `{"decision": "block", "reason": "..."}` on stdout | Wrappers use exit 0 + JSON block. Guard scripts exit 1 on deny, so wrappers translate exit 1 → exit 0 + JSON block. |
 | Hook turn-kill limitation | **Known platform limitation** — `block` and `deny` both kill the agent's turn | On Devin, a blocked tool call terminates the agent's turn — it goes silent and cannot recover or try alternatives without user intervention. This does NOT change the hook strategy: blocked actions must stay blocked. A dead turn is better than a corrupted source file or a bypassed workflow. This is a Devin platform gap that should be filed upstream. |
-| Hook tool matchers | `exec` for commands, `edit\|write` for file operations | Devin CLI tool names (lowercase). |
+| Hook tool matchers | `exec` for blocked-commands only | No `edit\|write` matcher — source-guard hook removed (see limitation #3). |
 | MCP config location | `.devin/config.json` under `mcpServers` key | Devin CLI reads MCP servers from config files, not a separate `.mcp.json`. |
 | Agent file format | Flat `.md` files via `.claude/agents/` import | Devin natively imports `.claude/agents/*.md` flat files (documented in subagents.mdx). No format adaptation needed. The build step copies agents into this path. |
 | Model slugs | Use short names (`sonnet`) for Devin agents; full identifiers for Claude/Droid | Devin docs only show short names (`sonnet`, `opus`, etc.). ADR-0058's `claude-sonnet-4-6` may not resolve. Build step rewrites `model:` field for Devin agents. |
@@ -78,8 +78,8 @@ Devin CLI also natively reads `.agents/` directories and `AGENTS.md`, and can im
      ]
    }
    ```
-4. **Upsert `AGENTS.md`** — read `context.md` from the installed package. If `AGENTS.md` exists, replace content between `<!-- sdd:begin -->` and `<!-- sdd:end -->` markers (preserve user content outside markers). If absent, create with markers wrapping the context content.
-5. **Write `.devin/config.json`** (merge with existing if present):
+5. **Upsert `AGENTS.md`** — read `context.md` from the installed package. If `AGENTS.md` exists, replace content between `<!-- sdd:begin -->` and `<!-- sdd:end -->` markers (preserve user content outside markers). If absent, create with markers wrapping the context content.
+6. **Write `.devin/config.json`** (merge with existing if present):
    ```json
    {
      "mcpServers": {
@@ -94,8 +94,8 @@ Devin CLI also natively reads `.agents/` directories and `AGENTS.md`, and can im
      }
    }
    ```
-6. **Tutorial:** If `is_first_time`, display the SDD tutorial (explains workflow, available skills, how `/feature-change` works).
-7. **Verify:** Confirm `spec-driven-config.json`, `AGENTS.md`, `.devin/config.json`, `.devin/hooks.v1.json`, `.devin/dist/docs-mcp.js` all exist.
+7. **Tutorial:** If `is_first_time`, display the SDD tutorial (explains workflow, available skills, how `/feature-change` works).
+8. **Verify:** Confirm `spec-driven-config.json`, `AGENTS.md`, `.devin/config.json`, `.devin/hooks.v1.json`, `.devin/dist/docs-mcp.js` all exist.
 
 ### Development workflow (after setup)
 
@@ -122,8 +122,7 @@ devin/sdd/
 │   ├── design-audit/                  # copied from src/sdd/.agent/skills/design-audit
 │   ├── spec-evaluator/                # copied from src/sdd/.agent/skills/spec-evaluator
 │   ├── implementation-evaluator/      # copied from src/sdd/.agent/skills/implementation-evaluator
-│   ├── file-bug/                      # copied from src/sdd/.agent/skills/file-bug
-│   └── dashboard/                     # copied from src/sdd/.agent/skills/dashboard
+│   └── file-bug/                      # copied from src/sdd/.agent/skills/file-bug
 ├── agents/                            # Flat .md files (Devin imports from .claude/agents/); installed to target's .claude/agents/
 ├── hooks.v1.json                      # Devin hook registration (flat schema, lives at .devin/ root)
 ├── hooks/
@@ -134,7 +133,7 @@ devin/sdd/
 │   ├── docs-mcp.js
 │   ├── docs-dashboard.js
 │   └── ui/
-└── context.md                         # symlink → src/sdd/context.md
+└── context.md                         # copied from src/sdd/context.md
 ```
 
 **`hooks.v1.json`** (flat schema — no `"hooks"` wrapper key, unlike Claude/Droid):
@@ -164,7 +163,7 @@ devin/sdd/
 ### `src/sdd/build.sh` (MODIFIED)
 
 Add a Devin build target that:
-1. Copies skills (excluding `local-setup`) into `devin/sdd/skills/`
+1. Copies skills (excluding `local-setup` and `dashboard`) into `devin/sdd/skills/`. Dashboard is deferred — its canonical SKILL.md references `${CLAUDE_PLUGIN_ROOT}` which doesn't exist on Devin.
 2. Prepends a Devin-specific invocation preamble after the YAML frontmatter in each copied skill. The preamble maps Claude's `Agent(subagent_type="<name>")` to Devin's `run_subagent(profile="<name>", task="<prompt>", title="<label>", is_background=true)`. No marker needed in canonical source — Claude build copies skills verbatim (they already use Claude syntax).
 3. Translates skill frontmatter: `user_invocable: true` → adds `triggers: [user, model]` (Devin's equivalent)
 4. Copies agents as flat `.md` files into `devin/sdd/agents/` (same structure as Claude). Rewrites frontmatter to Devin-compatible: `tools: "*"` → `allowed-tools` list, `maxTurns` → removed, `run_in_background` → removed, `model: claude-sonnet-4-6` → `model: sonnet`. Users install these to `.claude/agents/` where Devin imports them.
