@@ -5,5 +5,8 @@
     "docs-mcp",
     "docs-dashboard",
     "docs-dashboard/ui"
-  ]
+  ],
+  "dependencies": {
+    "@rollup/rollup-darwin-x64": "^4.60.2"
+  }
 }
