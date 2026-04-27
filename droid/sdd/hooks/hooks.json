@@ -1,14 +1,3 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Execute",
-        "hooks": [{ "type": "command", "command": "bash \"${DROID_PLUGIN_ROOT}/hooks/blocked-commands-hook.sh\"" }]
-      },
-      {
-        "matcher": "Edit|Create",
-        "hooks": [{ "type": "command", "command": "bash \"${DROID_PLUGIN_ROOT}/hooks/source-guard-hook.sh\"" }]
-      }
-    ]
-  }
+  "hooks": {}
 }

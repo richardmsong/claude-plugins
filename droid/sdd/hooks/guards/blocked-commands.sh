@@ -1,1 +1,0 @@
-../../../../src/sdd/hooks/guards/blocked-commands.sh

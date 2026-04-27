@@ -1,16 +1,4 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Execute",
-        "hooks": [{ "type": "command", "command": "bash \"$FACTORY_PROJECT_DIR/droid/sdd/hooks/blocked-commands-hook.sh\"" }]
-      },
-      {
-        "matcher": "Edit|Create",
-        "hooks": [{ "type": "command", "command": "bash \"$FACTORY_PROJECT_DIR/droid/sdd/hooks/source-guard-hook.sh\"" }]
-      }
-    ]
-  },
   "commandAllowlist": [
     "git add",
     "git commit",
