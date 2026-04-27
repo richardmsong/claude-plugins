@@ -73,8 +73,9 @@ bun run "$BACKEND_ENTRY" --root "$PROJECT_DIR" --port "$BACKEND_PORT" >"$BACKEND
 BACKEND_PID=$!
 
 # ---- Launch Vite ----
+# --host 127.0.0.1 forces IPv4 binding so nc -z 127.0.0.1 can detect readiness.
 # Subshell cd so the parent shell's PWD is preserved. exec avoids an extra layer.
-(cd "$UI_DIR" && BACKEND_PORT="$BACKEND_PORT" exec bun x vite --port "$VITE_PORT" --strictPort) \
+(cd "$UI_DIR" && BACKEND_PORT="$BACKEND_PORT" exec bun x vite --port "$VITE_PORT" --strictPort --host 127.0.0.1) \
   >"$VITE_LOG" 2>&1 &
 VITE_PID=$!
 
