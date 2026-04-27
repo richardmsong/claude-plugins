@@ -21,8 +21,9 @@ Each platform's frontmatter template specifies the model independently:
 
 - **Claude Code (canonical)**: `model: claude-sonnet-4-6` — full model identifier. Pinned to Sonnet for cost control.
 - **Droid**: `model: inherit` — uses the parent session's model. Droid sessions run the model configured by the user.
+- **OpenCode**: `model: anthropic/claude-sonnet-4-6` — provider-prefixed identifier. OpenCode requires the provider prefix.
 
-When updating the Claude Code model version (e.g. to `claude-sonnet-4-7`), update all four canonical definitions in `src/sdd/.agent/agents/`. Droid templates use `inherit` and don't need updating.
+When updating the Claude Code model version (e.g. to `claude-sonnet-4-7`), update all four canonical definitions in `src/sdd/.agent/agents/`. Droid templates use `inherit` and don't need updating. OpenCode templates need the provider prefix updated (e.g. `anthropic/claude-sonnet-4-7`).
 
 ## File Location
 
@@ -35,6 +36,8 @@ Canonical agent definitions live at `src/sdd/.agent/agents/<name>.md` with Claud
 | `claude/sdd/agents/` | Build output (copy of canonical) | Claude Code plugin |
 | `droid/sdd/droids/` | Build output (Droid frontmatter + skill body) | Droid plugin |
 | `.factory/droids/` | Symlink to `droid/sdd/droids/` | Droid local dev |
+| `opencode/sdd/agents/` | Build output (OpenCode frontmatter + skill body) | OpenCode plugin |
+| `.opencode/agents/` | Symlink to `opencode/sdd/agents/` | OpenCode local dev |
 
 The skill body (everything after the YAML frontmatter) is shared across all platforms. Only the frontmatter differs. Edits to the skill body in canonical source propagate to all platforms on the next build.
 
@@ -45,6 +48,8 @@ Each platform package contains a `.agent-templates/` directory with per-agent YA
 Template files: `<platform>/sdd/.agent-templates/<agent-name>.yaml`
 
 Every canonical agent must have a template in every platform that has a `.agent-templates/` directory. Missing template = build failure.
+
+The build output directory is configurable per platform via `<platform>/sdd/.agent-templates/output-dir`. This file contains the target directory name (e.g., `agents` for OpenCode, `droids` for Droid). If absent, the default is `droids/` (backward-compatible with Droid).
 
 ## Frontmatter Contract (Claude Code — canonical)
 
@@ -70,6 +75,19 @@ Droid agent definitions use Factory/Droid YAML frontmatter (per `docs.factory.ai
 | `tools` | no | Omit for all tools, or array of tool IDs like `["Read", "Edit", "Execute"]`. |
 
 Droid tool names differ from Claude Code: `Execute` (not `Bash`), `Create`/`Edit` (not `Write`), `Task` (not `Agent`).
+
+## Frontmatter Contract (OpenCode)
+
+OpenCode agent definitions use YAML frontmatter in `.opencode/agents/*.md`:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | yes | Agent identifier, used in `subagent(agent="<name>")` invocations. |
+| `description` | yes | When the master session should delegate to this agent. |
+| `model` | yes | Provider-prefixed model identifier (e.g., `anthropic/claude-sonnet-4-6`). |
+| `tools` | no | Object mapping tool names to `true`/`false`. Omit for all tools enabled. |
+
+OpenCode tool names: `read`, `edit`, `glob`, `grep`, `list`, `bash`, `todowrite`, `skill` (all lowercase).
 
 ## Invocation
 
