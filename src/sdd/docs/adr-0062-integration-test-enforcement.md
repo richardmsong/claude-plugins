@@ -1,9 +1,10 @@
 # ADR: Integration Test Enforcement in SDD Pipeline
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-28: draft
 - 2026-04-28: accepted — paired with spec-agents.md
+- 2026-04-28: implemented — all scope CLEAN
 
 ## Overview
 
