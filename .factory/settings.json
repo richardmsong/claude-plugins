@@ -7,14 +7,19 @@
     "git status",
     "git stash"
   ],
-   "hooks": {
- "UserPromptSubmit": [
-   {
-     "hooks": [{
-       "type": "command",
-       "command": "bash \"$FACTORY_PROJECT_DIR/factory/sdd/hooks/guards/workflow-reminder.sh\""
-     }]
-   }
- ]
-}
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$FACTORY_PROJECT_DIR/factory/sdd/hooks/guards/workflow-reminder.sh\""
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "spec-driven-dev@agent-plugins": true
+  }
 }
