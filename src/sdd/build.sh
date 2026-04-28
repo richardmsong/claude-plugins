@@ -178,6 +178,25 @@ for platform_dir in "$REPO_ROOT"/*/sdd; do
   done
 done
 
+# 8c. Copy skills into non-Claude platform output directories (ADR-0001)
+# local-setup is dev-only and excluded. Real dirs (e.g. setup/) are preserved.
+echo "Copying platform skills..."
+for platform_dir in "$REPO_ROOT"/*/sdd; do
+  [ "$platform_dir" = "$OUT" ] && continue  # claude handled in step 6
+  [ -d "$platform_dir/skills" ] || continue
+
+  platform=$(basename "$(dirname "$platform_dir")")
+  for skill in "$SRC/.agent/skills"/*/; do
+    name=$(basename "$skill")
+    [ "$name" = "local-setup" ] && continue
+    target="$platform_dir/skills/$name"
+    [ -L "$target" ] && rm "$target"
+    [ -d "$target" ] && rm -rf "$target"
+    cp -R "$skill" "$target"
+    echo "  $platform/skills/$name"
+  done
+done
+
 # 9. Copy guard scripts
 echo "Copying guards..."
 mkdir -p "$OUT/hooks/guards"
