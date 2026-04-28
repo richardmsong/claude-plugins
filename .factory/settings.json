@@ -13,10 +13,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$FACTORY_PROJECT_DIR/factory/sdd/hooks/guards/workflow-reminder.sh\""
+            "command": "sh -c 'echo \"[HOOK-TS] $(/bin/date +%Y-%m-%dT%H:%M:%S)\"'"
           }
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "spec-driven-dev@agent-plugins": true
   }
 }
