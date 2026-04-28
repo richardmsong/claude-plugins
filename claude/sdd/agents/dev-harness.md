@@ -4,6 +4,7 @@ description: Implementation loop for any project component. Reads ADRs + specs, 
 model: claude-sonnet-4-6
 maxTurns: 500
 tools: "*"
+run_in_background: true
 ---
 
 # Dev Harness
@@ -100,11 +101,18 @@ When you find code behavior that isn't mentioned in the spec, make a judgment ca
    Common categories include:
    - build: project compiles/builds cleanly
    - unit: pure functions and isolated logic
-   - integration: real dependencies wired end-to-end
+   - integration: real dependencies wired end-to-end (real DB, real NATS with operator-mode JWT, real cluster)
    - e2e: full stack tests (real cluster, real browser, etc.)
    
    The spec is authoritative for what tests are required. If the spec
    defines specific test scenarios, those are the requirements.
+   
+   **ADR integration test cases:** Check the ADR(s) that introduced each
+   feature for an `## Integration Test Cases` section. Each listed test
+   case is a required test — implement it as part of the integration
+   test suite. Integration tests must run against real infrastructure,
+   not mocked dependencies. Tests against a vanilla NATS server (no
+   operator mode) do NOT satisfy auth-related integration test requirements.
 
 4. Print unified gap report — Phase 1 gaps first, then Phase 2 gaps
 

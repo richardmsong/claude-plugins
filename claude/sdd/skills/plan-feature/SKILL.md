@@ -220,6 +220,22 @@ What's in v1. What's explicitly deferred.
 - <one-line ambiguity — what needs a user decision>
 - ...
 
+## Integration Test Cases
+
+Smoke tests that run against the live cluster (or equivalent real infrastructure).
+Each test case creates its own test fixtures, exercises the full stack, and cleans
+up after itself. These are the project's confidence gate — if they pass, the
+feature works end-to-end.
+
+| Test case | What it verifies | Setup/teardown | Components exercised |
+|-----------|------------------|----------------|----------------------|
+
+Every ADR that touches auth, data flow, API endpoints, KV/DB state, or
+cross-component communication MUST list at least one integration test case.
+Purely cosmetic or config-only changes (no runtime behavior) may skip this
+section with an explicit note: "No integration tests — change is
+<cosmetic/config-only/docs-only>."
+
 ## Implementation Plan
 
 Estimated effort to implement this design via dev-harness.

@@ -121,7 +121,18 @@ For each spec line that was `IMPLEMENTED` or `PARTIAL` in Phase 1, verify that t
    - `E2E_ONLY` — integration/e2e test exists but no unit test
    - `UNTESTED` — no test covers this spec line at all
 
-A unit test verifies the function/method in isolation (mocked dependencies). An integration/e2e test verifies the behavior through a real or near-real stack (real database, real HTTP, real browser, etc.).
+A unit test verifies the function/method in isolation (mocked dependencies). An integration/e2e test verifies the behavior through a real or near-real stack (real database, real HTTP, real NATS, real cluster, etc.).
+
+**Integration test bar for critical paths:** Spec lines that touch any of the following MUST have integration test coverage (not just unit tests). Flag `UNIT_ONLY` as a gap with direction `CODE→FIX` for these categories:
+- **Auth flows** — JWT issuance, token validation, permission scoping, login/refresh
+- **Data flow** — KV bucket reads/writes, DB CRUD, NATS pub/sub with real subject permissions
+- **Cross-component communication** — NATS request/reply between components, webhook callbacks, leafnode auth
+- **API endpoints** — HTTP handlers that read/write state (not just return static responses)
+- **Infrastructure bootstrap** — operator key generation, credential provisioning, health probes
+
+The integration test should run against real infrastructure (the deployed cluster, a real DB, a real NATS server with operator-mode JWT enforcement) — not against mocked dependencies. Tests using testcontainers with a vanilla NATS server (no operator mode) do NOT count as integration tests for auth-related behavior, since they cannot verify JWT permission enforcement.
+
+**ADR integration test cases:** Check if the ADR(s) that introduced this behavior include an `## Integration Test Cases` section. If the ADR lists test cases that don't have corresponding test implementations, flag each as a gap with direction `CODE→FIX`.
 
 Append to the audit file:
 
@@ -129,8 +140,8 @@ Append to the audit file:
 
 ### Phase 3 — Test Coverage
 
-| Spec (doc:line) | Spec text | Unit test | E2E test | Verdict |
-|-----------------|-----------|-----------|----------|---------|
+| Spec (doc:line) | Spec text | Unit test | Integration test | Verdict | Notes |
+|-----------------|-----------|-----------|------------------|---------|-------|
 ```
 
 Write rows incrementally as with previous phases.

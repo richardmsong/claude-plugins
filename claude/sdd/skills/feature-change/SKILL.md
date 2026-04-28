@@ -141,9 +141,16 @@ Which specs are updated in this commit. Which components implement the change.
 
 ## Scope
 What's in v1. What's explicitly deferred.
+
+## Integration Test Cases
+
+| Test case | What it verifies | Components exercised |
+|-----------|------------------|----------------------|
+
+(Skip for docs-only or cosmetic changes with a note.)
 ```
 
-For bug fixes (class A), the ADR is short — an Overview + Motivation + a one-line Impact is often enough. For features and spec changes (B/C), follow the fuller structure in `/plan-feature`.
+For bug fixes (class A), the ADR is short — an Overview + Motivation + a one-line Impact is often enough. For features and spec changes (B/C), follow the fuller structure in `/plan-feature`. **Every ADR that touches runtime behavior must include at least one integration test case** — this is the smoke test gate that prevents regressions like missing JWT permissions from shipping undetected.
 
 ---
 
