@@ -1,11 +1,77 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+NO_BUMP=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-bump) NO_BUMP=true; shift ;;
+    *) echo "Unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SRC="$REPO_ROOT/src/sdd"
 OUT="$REPO_ROOT/claude/sdd"
 
 echo "=== SDD Plugin Build ==="
+
+# ---- Version sync ----
+SOURCE_PLUGIN="$REPO_ROOT/factory/sdd/.factory-plugin/plugin.json"
+CURRENT_HASH=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")
+
+echo "Syncing plugin version..."
+python3 -c "
+import json, sys, os, glob
+
+source_path = sys.argv[1]
+current_hash = sys.argv[2]
+repo_root = sys.argv[3]
+no_bump = sys.argv[4] == 'true'
+
+with open(source_path) as f:
+    source = json.load(f)
+
+version = source.get('version', '')
+if not version:
+    print('FATAL: no version in ' + source_path, file=sys.stderr)
+    sys.exit(1)
+
+description = source.get('description', '')
+stored_hash = source.get('_buildHash', '')
+
+# Auto-bump patch if source changed since last build (unless --no-bump)
+if current_hash != 'unknown' and current_hash != stored_hash:
+    if not no_bump:
+        parts = version.split('.')
+        if len(parts) == 3:
+            parts[2] = str(int(parts[2]) + 1)
+            version = '.'.join(parts)
+            source['version'] = version
+        print(f'  bumped to {version} (hash: {current_hash[:8]})')
+    else:
+        print(f'  version: {version} (--no-bump, hash updated)')
+    source['_buildHash'] = current_hash
+    with open(source_path, 'w') as f:
+        json.dump(source, f, indent=2)
+        f.write('\n')
+else:
+    print(f'  version: {version} (no change)')
+
+# Discover and sync all other platform plugin.json files
+targets = glob.glob(os.path.join(repo_root, '*/sdd/.*-plugin/plugin.json'))
+for target in targets:
+    if os.path.abspath(target) == os.path.abspath(source_path):
+        continue
+    with open(target) as f:
+        data = json.load(f)
+    data['version'] = version
+    if description:
+        data['description'] = description
+    with open(target, 'w') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+    print(f'  synced: {os.path.relpath(target, repo_root)}')
+" "$SOURCE_PLUGIN" "$CURRENT_HASH" "$REPO_ROOT" "$NO_BUMP"
 
 # 1. Remove stale symlinks in OUT (leave real files intact)
 echo "Cleaning stale symlinks..."

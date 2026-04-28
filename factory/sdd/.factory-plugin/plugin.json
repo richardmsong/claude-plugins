@@ -2,5 +2,8 @@
   "name": "spec-driven-dev",
   "version": "1.0.0",
   "description": "Spec-driven development workflow: ADR authoring, design audit, spec compliance, and implementation orchestration",
-  "author": { "name": "Richard Song" }
+  "author": {
+    "name": "Richard Song"
+  },
+  "_buildHash": "80b4d56c16eb27ef95dc94280f2b0d7c87086c4a"
 }
