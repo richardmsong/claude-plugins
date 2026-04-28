@@ -1,0 +1,18 @@
+{
+  "name": "agent-plugins",
+  "owner": {
+    "name": "Richard Song"
+  },
+  "metadata": {
+    "description": "Agent-neutral plugin marketplace — spec-driven development workflows",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "spec-driven-dev",
+      "source": "./factory/sdd",
+      "description": "Spec-driven development workflow: ADR authoring, design audit, spec compliance, and implementation orchestration",
+      "category": "development"
+    }
+  ]
+}
