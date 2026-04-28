@@ -4,11 +4,11 @@ on:
     branches: [main]
     paths:
       - 'src/sdd/**'
-      - 'droid/sdd/.agent-templates/**'
+      - 'factory/sdd/.agent-templates/**'
   pull_request:
     paths:
       - 'src/sdd/**'
-      - 'droid/sdd/.agent-templates/**'
+      - 'factory/sdd/.agent-templates/**'
 
 permissions:
   contents: write
@@ -28,6 +28,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add claude/sdd/ droid/sdd/droids/ factory/sdd/.factory-plugin/
+          git add claude/sdd/ factory/sdd/droids/ factory/sdd/.factory-plugin/
           git diff --cached --quiet || git commit -m "build(plugin): auto-build claude/sdd/ from src/sdd/ [skip ci]"
           git push origin HEAD
