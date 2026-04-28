@@ -1,11 +1,8 @@
 {
   "name": "agent-plugins",
+  "description": "Agent-neutral plugin marketplace — spec-driven development workflows",
   "owner": {
     "name": "Richard Song"
-  },
-  "metadata": {
-    "description": "Agent-neutral plugin marketplace — spec-driven development workflows",
-    "version": "1.0.0"
   },
   "plugins": [
     {
