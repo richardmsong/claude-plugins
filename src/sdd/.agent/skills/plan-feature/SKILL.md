@@ -119,7 +119,7 @@ The goal is to understand:
 
 ## Step 2 — Write the initial draft ADR file (DO THIS BEFORE ASKING QUESTIONS)
 
-Pick a slug and write `docs/adr-NNNN-<slug>.md` to disk now. ADRs are numbered with a zero-padded 4-digit monotonic global counter — compute `N = (ls docs/adr-*.md | wc -l) + 1` at write time. If a later commit reveals the number's already taken, bump by 1 and retry (the rename is mechanical — only the filename changes). The template at the end of this section is the full shape. On this first write:
+Pick a slug and write `docs/adr-NNNN-<slug>.md` to disk now. ADRs are numbered with a zero-padded 4-digit monotonic global counter — compute N by extracting the highest existing number and adding 1: `N = $(ls docs/adr-*.md | sed 's|.*/adr-||' | cut -c1-4 | sort -n | tail -1) + 1` at write time. Do NOT use `wc -l` — file count diverges from max number when numbers are reused or files deleted. If a later commit reveals the number's already taken, bump by 1 and retry (the rename is mechanical — only the filename changes). The template at the end of this section is the full shape. On this first write:
 
 - Fill in what you can from research: title, motivation, a rough sketch of the user-facing flow, which components are implicated, which specs are likely impacted.
 - **Stub every uncertain section** with `TODO: <question>` or `(decision pending: <question>)`. It is better to write a bad first draft that captures what you're thinking than to hold it in your head.

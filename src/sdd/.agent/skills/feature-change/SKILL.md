@@ -115,7 +115,7 @@ No ADR or spec covers this. Run /plan-feature <description> to produce an ADR, t
 
 ## Step 3 — Author the ADR
 
-Create `docs/adr-NNNN-<slug>.md`. Compute `N = (ls docs/adr-*.md | wc -l) + 1`, zero-padded to 4 digits. If the number's already taken at commit time, bump by 1 and retry. Use a kebab-case slug.
+Create `docs/adr-NNNN-<slug>.md`. Compute N by extracting the highest existing number and adding 1: `N = $(ls docs/adr-*.md | sed 's|.*/adr-||' | cut -c1-4 | sort -n | tail -1) + 1`, zero-padded to 4 digits. Do NOT use `wc -l` — file count diverges from max number when numbers are reused or files deleted. Use a kebab-case slug.
 
 Minimum content:
 
