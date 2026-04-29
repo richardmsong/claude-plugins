@@ -25,10 +25,9 @@ Two compounding problems:
 | `.agent-templates/` | Removed — stubs are the template source | Stubs are more readable and directly editable; eliminates indirection |
 | Templating engine | Go `text/template`, driven by a committed script `src/sdd/build_templates.go` | Go 1.26 is already installed; no new binary dependency; owned Go script |
 | Uniform stub rule | Every file in `dist/` has exactly one stub in `platform/sdd/` (outside dist/); `build_templates.go` renders stubs → dist/ | No special-cased files; all config is visible in the stub tree |
-| Template data for `.md` | Stub YAML frontmatter parsed as data context; src body is the Go template text | Stub frontmatter fields available as `{{ .FieldName }}` in body |
-| Template data for non-`.md` | Global build context: `version.json` fields + platform-specific vars (platform name, paths) | plugin.json / mcp.json stubs use `{{ .Version }}`, `{{ .PluginRoot }}`, etc. |
-| Non-.md stubs | `platform/sdd/.factory-plugin/plugin.json`, `platform/sdd/mcp.json`, `claude/sdd/.mcp.json`, `claude/sdd/.claude-plugin/plugin.json`, etc. are Go templates rendered into dist/ | These already exist as files; they become templates instead of hard-coded files |
-| Compiled artifacts | `docs-mcp.js`, `docs-dashboard.js`, UI assets — built by `build.sh`, placed in dist/ directly (not driven by stubs) | Cannot be Go-templated; handled separately by build.sh as today |
+| Template data | Shared context: version.json fields + platform vars; YAML frontmatter (if present) merged in as additional fields | Uniform across all file types; no branching on extension |
+| `include` function | Custom Go template function: reads `src/sdd/<path>`, renders it with the same data context, returns inline | Decouples stub directory name (droids/) from src directory name (agents/); explicit in the template |
+| Compiled artifacts | `docs-mcp.js`, `docs-dashboard.js`, UI assets — built by `build.sh`, placed in dist/ directly (not stub-driven) | Cannot be Go-templated; only exception to the uniform stub rule |
 | src/sdd/agents/ body | Body-only, no frontmatter — stubs own the frontmatter entirely | Clean separation; frontmatter in src would be misleading since it is never used |
 | Stub → src body mapping | Stubs use `{{ include "agents/<name>.md" }}` in the body — a custom Go template function registered by `build_templates.go` that reads and renders the referenced file from `src/sdd/`; if body has no `include`, stub renders as-is | Reference is in the template itself; no special frontmatter field; survives any directory renaming; `droids/` → `agents/` mapping is explicit in the stub body |
 | Marketplace manifest | Static files at repo root: `agent-plugins/.factory-plugin/marketplace.json` and `agent-plugins/.claude-plugin/marketplace.json`, pointing to `factory/sdd/dist` and `claude/sdd/dist` respectively | Root-level manifests not compiled; dist/ plugin.json is the compiled manifest |
@@ -100,11 +99,11 @@ agent-plugins/
 ### `src/sdd/build_templates.go`
 New file. For each platform directory, recursively walks all files outside `dist/`:
 
-**For all files (uniform):**
-1. Parse YAML frontmatter (if present) as template data; merge with global context (version.json + platform vars)
-2. Render the entire stub as a Go `text/template` with that data
-3. `include "path/to/src.md"` — custom function that reads `src/sdd/<path>`, renders it as a Go template with the same data, and returns the result inline
-4. Write rendered output to `platform/sdd/dist/<mirrored-path>`
+Every stub is rendered as a Go `text/template` with a shared data context (version.json fields + platform vars). One custom function is registered:
+
+- `include "path"` — reads `src/sdd/<path>`, renders it as a Go template with the same data context, returns the result inline
+
+Whether a stub uses `{{ include "..." }}`, `{{ .Version }}`, both, or neither is purely the stub author's choice. The Go script applies the same algorithm to every file regardless of extension.
 
 Example agent stub at `factory/sdd/droids/dev-harness.md`:
 ```
@@ -115,6 +114,16 @@ model: claude-opus-4-5
 tools: "*"
 ---
 {{ include "agents/dev-harness.md" }}
+```
+
+Example non-`.md` stub at `factory/sdd/.factory-plugin/plugin.json`:
+```json
+{
+  "name": "spec-driven-dev",
+  "version": "{{ .Version }}",
+  "description": "{{ .Description }}",
+  "_buildHash": "{{ .BuildHash }}"
+}
 ```
 
 **For all other files (`.json`, `.sh`, `.md` with no src match):**
