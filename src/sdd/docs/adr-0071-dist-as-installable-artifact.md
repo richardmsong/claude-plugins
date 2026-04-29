@@ -6,7 +6,7 @@
 
 ## Overview
 
-Restructure each platform output directory so that `platform/sdd/dist/` is the complete, self-contained installable plugin artifact. Every file in `dist/` has exactly one corresponding stub file in the platform directory tree (outside `dist/`). A single committed Go script (`src/sdd/build.go`) replaces `build.sh` entirely and handles all build steps: rendering stubs as Go `text/template` files into `dist/`, building compiled artifacts (docs-mcp.js, docs-dashboard.js, UI) by shelling out to bun/npm, bumping the build hash, and running validation. CI runs `go run src/sdd/build.go`. Files with no `{{ }}` expressions render verbatim — copy is a degenerate template.
+Restructure each platform output directory so that `platform/sdd/dist/` is the complete, self-contained installable plugin artifact. Every file in `dist/` has exactly one corresponding stub file in the platform directory tree (outside `dist/`). A single committed Go script (`src/sdd/build.go`) replaces `build.sh` entirely and handles all build steps: rendering every stub as a Go `text/template` into `dist/`, building compiled artifacts (docs-mcp.js, docs-dashboard.js, UI) by shelling out to bun/npm, bumping the build hash, and running validation. CI runs `go run src/sdd/build.go`. Every stub is a valid Go template.
 
 ## Motivation
 
