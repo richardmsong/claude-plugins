@@ -36,7 +36,7 @@ Two compounding problems:
 | Claude plugin root | `claude/sdd/dist/` — `.mcp.json` and `.claude-plugin/plugin.json` move inside dist/ | Claude is not special; same pattern as factory |
 | Migration | All in one change: strip src agent bodies, convert existing stubs, remove .agent-templates/, restructure dist/ | Avoids a long-lived transitional state |
 | Go script location | `src/sdd/build.go`, invoked directly via `go run src/sdd/build.go`; no module needed | Single file, co-located with src/sdd/ |
-| Stub linter | `build.go --lint` (or separate `lint.go`) validates every stub is a valid Go template — parses without error, contains at least one `{{ }}` expression; runs in CI before merge to main | Catches invalid or non-templated stubs before they land |
+| Stub linter | `build.go --lint` runs in CI before merge to main; checks: (1) every stub parses as a valid Go template, (2) every stub contains at least one `{{ }}` expression, (3) every file in `src/sdd/` that should have a corresponding stub has one in every platform directory — catches orphaned src files with no platform representation | Prevents invalid stubs, non-templated stubs, and forgotten platform coverage from landing |
 
 ## Directory layout after change
 
@@ -183,6 +183,7 @@ All in one change. Setup skill (`setup/`) remains a special case — it lives in
 | `claude/sdd/dist/.mcp.json` rendered from stub template | Non-.md stub rendering works for Claude | build.go |
 | `build.go --lint` rejects a stub with no `{{ }}` expression | Linter catches non-templated stubs | build.go --lint |
 | `build.go --lint` rejects a stub with invalid Go template syntax | Linter catches malformed stubs | build.go --lint |
+| Add `src/sdd/agents/new-agent.md` without a stub in factory/sdd/ or claude/sdd/ → lint fails | Linter catches orphaned src files missing platform stubs | build.go --lint |
 | `agent-plugins/.factory-plugin/marketplace.json` points to `factory/sdd/dist` | Marketplace manifest correct | static file |
 | `factory/sdd/droids/dev-harness.md` contains only frontmatter, no body | Stubs are frontmatter-only | migration |
 | `factory/sdd/dist/.factory-plugin/plugin.json` contains correct version/buildHash | Non-.md stub rendered with version.json data | build_templates.go |
