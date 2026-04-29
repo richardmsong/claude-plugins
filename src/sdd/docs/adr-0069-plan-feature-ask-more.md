@@ -1,8 +1,9 @@
 # ADR: plan-feature must ask about design decisions, not just ambiguities
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-04-29: accepted
+- 2026-04-29: implemented — all scope CLEAN
 
 ## Overview
 
