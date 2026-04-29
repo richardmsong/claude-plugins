@@ -6,7 +6,7 @@
 
 ## Overview
 
-Restructure each platform output directory so that `platform/sdd/dist/` is the complete, self-contained installable plugin artifact. Every file in `dist/` has exactly one corresponding stub file in the platform directory tree (outside `dist/`). A committed Go script (`src/sdd/build_templates.go`) renders all stubs as Go `text/template` files into `dist/`. For `.md` files the stub provides frontmatter (data context) and the matching `src/sdd/` file provides the body (template text). For all other files (`.json`, shell scripts, etc.) the stub itself is the complete Go template. Files with no `{{ }}` expressions render verbatim — copy is a degenerate template. Compiled artifacts (`docs-mcp.js`, `docs-dashboard.js`, UI assets) are built by `build.sh` and placed in `dist/` separately. `build.sh` is also updated for the unnested `src/sdd/` source paths.
+Restructure each platform output directory so that `platform/sdd/dist/` is the complete, self-contained installable plugin artifact. Every file in `dist/` has exactly one corresponding stub file in the platform directory tree (outside `dist/`). A single committed Go script (`src/sdd/build.go`) replaces `build.sh` entirely and handles all build steps: rendering stubs as Go `text/template` files into `dist/`, building compiled artifacts (docs-mcp.js, docs-dashboard.js, UI) by shelling out to bun/npm, bumping the build hash, and running validation. CI runs `go run src/sdd/build.go`. Files with no `{{ }}` expressions render verbatim — copy is a degenerate template.
 
 ## Motivation
 
@@ -14,7 +14,7 @@ Two compounding problems:
 
 1. **Source unnesting**: `src/sdd/.agent/agents/` → `src/sdd/agents/`, `src/sdd/.agent/skills/` → `src/sdd/skills/`. `build.sh` still references the old `.agent/` paths and is broken.
 
-2. **No clear installable artifact boundary**: the whole `platform/sdd/` directory mixes build inputs (`.agent-templates/`, `hooks/`) with generated outputs (`droids/`, `skills/`, `context.md`, `mcp.json`, `dist/`). Pointing a plugin installer at the whole directory is fragile. Making `dist/` the single installable artifact gives a clean boundary: delete `dist/`, run `build.sh + src/sdd/ + platform/sdd/`, and `dist/` is fully restored.
+2. **No clear installable artifact boundary**: the whole `platform/sdd/` directory mixes build inputs (`.agent-templates/`, `hooks/`) with generated outputs (`droids/`, `skills/`, `context.md`, `mcp.json`, `dist/`). Pointing a plugin installer at the whole directory is fragile. Making `dist/` the single installable artifact gives a clean boundary: delete `dist/`, run `go run src/sdd/build.go`, and `dist/` is fully restored.
 
 ## Decisions
 
@@ -23,8 +23,9 @@ Two compounding problems:
 | Installable artifact | `platform/sdd/dist/` is the complete, self-contained plugin package | Clean install boundary: everything a plugin host needs is inside dist/ |
 | Top-level stubs | `platform/sdd/agents/` (or `droids/`), `skills/`, etc. hold `.md` stub files — frontmatter + a body that uses `{{ include "agents/<name>.md" }}` to pull in the src body | Replaces `.agent-templates/`; reference to src is explicit in the template, not in a special metadata field |
 | `.agent-templates/` | Removed — stubs are the template source | Stubs are more readable and directly editable; eliminates indirection |
-| Templating engine | Go `text/template`, driven by a committed script `src/sdd/build_templates.go` | Go 1.26 is already installed; no new binary dependency; owned Go script |
-| Uniform stub rule | Every file in `dist/` has exactly one stub in `platform/sdd/` (outside dist/); `build_templates.go` renders stubs → dist/ | No special-cased files; all config is visible in the stub tree |
+| Build entry point | `src/sdd/build.go` — single Go script replaces `build.sh` entirely; CI runs `go run src/sdd/build.go` | Go 1.26 already installed; removes bash dependency; single language for all build logic |
+| Templating engine | Go `text/template` inside `build.go` | Same process handles templating and artifact compilation (shells out to bun/npm where needed) |
+| Uniform stub rule | Every file in `dist/` has exactly one stub in `platform/sdd/` (outside dist/); `build.go` renders stubs → dist/ | No special-cased files; all config is visible in the stub tree |
 | Template data | Shared context: version.json fields + platform vars; YAML frontmatter (if present) merged in as additional fields | Uniform across all file types; no branching on extension |
 | `include` function | Custom Go template function: reads `src/sdd/<path>`, renders it with the same data context, returns inline | Decouples stub directory name (droids/) from src directory name (agents/); explicit in the template |
 | Compiled artifacts | `docs-mcp.js`, `docs-dashboard.js`, UI assets — built by `build.sh`, placed in dist/ directly (not stub-driven) | Cannot be Go-templated; only exception to the uniform stub rule |
@@ -34,7 +35,7 @@ Two compounding problems:
 | dist/ tracked in git | Yes — CI commits dist/ same as today | Diff visibility; clone-and-go install; consistent with existing practice |
 | Claude plugin root | `claude/sdd/dist/` — `.mcp.json` and `.claude-plugin/plugin.json` move inside dist/ | Claude is not special; same pattern as factory |
 | Migration | All in one change: strip src agent bodies, convert existing stubs, remove .agent-templates/, restructure dist/ | Avoids a long-lived transitional state |
-| Go script location | `src/sdd/build_templates.go`, invoked by `build.sh` via `go run src/sdd/build_templates.go` | Co-located with build.sh; single Go file, no module needed |
+| Go script location | `src/sdd/build.go`, invoked directly via `go run src/sdd/build.go`; no module needed | Single file, co-located with src/sdd/ |
 
 ## Directory layout after change
 
@@ -47,8 +48,7 @@ agent-plugins/
 │   ├── skills/              ← body-only .md files (no frontmatter)
 │   ├── hooks/guards/        ← platform-neutral guard scripts
 │   ├── version.json         ← version source of truth
-│   ├── build.sh
-│   └── build_templates.go
+│   └── build.go             ← replaces build.sh; go run src/sdd/build.go
 ├── factory/sdd/             ← everything here (outside dist/) is a stub/template
 │   ├── .factory-plugin/
 │   │   └── plugin.json      ← Go template stub → dist/.factory-plugin/plugin.json
@@ -89,23 +89,20 @@ agent-plugins/
 
 ## Component Changes
 
-### `src/sdd/build.sh`
-- Update all `$SRC/.agent/agents/` → `$SRC/agents/`, `$SRC/.agent/skills/` → `$SRC/skills/`
-- Replace unified loop's agent/droid and skill templating with `go run "$SRC/build_templates.go <platform_dir> <src_dir>"`
-- Remove explicit plugin.json / mcp.json write steps — these are now stub-rendered by build_templates.go
-- Build and place compiled artifacts (docs-mcp.js, docs-dashboard.js, UI) into dist/ as before
-- Validation step updated to check dist/ paths
+### `src/sdd/build.go`
+New file. Replaces `build.sh` entirely. Responsibilities:
 
-### `src/sdd/build_templates.go`
-New file. For each platform directory, recursively walks all files outside `dist/`:
+1. **Stub rendering**: For each platform directory, recursively walk all files outside `dist/`. Render each as a Go `text/template` with shared data context (version.json fields + platform vars + YAML frontmatter if present). Register one custom function: `include "path"` — reads `src/sdd/<path>`, renders it with the same data context, returns inline. Write output to `platform/sdd/dist/<mirrored-path>`.
 
-Every stub is rendered as a Go `text/template` with a shared data context (version.json fields + platform vars). One custom function is registered:
+2. **Compiled artifacts**: Shell out to `bun build` / `npm run build` to produce `docs-mcp.js`, `docs-dashboard.js`, and UI assets; place results in `dist/`.
 
-- `include "path"` — reads `src/sdd/<path>`, renders it as a Go template with the same data context, returns the result inline
+3. **Build hash**: Update `_buildHash` in `src/sdd/version.json` (as today).
 
-Whether a stub uses `{{ include "..." }}`, `{{ .Version }}`, both, or neither is purely the stub author's choice. The Go script applies the same algorithm to every file regardless of extension.
+4. **Validation**: Check expected files exist in each platform's `dist/`.
 
-Example agent stub at `factory/sdd/droids/dev-harness.md`:
+Example stubs:
+
+`factory/sdd/droids/dev-harness.md`:
 ```
 ---
 name: dev-harness
@@ -116,7 +113,7 @@ tools: "*"
 {{ include "agents/dev-harness.md" }}
 ```
 
-Example non-`.md` stub at `factory/sdd/.factory-plugin/plugin.json`:
+`factory/sdd/.factory-plugin/plugin.json`:
 ```json
 {
   "name": "spec-driven-dev",
@@ -125,13 +122,6 @@ Example non-`.md` stub at `factory/sdd/.factory-plugin/plugin.json`:
   "_buildHash": "{{ .BuildHash }}"
 }
 ```
-
-**For all other files (`.json`, `.sh`, `.md` with no src match):**
-1. Parse file as Go `text/template`
-2. Data context = `version.json` fields + platform-specific vars (platform name, plugin root path)
-3. Render and write to `platform/sdd/dist/<same-relative-path>`
-
-Files with no `{{ }}` expressions are written verbatim.
 
 ### `src/sdd/agents/*.md`
 Remove frontmatter from all 4 agent files (design-evaluator, dev-harness, implementation-evaluator, spec-evaluator). Keep body only.
@@ -162,8 +152,8 @@ New static file pointing to `claude/sdd/dist`.
 
 ## Impact
 
-- `src/sdd/build.sh` — updated src paths, delegates to build_templates.go
-- `src/sdd/build_templates.go` — new Go templating script (stub→dist for all file types)
+- `src/sdd/build.sh` — deleted
+- `src/sdd/build.go` — new; replaces build.sh entirely
 - `src/sdd/agents/*.md` — strip frontmatter, keep body only
 - `factory/sdd/droids/*.md` — strip body, keep frontmatter only
 - `claude/sdd/agents/*.md` — strip body, keep frontmatter only
@@ -186,10 +176,10 @@ All in one change. Setup skill (`setup/`) remains a special case — it lives in
 
 | Test case | What it verifies | Components exercised |
 |-----------|------------------|----------------------|
-| Delete `factory/sdd/dist/`, run `build.sh`, `dist/` is fully restored | dist/ is fully derived | build.sh, build_templates.go |
-| `factory/sdd/dist/droids/dev-harness.md` has factory frontmatter + src body | Go template merge works correctly | build_templates.go |
-| `factory/sdd/dist/.factory-plugin/plugin.json` has correct version | dist/ plugin.json generated from version.json | build.sh |
-| `claude/sdd/dist/.mcp.json` exists and references dist/ path | .mcp.json moved into dist/ | build.sh |
+| Delete `factory/sdd/dist/`, run `go run src/sdd/build.go`, `dist/` is fully restored | dist/ is fully derived | build.go |
+| `factory/sdd/dist/droids/dev-harness.md` has factory frontmatter + src body | Go template merge + include works correctly | build.go |
+| `factory/sdd/dist/.factory-plugin/plugin.json` has correct version | Non-.md stub rendered with version.json data | build.go |
+| `claude/sdd/dist/.mcp.json` rendered from stub template | Non-.md stub rendering works for Claude | build.go |
 | `agent-plugins/.factory-plugin/marketplace.json` points to `factory/sdd/dist` | Marketplace manifest correct | static file |
 | `factory/sdd/droids/dev-harness.md` contains only frontmatter, no body | Stubs are frontmatter-only | migration |
 | `factory/sdd/dist/.factory-plugin/plugin.json` contains correct version/buildHash | Non-.md stub rendered with version.json data | build_templates.go |
