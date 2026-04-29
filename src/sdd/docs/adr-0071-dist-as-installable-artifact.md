@@ -6,7 +6,7 @@
 
 ## Overview
 
-Restructure each platform output directory so that `platform/sdd/dist/` is the complete, self-contained installable plugin artifact. Every file in `dist/` has exactly one corresponding stub file in the platform directory tree (outside `dist/`). A single committed Go script (`src/sdd/build.go`) replaces `build.sh` entirely and handles all build steps: rendering every stub as a Go `text/template` into `dist/`, building compiled artifacts (docs-mcp.js, docs-dashboard.js, UI) by shelling out to bun/npm, bumping the build hash, and running validation. CI runs `go run src/sdd/build.go`. Every stub is a valid Go template.
+Restructure each platform output directory so that `platform/sdd/dist/` is the complete, self-contained installable plugin artifact. Every file in `dist/` has exactly one corresponding stub file in the platform directory tree (outside `dist/`) — no exceptions. A single committed Go script (`src/sdd/build.go`) replaces `build.sh` entirely and handles all build steps: rendering every stub as a Go `text/template` into `dist/`, compiling TypeScript artifacts (docs-mcp.js, docs-dashboard.js, UI) by shelling out to bun, bumping the build hash, and running validation. Compiled artifacts also have stubs — build.go compiles them first, then the stub templates them into dist/. CI runs `cd src/sdd && go run build.go`. Every stub is a valid Go template.
 
 ## Motivation
 
@@ -28,14 +28,14 @@ Two compounding problems:
 | Uniform stub rule | Every file in `dist/` has exactly one stub in `platform/sdd/` (outside dist/); `build.go` renders stubs → dist/ | No special-cased files; all config is visible in the stub tree |
 | Template data | Shared context: version.json fields + platform vars; YAML frontmatter (if present) merged in as additional fields | Uniform across all file types; no branching on extension |
 | `include` function | Custom Go template function: reads `src/sdd/<path>`, renders it with the same data context, returns inline | Decouples stub directory name (droids/) from src directory name (agents/); explicit in the template |
-| Compiled artifacts | `docs-mcp.js`, `docs-dashboard.js`, UI assets — built by `build.sh`, placed in dist/ directly (not stub-driven) | Cannot be Go-templated; only exception to the uniform stub rule |
+| Compiled artifacts | `docs-mcp.js`, `docs-dashboard.js`, UI assets — build.go compiles them, then stub templates reference the build output via `{{ include }}` or `{{ compiledArtifact "path" }}` to place them into dist/ | Maintains uniform stub rule: every dist/ file has a stub; compiled artifacts are no exception |
 | src/sdd/agents/ body | Body-only, no frontmatter — stubs own the frontmatter entirely | Clean separation; frontmatter in src would be misleading since it is never used |
-| Stub → src body mapping | Stubs use `{{ include "agents/<name>.md" }}` in the body — a custom Go template function registered by `build_templates.go` that reads and renders the referenced file from `src/sdd/`; if body has no `include`, stub renders as-is | Reference is in the template itself; no special frontmatter field; survives any directory renaming; `droids/` → `agents/` mapping is explicit in the stub body |
+| Stub → src body mapping | Stubs use `{{ include "agents/<name>.md" }}` in the body — a custom Go template function registered by `build.go` that reads and renders the referenced file from `src/sdd/`; if body has no `include`, stub renders as-is | Reference is in the template itself; no special frontmatter field; survives any directory renaming; `droids/` → `agents/` mapping is explicit in the stub body |
 | Marketplace manifest | Static files at repo root: `agent-plugins/.factory-plugin/marketplace.json` and `agent-plugins/.claude-plugin/marketplace.json`, pointing to `factory/sdd/dist` and `claude/sdd/dist` respectively | Root-level manifests not compiled; dist/ plugin.json is the compiled manifest |
 | dist/ tracked in git | Yes — CI commits dist/ same as today | Diff visibility; clone-and-go install; consistent with existing practice |
 | Claude plugin root | `claude/sdd/dist/` — `.mcp.json` and `.claude-plugin/plugin.json` move inside dist/ | Claude is not special; same pattern as factory |
 | Migration | All in one change: strip src agent bodies, convert existing stubs, remove .agent-templates/, restructure dist/ | Avoids a long-lived transitional state |
-| Go script location | `src/sdd/build.go`, invoked directly via `go run src/sdd/build.go`; no module needed | Single file, co-located with src/sdd/ |
+| Go script location | `src/sdd/build.go` with `go.mod` in `src/sdd/`; invoked via `cd src/sdd && go run build.go` | Requires `go.mod` for YAML parsing dependency (`gopkg.in/yaml.v3`); single Go file plus module |
 | Stub linter | `build.go --lint` runs in CI before merge to main; checks: (1) every stub parses as a valid Go template, (2) every stub contains at least one `{{ }}` expression, (3) every file in `src/sdd/` that should have a corresponding stub has one in every platform directory — catches orphaned src files with no platform representation | Prevents invalid stubs, non-templated stubs, and forgotten platform coverage from landing |
 
 ## Directory layout after change
@@ -49,7 +49,9 @@ agent-plugins/
 │   ├── skills/              ← body-only .md files (no frontmatter)
 │   ├── hooks/guards/        ← platform-neutral guard scripts
 │   ├── version.json         ← version source of truth
-│   └── build.go             ← replaces build.sh; go run src/sdd/build.go
+│   ├── go.mod               ← Go module (for gopkg.in/yaml.v3)
+│   ├── go.sum
+│   └── build.go             ← replaces build.sh; cd src/sdd && go run build.go
 ├── factory/sdd/             ← everything here (outside dist/) is a stub/template
 │   ├── .factory-plugin/
 │   │   └── plugin.json      ← Go template stub → dist/.factory-plugin/plugin.json
@@ -57,15 +59,21 @@ agent-plugins/
 │   ├── context.md           ← Go template stub → dist/context.md
 │   ├── droids/              ← frontmatter-only .md stubs → dist/droids/ (merged with src body)
 │   ├── skills/              ← frontmatter-only .md stubs → dist/skills/ (merged with src body)
-│   ├── hooks/               ← Go template stubs → dist/hooks/ (hooks.json, wrappers)
+│   ├── hooks/               ← Go template stubs (hooks.json, wrappers); guards use {{ include }}
+│   │   ├── hooks.json       ← Go template stub (platform-specific hook registration)
+│   │   ├── workflow-reminder-hook.sh  ← Go template stub (platform I/O wrapper)
+│   │   └── guards/          ← stubs that {{ include }} shared guards from src/sdd/hooks/guards/
+│   ├── docs-mcp.js          ← stub for compiled artifact
+│   ├── docs-dashboard.js    ← stub for compiled artifact
+│   ├── docs-dashboard/      ← stubs for compiled UI assets
 │   └── dist/                ← fully derived, CI-tracked
 │       ├── .factory-plugin/plugin.json
 │       ├── mcp.json
 │       ├── context.md
 │       ├── droids/
 │       ├── skills/
-│       ├── hooks/guards/
-│       ├── docs-mcp.js      ← compiled artifact (not stub-driven)
+│       ├── hooks/
+│       ├── docs-mcp.js
 │       ├── docs-dashboard.js
 │       └── docs-dashboard/
 └── claude/sdd/              ← everything here (outside dist/) is a stub/template
@@ -75,15 +83,23 @@ agent-plugins/
     ├── context.md           ← Go template stub → dist/context.md
     ├── agents/              ← frontmatter-only .md stubs → dist/agents/ (merged with src body)
     ├── skills/              ← frontmatter-only .md stubs → dist/skills/ (merged with src body)
-    ├── hooks/               ← Go template stubs → dist/hooks/
+    ├── hooks/               ← Go template stubs (hooks.json, wrappers, guards)
+    │   ├── hooks.json       ← Go template stub (Claude-specific hook registration)
+    │   ├── blocked-commands-hook.sh   ← Claude I/O wrapper stub
+    │   ├── source-guard-hook.sh       ← Claude I/O wrapper stub
+    │   ├── workflow-reminder-hook.sh  ← Claude I/O wrapper stub
+    │   └── guards/          ← stubs that {{ include }} shared guards from src/sdd/hooks/guards/
+    ├── docs-mcp.js          ← stub for compiled artifact
+    ├── docs-dashboard.js    ← stub for compiled artifact
+    ├── docs-dashboard/      ← stubs for compiled UI assets
     └── dist/                ← fully derived, CI-tracked
         ├── .claude-plugin/plugin.json
         ├── .mcp.json
         ├── context.md
         ├── agents/
         ├── skills/
-        ├── hooks/guards/
-        ├── docs-mcp.js      ← compiled artifact (not stub-driven)
+        ├── hooks/
+        ├── docs-mcp.js
         ├── docs-dashboard.js
         └── docs-dashboard/
 ```
@@ -140,10 +156,10 @@ Convert from full content to frontmatter-only stubs.
 Deleted — replaced by stubs.
 
 ### `factory/sdd/.factory-plugin/plugin.json` and `factory/sdd/mcp.json`
-Convert from hard-coded JSON to Go template stubs. Add `{{ .Version }}`, `{{ .Description }}`, `{{ .BuildHash }}`, and any path variables. Rendered into dist/ by build_templates.go.
+Convert from hard-coded JSON to Go template stubs. Add `{{ .Version }}`, `{{ .Description }}`, `{{ .BuildHash }}`, and any path variables. Rendered into dist/ by build.go.
 
 ### `claude/sdd/.claude-plugin/plugin.json`, `claude/sdd/.mcp.json`, `claude/sdd/context.md`
-Convert to Go template stubs if not already. Add template variables as needed. Rendered into dist/ by build_templates.go.
+Convert to Go template stubs if not already. Add template variables as needed. Rendered into dist/ by build.go.
 
 ### `agent-plugins/.factory-plugin/marketplace.json`
 New static file pointing to `factory/sdd/dist`.
@@ -166,6 +182,8 @@ New static file pointing to `claude/sdd/dist`.
 - `claude/sdd/.mcp.json` — convert to Go template stub
 - `claude/sdd/context.md` — convert to Go template stub (if it uses any build vars)
 - `factory/sdd/.agent-templates/` — deleted
+- `src/sdd/skills/local-setup/` — deleted (development-only, doesn't belong in dist/)
+- `src/sdd/skills/setup/SKILL.md` — new; common setup body extracted from existing platform-specific setup skills
 - `agent-plugins/.factory-plugin/marketplace.json` — new static file
 - `agent-plugins/.claude-plugin/marketplace.json` — new static file
 
@@ -186,5 +204,5 @@ All in one change. No special cases — setup skill follows the same stub+templa
 | Add `src/sdd/agents/new-agent.md` without a stub in factory/sdd/ or claude/sdd/ → lint fails | Linter catches orphaned src files missing platform stubs | build.go --lint |
 | `agent-plugins/.factory-plugin/marketplace.json` points to `factory/sdd/dist` | Marketplace manifest correct | static file |
 | `factory/sdd/droids/dev-harness.md` contains only frontmatter, no body | Stubs are frontmatter-only | migration |
-| `factory/sdd/dist/.factory-plugin/plugin.json` contains correct version/buildHash | Non-.md stub rendered with version.json data | build_templates.go |
-| `claude/sdd/dist/.mcp.json` rendered from stub template | Non-.md stub rendering works for Claude | build_templates.go |
+| `factory/sdd/dist/.factory-plugin/plugin.json` contains correct version/buildHash | Non-.md stub rendered with version.json data | build.go |
+| `claude/sdd/dist/.mcp.json` rendered from stub template | Non-.md stub rendering works for Claude | build.go |
