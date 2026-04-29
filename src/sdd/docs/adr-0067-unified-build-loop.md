@@ -10,7 +10,7 @@ Refactor `build.sh` to process skills, agents/droids, guard scripts, and `contex
 
 ## Motivation
 
-After ADR-0001 added skills copy for non-Claude platforms, the build had three separate code paths doing structurally identical work: step 6 (Claude skills), step 8 (Claude agents), and step 8c (non-Claude skills). Steps 9–10 (guards + GUARD= rewriting) were Claude-only with no equivalent for other platforms. Adding a new platform would require touching multiple disconnected sections.
+After ADR-0066 added skills copy for non-Claude platforms, the build had three separate code paths doing structurally identical work: step 6 (Claude skills), step 8 (Claude agents), and step 8c (non-Claude skills). Steps 9–10 (guards + GUARD= rewriting) were Claude-only with no equivalent for other platforms. Adding a new platform would require touching multiple disconnected sections.
 
 The unified loop closes this by making platform registration implicit: drop a `*/sdd` directory with the right config and the build picks it up automatically.
 
@@ -38,7 +38,7 @@ The unified loop closes this by making platform registration implicit: drop a `*
 
 ## Scope
 
-All existing platforms (claude, factory). Context.md copy for factory is a side effect that closes the symlink-in-output issue noted in ADR-0001 scope.
+All existing platforms (claude, factory). Context.md copy for factory is a side effect that closes the symlink-in-output issue noted in ADR-0066 scope.
 
 ## Integration Test Cases
 
