@@ -21,7 +21,7 @@ Two compounding problems:
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Installable artifact | `platform/sdd/dist/` is the complete, self-contained plugin package | Clean install boundary: everything a plugin host needs is inside dist/ |
-| Top-level stubs | `platform/sdd/agents/` (or `droids/`), `skills/`, etc. hold frontmatter-only `.md` files — static inputs, human-authored | Replaces `.agent-templates/` YAML files; stubs own all platform-specific frontmatter |
+| Top-level stubs | `platform/sdd/agents/` (or `droids/`), `skills/`, etc. hold `.md` stub files — frontmatter + a body that uses `{{ include "agents/<name>.md" }}` to pull in the src body | Replaces `.agent-templates/`; reference to src is explicit in the template, not in a special metadata field |
 | `.agent-templates/` | Removed — stubs are the template source | Stubs are more readable and directly editable; eliminates indirection |
 | Templating engine | Go `text/template`, driven by a committed script `src/sdd/build_templates.go` | Go 1.26 is already installed; no new binary dependency; owned Go script |
 | Uniform stub rule | Every file in `dist/` has exactly one stub in `platform/sdd/` (outside dist/); `build_templates.go` renders stubs → dist/ | No special-cased files; all config is visible in the stub tree |
@@ -30,7 +30,7 @@ Two compounding problems:
 | Non-.md stubs | `platform/sdd/.factory-plugin/plugin.json`, `platform/sdd/mcp.json`, `claude/sdd/.mcp.json`, `claude/sdd/.claude-plugin/plugin.json`, etc. are Go templates rendered into dist/ | These already exist as files; they become templates instead of hard-coded files |
 | Compiled artifacts | `docs-mcp.js`, `docs-dashboard.js`, UI assets — built by `build.sh`, placed in dist/ directly (not driven by stubs) | Cannot be Go-templated; handled separately by build.sh as today |
 | src/sdd/agents/ body | Body-only, no frontmatter — stubs own the frontmatter entirely | Clean separation; frontmatter in src would be misleading since it is never used |
-| Stub → src body mapping | Go script searches `src/sdd/` recursively by filename (and by relative sub-path for nested files like `plan-feature/SKILL.md`) | Filenames are unique within each type; avoids any explicit directory alias config |
+| Stub → src body mapping | Stubs use `{{ include "agents/<name>.md" }}` in the body — a custom Go template function registered by `build_templates.go` that reads and renders the referenced file from `src/sdd/`; if body has no `include`, stub renders as-is | Reference is in the template itself; no special frontmatter field; survives any directory renaming; `droids/` → `agents/` mapping is explicit in the stub body |
 | Marketplace manifest | Static files at repo root: `agent-plugins/.factory-plugin/marketplace.json` and `agent-plugins/.claude-plugin/marketplace.json`, pointing to `factory/sdd/dist` and `claude/sdd/dist` respectively | Root-level manifests not compiled; dist/ plugin.json is the compiled manifest |
 | dist/ tracked in git | Yes — CI commits dist/ same as today | Diff visibility; clone-and-go install; consistent with existing practice |
 | Claude plugin root | `claude/sdd/dist/` — `.mcp.json` and `.claude-plugin/plugin.json` move inside dist/ | Claude is not special; same pattern as factory |
@@ -100,12 +100,22 @@ agent-plugins/
 ### `src/sdd/build_templates.go`
 New file. For each platform directory, recursively walks all files outside `dist/`:
 
-**For `.md` files:**
-1. Parse YAML frontmatter from stub as template data
-2. Find corresponding src body: search `src/sdd/` by filename (or relative sub-path for nested files like `plan-feature/SKILL.md`)
-3. Render src body as Go `text/template` with stub frontmatter as data
-4. Output = rendered frontmatter block + `---` separator + rendered body
-5. Write to `platform/sdd/dist/<mirrored-path>`
+**For all files (uniform):**
+1. Parse YAML frontmatter (if present) as template data; merge with global context (version.json + platform vars)
+2. Render the entire stub as a Go `text/template` with that data
+3. `include "path/to/src.md"` — custom function that reads `src/sdd/<path>`, renders it as a Go template with the same data, and returns the result inline
+4. Write rendered output to `platform/sdd/dist/<mirrored-path>`
+
+Example agent stub at `factory/sdd/droids/dev-harness.md`:
+```
+---
+name: dev-harness
+description: ...
+model: claude-opus-4-5
+tools: "*"
+---
+{{ include "agents/dev-harness.md" }}
+```
 
 **For all other files (`.json`, `.sh`, `.md` with no src match):**
 1. Parse file as Go `text/template`
