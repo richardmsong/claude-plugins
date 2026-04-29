@@ -5,7 +5,7 @@
       "command": "bun",
       "args": [
         "run",
-        "${DROID_PLUGIN_ROOT}/dist/docs-mcp.js"
+        "${DROID_PLUGIN_ROOT}/docs-mcp.js"
       ]
     }
   }

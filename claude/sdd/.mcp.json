@@ -3,7 +3,7 @@
     "command": "bun",
     "args": [
       "run",
-      "{{ if eq .Platform "claude" }}${CLAUDE_PLUGIN_ROOT}{{ else }}${DROID_PLUGIN_ROOT}{{ end }}/dist/docs-mcp.js"
+      "{{ .PluginRoot }}/docs-mcp.js"
     ]
   }
 }

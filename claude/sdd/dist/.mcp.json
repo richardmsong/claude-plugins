@@ -3,7 +3,7 @@
     "command": "bun",
     "args": [
       "run",
-      "${CLAUDE_PLUGIN_ROOT}/dist/docs-mcp.js"
+      "${CLAUDE_PLUGIN_ROOT}/docs-mcp.js"
     ]
   }
 }

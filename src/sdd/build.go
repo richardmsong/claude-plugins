@@ -275,11 +275,16 @@ func renderPlatform(p PlatformDir, srcDir string, vi VersionInfo, compiled map[s
 		}
 
 		// Build template data context
+		pluginRoot := "${DROID_PLUGIN_ROOT}"
+		if p.Name == "claude" {
+			pluginRoot = "${CLAUDE_PLUGIN_ROOT}"
+		}
 		data := map[string]interface{}{
 			"Version":     vi.Version,
 			"Description": vi.Description,
 			"BuildHash":   vi.BuildHash,
 			"Platform":    p.Name,
+			"PluginRoot":  pluginRoot,
 		}
 
 		outPath := filepath.Join(distDir, rel)
