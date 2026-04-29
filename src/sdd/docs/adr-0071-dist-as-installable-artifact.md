@@ -97,7 +97,7 @@ New file. Replaces `build.sh` entirely. Responsibilities:
 
 2. **Compiled artifacts**: Shell out to `bun build` / `npm run build` to produce `docs-mcp.js`, `docs-dashboard.js`, and UI assets; place results in `dist/`.
 
-3. **Build hash**: Update `_buildHash` in `src/sdd/version.json` (as today).
+3. **Build hash**: Content-hash all input files (src/sdd/ + platform stubs) using SHA256 — walk all files, hash each, combine into a single digest. Store in `src/sdd/version.json` as `_buildHash`. Version bumps only when actual content changes, not on unrelated commits. Replaces the current `git rev-parse HEAD` approach.
 
 4. **Validation**: Check expected files exist in each platform's `dist/`.
 
