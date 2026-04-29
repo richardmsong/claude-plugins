@@ -75,3 +75,11 @@
 |---|-----|-------|-----------|------|
 | 1 | Compiled artifacts row contradicts docs-dashboard stubs row | Round 2 added docs-dashboard/ to compiled artifacts before Round 3 clarified it's distributed as source; the old row wasn't updated | Removed `docs-dashboard/` from Compiled artifacts row; now lists only `docs-mcp.js` and `docs-dashboard.js`; also deleted `ui/dist/` (Vite build cache) from source tree | factual |
 | 2 | Linter orphan-check exclusions missing | ADR said "every file in src/sdd/ that should have a stub" without defining "should" | Added explicit exclusion list to linter decision: `**/tests/**`, `**/__tests__/**`, `**/node_modules/**`, `build.go`, `go.mod`, `go.sum`, `version.json`, `bun.lock`, `**/package.json`, `**/tsconfig*.json`, `docs/**` | factual |
+
+### Round 5
+
+CLEAN — no blocking gaps found.
+
+### Result
+
+**CLEAN** after 5 rounds, 17 total gaps resolved (10 factual fixes, 7 design decisions).
