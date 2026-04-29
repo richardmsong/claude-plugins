@@ -45,3 +45,19 @@
 | 3 | CI workflow migration steps missing | ADR focused on build.go but never mentioned the CI workflow that invokes it; Go setup, path triggers, lint step all unspecified | Added `.github/workflows/build-plugin.yml` to Component Changes: setup-go action, changed run step, updated path triggers, added lint step | factual |
 | 4 | Setup skill extraction rules underspecified | Two platform setup skills may have diverged; ADR said "extract common content" without specifying how | User decided: diff the two, shared content → src body, divergent parts stay in stubs via `{{ if eq .Platform "claude" }}` template conditionals | decision |
 | 5 | `context.md` stub vs linter contradiction | `context.md` has no template variables but linter requires `{{ }}`; ADR said "if it uses any build vars" leaving it ambiguous | Clarified: stubs contain `{{ include "context.md" }}` pulling body from src/sdd/context.md — satisfies linter, keeps content platform-neutral | factual |
+
+### Round 3
+
+**Gaps found: 3 (1 blocking, 2 warnings)**
+
+1. **`docs-dashboard/` per-file stubs incompatible with Vite content-hashed filenames** — Vite produces `index-DVUHqR9j.css`, `index-zkmHLq7H.js` — filenames change every build. You cannot write a static stub for a content-hashed filename. The per-file stub decision from Round 2 doesn't work for the UI assets directory.
+2. **`dashboard.sh` not mentioned in ADR** — `src/sdd/docs-dashboard/dashboard.sh` is a 100+ line launcher script that lives in dist today. ADR doesn't specify whether it gets a stub or how it's handled.
+3. **`src/sdd/skills/` frontmatter stripping missing from Component Changes** — ADR says src skills become body-only (no frontmatter) in the directory layout, but Component Changes only mentions agents, not `src/sdd/skills/*/SKILL.md`.
+
+#### Fixes applied
+
+| # | Gap | Cause | Resolution | Type |
+|---|-----|-------|-----------|------|
+| 1 | Vite content-hashed filenames vs per-file stubs | Assumed docs-dashboard is pre-compiled; actually Vite runs at dev time via dashboard.sh — source files have stable filenames | Corrected: docs-dashboard/ is distributed as source, not compiled; per-file stubs on stable source filenames; `ui/dist/` excluded from stubs | factual |
+| 2 | `dashboard.sh` not mentioned | Overlooked as a file that needs a stub | dashboard.sh is a stable source file — gets its own stub like any other file in docs-dashboard/ | factual |
+| 3 | `src/sdd/skills/` frontmatter stripping missing | Component Changes listed agents but forgot skills | Added `src/sdd/skills/*/SKILL.md` to Component Changes and Impact sections | factual |

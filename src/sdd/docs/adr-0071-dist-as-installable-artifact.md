@@ -29,7 +29,7 @@ Two compounding problems:
 | Template data | Shared context: version.json fields + platform vars; YAML frontmatter (if present) merged in as additional fields | Uniform across all file types; no branching on extension |
 | `include` function | Custom Go template function: reads `src/sdd/<path>`, renders it with the same data context, returns inline | Decouples stub directory name (droids/) from src directory name (agents/); explicit in the template |
 | Compiled artifacts | `docs-mcp.js`, `docs-dashboard.js`, `docs-dashboard/` UI assets — build.go compiles them first (shells out to bun), then per-file stubs in the platform dir reference the compiled outputs via `{{ include }}`. Each compiled output has its own stub that mirrors the dist/ output structure. | Maintains uniform stub rule: every dist/ file has a stub; compiled artifacts are no exception |
-| `docs-dashboard/` stubs | Each file in the compiled dashboard output (e.g. `docs-dashboard/index.html`, `docs-dashboard/assets/*.js`) has a corresponding stub in `platform/sdd/docs-dashboard/` that `{{ include }}`s the compiled output from a build staging area | Per-file stubs, not an opaque directory copy |
+| `docs-dashboard/` stubs | `docs-dashboard/` is distributed as source (not pre-compiled) — Vite runs at dev time via `dashboard.sh`. Each source file (`dashboard.sh`, `package.json`, `src/*.ts`, `ui/src/*.tsx`, `ui/vite.config.ts`, etc.) has its own stub. `ui/dist/` (Vite build cache) is excluded from stubs. | Per-file stubs on stable source filenames; no content-hashed filename problem |
 | Setup skill extraction | Diff the two existing platform setup skills; shared content goes to `src/sdd/skills/setup/SKILL.md` body; divergent parts stay in platform stubs using template conditionals (`{{ if eq .Platform "claude" }}`) | Explicit split; no judgment calls for the implementer |
 | src/sdd/agents/ body | Body-only, no frontmatter — stubs own the frontmatter entirely | Clean separation; frontmatter in src would be misleading since it is never used |
 | Stub → src body mapping | Stubs use `{{ include "agents/<name>.md" }}` in the body — a custom Go template function registered by `build.go` that reads and renders the referenced file from `src/sdd/`; if body has no `include`, stub renders as-is | Reference is in the template itself; no special frontmatter field; survives any directory renaming; `droids/` → `agents/` mapping is explicit in the stub body |
@@ -145,6 +145,9 @@ tools: "*"
 ### `src/sdd/agents/*.md`
 Remove frontmatter from all 4 agent files (design-evaluator, dev-harness, implementation-evaluator, spec-evaluator). Keep body only.
 
+### `src/sdd/skills/*/SKILL.md`
+Remove frontmatter from all skill files. Keep body only. Stubs own the frontmatter.
+
 ### `factory/sdd/droids/*.md`
 Convert from full content (frontmatter + body) to frontmatter-only stubs.
 
@@ -186,6 +189,7 @@ Delete — redundant with `.factory-plugin/`.
 - `src/sdd/build.sh` — deleted
 - `src/sdd/build.go` — new; replaces build.sh entirely
 - `src/sdd/agents/*.md` — strip frontmatter, keep body only
+- `src/sdd/skills/*/SKILL.md` — strip frontmatter, keep body only
 - `factory/sdd/droids/*.md` — strip body, keep frontmatter only
 - `claude/sdd/agents/*.md` — strip body, keep frontmatter only
 - `factory/sdd/skills/*/SKILL.md` — strip body, keep frontmatter only
