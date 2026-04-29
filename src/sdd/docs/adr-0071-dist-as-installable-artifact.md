@@ -171,7 +171,7 @@ New static file pointing to `claude/sdd/dist`.
 
 ## Scope
 
-All in one change. Setup skill (`setup/`) remains a special case — it lives in `claude/sdd/skills/setup/` as a real file (not in src) and is excluded from stub processing.
+All in one change. No special cases — setup skill follows the same stub+template pattern as everything else. Each platform has its own setup stub (e.g., `claude/sdd/skills/setup/SKILL.md`, `factory/sdd/skills/setup/SKILL.md`) with platform-specific frontmatter, and the shared body comes from `src/sdd/skills/setup/SKILL.md` via `{{ include }}`.
 
 ## Integration Test Cases
 
