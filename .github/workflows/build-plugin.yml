@@ -28,6 +28,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add claude/sdd/ factory/sdd/droids/ factory/sdd/.factory-plugin/
+          git add --all
           git diff --cached --quiet || git commit -m "build(plugin): auto-build claude/sdd/ from src/sdd/ [skip ci]"
           git push origin HEAD

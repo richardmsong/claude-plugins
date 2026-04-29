@@ -16,7 +16,7 @@ OUT="$REPO_ROOT/claude/sdd"
 echo "=== SDD Plugin Build ==="
 
 # ---- Version sync ----
-SOURCE_PLUGIN="$REPO_ROOT/factory/sdd/.factory-plugin/plugin.json"
+SOURCE_PLUGIN="$SRC/version.json"
 CURRENT_HASH=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")
 
 echo "Syncing plugin version..."
