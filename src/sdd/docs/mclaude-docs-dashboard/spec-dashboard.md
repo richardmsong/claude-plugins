@@ -82,6 +82,7 @@ HTTP handlers are thin wrappers: unmarshal parameters, call the function, JSON-e
 |--------|------|-------------|---------------------|
 | GET | `/api/adrs?status=<s>` | List ADRs, optional status filter. | `listDocs({category: "adr", status: s})` |
 | GET | `/api/specs` | List specs. | `listDocs({category: "spec"})` |
+| GET | `/api/audits` | List audit reports. | `listDocs({category: "audit"})` |
 | GET | `/api/doc?path=<p>` | Full doc: metadata + raw_markdown + sections. | `listDocs` + `readRawDoc` |
 | GET | `/api/lineage?doc=<p>[&heading=<h>]` | Co-committed sections. `heading` optional (ADR-0031): absent/empty → doc-level aggregation; present → section-level. | `getLineage` |
 | GET | `/api/search?q=<q>&limit=<n>&category=<c>&status=<s>` | FTS search with snippets. | `searchDocs` |
@@ -238,9 +239,10 @@ The custom renderer also:
 
 | Hash route | Component | Description |
 |------------|-----------|-------------|
-| `#/` | `Landing.tsx` | ADRs bucketed by status (Drafts, Accepted, Implemented, Superseded, Withdrawn, Unspecified). Each bucket collapsible; all expanded by default (ADR-0035). Right column: specs grouped by directory. |
+| `#/` | `Landing.tsx` | Three sections: ADRs bucketed by status (Drafts, Accepted, Implemented, Superseded, Withdrawn, Unspecified), specs grouped by directory, and audit reports grouped by type prefix (`design-`, `spec-`, `impl-`, `adr-`). All buckets collapsible, expanded by default (ADR-0035, ADR-0074). |
 | `#/adr/<slug>` | `AdrDetail.tsx` | Rendered ADR with status badge + history dates. H2 popovers. H1 lineage marker (ADR-0031). |
 | `#/spec/<path>` | `SpecDetail.tsx` | Rendered spec. H2 popovers. H1 lineage marker (ADR-0031). |
+| `#/audit/<path>` | `AuditDetail.tsx` | Rendered audit report. Uses `MarkdownView`. No blame gutter or lineage popovers — audit docs are ephemeral reports, not versioned specs (ADR-0074). |
 | `#/search?q=<q>` | `SearchResults.tsx` | FTS5 results with snippets. |
 | `#/graph[?focus=<p>]` | `Graph.tsx` | Force-directed graph, global or 1-hop local mode. |
 

@@ -25,7 +25,7 @@ SQLite file at `<repoRoot>/.agent/.docs-index.db`, opened in WAL mode with forei
 |----------------------|----------|----------------------------------------------------------------------------|
 | `id`                 | INTEGER  | Primary key.                                                               |
 | `path`               | TEXT     | Unique. Repo-root-relative POSIX path, e.g. `docs/adr-0015-docs-mcp.md`.   |
-| `category`           | TEXT     | `adr`, `spec`, or `null`. Classified from the basename.                    |
+| `category`           | TEXT     | `adr`, `spec`, `audit`, or `null`. Classified by `classifyCategory` (ADR-0074). |
 | `title`              | TEXT     | H1 text (without the `# ` prefix). `null` if no H1.                        |
 | `status`             | TEXT     | ADR status per ADR-0018: `draft|accepted|implemented|superseded|withdrawn`. `null` for specs or ADRs without a `**Status**:` line. |
 | `commit_count`       | INTEGER  | Total git commits that touched this file (per ADR-0027). Default 0. Maintained by the lineage scanner. |
@@ -103,7 +103,7 @@ interface ParsedDoc {
 }
 ```
 
-`classifyCategory(filename)`: `adr-*` → `"adr"`; `spec-*` or `feature-list*` → `"spec"`; anything else → `null`. Operates on the basename; directory path is stripped.
+`classifyCategory(docPath)`: accepts the full repo-relative path (e.g. `docs/audits/spec-foo.md`). If the path contains an `audits/` directory component, returns `"audit"` regardless of filename. Otherwise, checks the basename: `adr-*` → `"adr"`; `spec-*` or `feature-list*` → `"spec"`; anything else → `null`. Return type: `"adr" | "spec" | "audit" | null`. Established by ADR-0074.
 
 ## Content indexer (`src/content-indexer.ts`)
 
@@ -144,7 +144,7 @@ All four tools take a `Database` handle and a validated args object (Zod schemas
 
 ### `search_docs`
 
-Input: `{query: string, category?: "adr"|"spec", status?: AdrStatus, limit?: number}`.
+Input: `{query: string, category?: "adr"|"spec"|"audit", status?: AdrStatus, limit?: number}`.
 
 SQL: joins `sections_fts MATCH ?` → `sections` → `documents`, filters by category/status if provided, orders by `sections_fts.rank` (BM25), applies `LIMIT`. Returns `{doc_path, doc_title, category, heading, snippet, line_start, line_end, rank}[]`. `snippet` uses FTS5's `snippet(sections_fts, 1, '[', ']', '...', 32)` — the match is wrapped in `[...]`.
 
@@ -182,7 +182,7 @@ interface LineageResult {
 
 ### `list_docs`
 
-Input: `{category?: "adr"|"spec", status?: AdrStatus}`.
+Input: `{category?: "adr"|"spec"|"audit", status?: AdrStatus}`.
 
 Returns `ListDoc[]`:
 
