@@ -22,14 +22,18 @@ export type SSEEvent = ReindexEvent | HelloEvent;
 export function useEventSource(url: string) {
   const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
   const refetchCounterRef = useRef<Record<string, number>>({});
+  const lastDataTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
     let es: EventSource;
+    let healthCheck: ReturnType<typeof setInterval>;
 
     function connect() {
+      lastDataTimeRef.current = Date.now();
       es = new EventSource(url);
 
       es.onmessage = (e) => {
+        lastDataTimeRef.current = Date.now();
         try {
           const event = JSON.parse(e.data) as SSEEvent;
           setLastEvent(event);
@@ -53,7 +57,18 @@ export function useEventSource(url: string) {
 
     connect();
 
+    healthCheck = setInterval(() => {
+      if (
+        Date.now() - lastDataTimeRef.current > 45_000 ||
+        es.readyState !== EventSource.OPEN
+      ) {
+        es.close();
+        connect();
+      }
+    }, 20_000);
+
     return () => {
+      clearInterval(healthCheck);
       es?.close();
     };
   }, [url]);
