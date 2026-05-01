@@ -4,6 +4,7 @@ import { seedTestDb, insertLineage, createTestDb } from "./testutil";
 import {
   handleAdrs,
   handleSpecs,
+  handleAudits,
   handleDoc,
   handleLineage,
   handleSearch,
@@ -26,6 +27,13 @@ This is a test ADR for unit testing.
 Details about implementation go here.
 `;
 
+const AUDIT_CONTENT = `# Spec Alignment Audit: Test Component
+
+## Summary
+
+This is a test audit report.
+`;
+
 const SPEC_CONTENT = `# Spec: Test Component
 
 ## Role
@@ -45,6 +53,7 @@ beforeEach(() => {
   const result = seedTestDb({
     "adr-0001-test-feature.md": ADR_CONTENT,
     "spec-test-component.md": SPEC_CONTENT,
+    "audits/spec-test-component-2026-04-22.md": AUDIT_CONTENT,
   });
   db = result.db;
   repoRoot = result.repoRoot;
@@ -361,5 +370,42 @@ describe("handleGraph", () => {
     // Only the focus node, no edges
     expect(data.edges.length).toBe(0);
     expect(data.nodes.length).toBe(1);
+  });
+});
+
+// ---- /api/audits (ADR-0074) ----
+
+describe("handleAudits", () => {
+  it("returns audit documents from audits/ directory", async () => {
+    const res = handleAudits(db);
+    expect(res.status).toBe(200);
+    const data = await res.json() as { doc_path: string; category: string }[];
+    expect(Array.isArray(data)).toBe(true);
+    const audit = data.find((d) => d.doc_path.includes("audits/"));
+    expect(audit).toBeDefined();
+    expect(audit!.category).toBe("audit");
+  });
+
+  it("does not return ADRs or specs", async () => {
+    const res = handleAudits(db);
+    const data = await res.json() as { category: string }[];
+    for (const doc of data) {
+      expect(doc.category).toBe("audit");
+    }
+  });
+
+  it("audit docs are not returned by handleSpecs", async () => {
+    const res = handleSpecs(db);
+    const data = await res.json() as { doc_path: string }[];
+    const hasAudit = data.some((d) => d.doc_path.includes("audits/"));
+    expect(hasAudit).toBe(false);
+  });
+
+  it("audit docs are not returned by handleAdrs", async () => {
+    const url = new URL("http://localhost/api/adrs");
+    const res = handleAdrs(db, url);
+    const data = await res.json() as { doc_path: string }[];
+    const hasAudit = data.some((d) => d.doc_path.includes("audits/"));
+    expect(hasAudit).toBe(false);
   });
 });

@@ -110,16 +110,19 @@ export function parseMarkdown(content: string): ParsedDoc {
 }
 
 /**
- * Classify a document category from its filename (basename).
+ * Classify a document category from its repo-relative path (ADR-0074).
  *
- * adr-*          → 'adr'
- * spec-*         → 'spec'
- * feature-list*  → 'spec'
- * everything else → null
+ * Rules (checked in order):
+ *   1. Path contains /audits/ as a directory component → 'audit'
+ *   2. Basename matches adr-*                          → 'adr'
+ *   3. Basename matches spec-* or feature-list*        → 'spec'
+ *   4. Everything else                                 → null
  */
-export function classifyCategory(filename: string): "adr" | "spec" | null {
-  // Strip directory components
-  const base = filename.split("/").pop() ?? filename;
+export function classifyCategory(docPath: string): "adr" | "spec" | "audit" | null {
+  // Check for /audits/ directory segment before filename-based classification (ADR-0074)
+  const parts = docPath.split("/");
+  if (parts.some((p) => p === "audits")) return "audit";
+  const base = parts.pop() ?? docPath;
   if (/^adr-/.test(base)) return "adr";
   if (/^(spec-|feature-list)/.test(base)) return "spec";
   return null;

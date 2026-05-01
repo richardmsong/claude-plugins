@@ -4,7 +4,7 @@
 
 `docs-dashboard` is a local development server that visualizes the ADR/spec corpus. It lists every ADR and spec, shows each ADR's status (`draft | accepted | implemented | superseded | withdrawn`) at a glance, renders spec-ADR lineage derived from git co-commits, and live-updates as files change on disk. It is a dev-only tool with no auth that reuses all indexing, parsing, lineage-scanning, and file-watching logic from `docs-mcp/src/` — the same functions the MCP server calls.
 
-Established by ADR-0027. Extended by ADR-0028 (bind `0.0.0.0`), ADR-0029 (`runLineageScan` in boot), ADR-0030 (LineagePopover doc-collapse), ADR-0031 (doc-level lineage), ADR-0032 (`--docs-dir` CLI flag), ADR-0040 (line-level lineage popover with blame gutter, inline diff, and range filter).
+Established by ADR-0027. Extended by ADR-0028 (bind `0.0.0.0`), ADR-0029 (`runLineageScan` in boot), ADR-0030 (LineagePopover doc-collapse), ADR-0031 (doc-level lineage), ADR-0040 (line-level lineage popover with blame gutter, inline diff, and range filter), ADR-0050 (`--root` / `resolveDocsRoot` unified path resolution), ADR-0056 (Vite HMR two-process layout), ADR-0073 (resilient SSE hook), ADR-0074 (audit docs — `classifyCategory` detects `audits/` directory, `/api/audits` endpoint, `#/audit/<path>` route, Audits section on landing page).
 
 ## Runtime
 
@@ -87,7 +87,7 @@ HTTP handlers are thin wrappers: unmarshal parameters, call the function, JSON-e
 | GET | `/api/lineage?doc=<p>[&heading=<h>]` | Co-committed sections. `heading` optional (ADR-0031): absent/empty → doc-level aggregation; present → section-level. | `getLineage` |
 | GET | `/api/search?q=<q>&limit=<n>&category=<c>&status=<s>` | FTS search with snippets. | `searchDocs` |
 | GET | `/api/graph?focus=<p>` | Graph nodes + edges. Omit `focus` for global; provide for 1-hop local. | `graph-queries.ts` |
-| GET | `/api/blame?doc=<p>[&since=<date>&ref=<branch>]` | Per-block blame+lineage data. Self-joins `blame_lines` on commit to find co-modified ADRs. Optional `since`/`ref` for range-filtered blame (computed on demand). | `blame-queries.ts` |
+| GET | `/api/blame?doc=<p>[&since=<date>&ref=<branch>]` | Per-block blame+lineage data. Self-joins `blame_lines` on commit to find co-modified ADRs. Optional `since`/`ref` for range-filtered blame (computed on demand). | `routes.ts` (`handleBlame`) |
 | GET | `/api/diff?doc=<p>&commit=<hash>&line_start=<n>&line_end=<n>` | Unified diff hunk from a specific commit overlapping the requested line range. | `git show` + hunk extraction |
 | GET | `/events` | SSE stream; emits `{type:"hello"}` on connect and `{type:"reindex",changed:[...]}` on watcher fires. | SSE broker in `server.ts` |
 
@@ -97,7 +97,7 @@ HTTP handlers are thin wrappers: unmarshal parameters, call the function, JSON-e
 interface DocResponse {
   doc_path: string;
   title: string | null;
-  category: "adr" | "spec" | null;
+  category: "adr" | "spec" | "audit" | null;
   status: "draft" | "accepted" | "implemented" | "superseded" | "withdrawn" | null;
   commit_count: number;
   raw_markdown: string;

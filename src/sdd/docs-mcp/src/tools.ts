@@ -52,7 +52,7 @@ const AdrStatusEnum = z.enum(["draft", "accepted", "implemented", "superseded", 
 
 export const SearchDocsSchema = z.object({
   query: z.string().describe("Search query (FTS5 syntax: words, phrases, AND/OR/NOT)"),
-  category: z.enum(["adr", "spec"]).optional().describe("Filter to ADRs or specs"),
+  category: z.enum(["adr", "spec", "audit"]).optional().describe("Filter to ADRs, specs, or audit reports"),
   status: AdrStatusEnum.optional().describe("Filter by ADR status (draft|accepted|implemented|superseded|withdrawn)"),
   limit: z.number().int().positive().default(10).describe("Max results (default 10)"),
 });
@@ -81,7 +81,7 @@ export const GetLineageSchema = z.object({
 });
 
 export const ListDocsSchema = z.object({
-  category: z.enum(["adr", "spec"]).optional().describe("Filter by category"),
+  category: z.enum(["adr", "spec", "audit"]).optional().describe("Filter by category (adr, spec, or audit)"),
   status: AdrStatusEnum.optional().describe("Filter by ADR status (draft|accepted|implemented|superseded|withdrawn)"),
 });
 

@@ -50,6 +50,15 @@ export function handleSpecs(db: Database): Response {
 }
 
 /**
+ * GET /api/audits
+ * Returns: ListDoc[] for audit reports (ADR-0074).
+ */
+export function handleAudits(db: Database): Response {
+  const docs = listDocs(db, { category: "audit" });
+  return json(docs);
+}
+
+/**
  * GET /api/doc?path=<p>
  * Returns: DocResponse — metadata + raw_markdown + sections.
  */
@@ -145,7 +154,7 @@ export function handleSearch(db: Database, url: URL): Response {
   const category = url.searchParams.get("category") ?? undefined;
   const status = url.searchParams.get("status") ?? undefined;
 
-  const validCategories = ["adr", "spec"];
+  const validCategories = ["adr", "spec", "audit"];
   if (category && !validCategories.includes(category)) {
     return badRequest(`Invalid category: ${category}`);
   }
@@ -158,7 +167,7 @@ export function handleSearch(db: Database, url: URL): Response {
     const results = searchDocs(db, {
       query: q,
       limit,
-      category: category as "adr" | "spec" | undefined,
+      category: category as "adr" | "spec" | "audit" | undefined,
       status: status as "draft" | "accepted" | "implemented" | "superseded" | "withdrawn" | undefined,
     });
     return json(results);

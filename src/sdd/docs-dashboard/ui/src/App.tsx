@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import Landing from "./routes/Landing";
 import AdrDetail from "./routes/AdrDetail";
 import SpecDetail from "./routes/SpecDetail";
+import AuditDetail from "./routes/AuditDetail";
 import SearchResults from "./routes/SearchResults";
 import Graph from "./routes/Graph";
 import SearchBar from "./components/SearchBar";
@@ -121,6 +122,9 @@ export default function App() {
   } else if (route.startsWith("/spec/")) {
     const specPath = route.slice("/spec/".length);
     content = <SpecDetail docPath={specPath} navigate={navigate} lastEvent={lastEvent} />;
+  } else if (route.startsWith("/audit/")) {
+    const auditPath = route.slice("/audit/".length);
+    content = <AuditDetail docPath={auditPath} navigate={navigate} lastEvent={lastEvent} />;
   } else if (route === "/search") {
     const q = params.get("q") ?? "";
     content = <SearchResults query={q} navigate={navigate} />;
