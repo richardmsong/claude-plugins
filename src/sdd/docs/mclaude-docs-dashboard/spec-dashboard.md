@@ -162,6 +162,15 @@ Lives in `src/server.ts`. Manages a `Set<Writer>` of active client connections.
 - **Events**: `{type:"hello"}` on connect; `{type:"reindex",changed:string[]}` on watcher callback.
 - Browser `EventSource` auto-reconnects; on reconnect the client receives a `hello` and triggers a full refetch.
 
+### Client-side liveness (`useEventSource` hook in `ui/src/App.tsx`)
+
+The `useEventSource` hook maintains a health-check interval (every 20s) that detects stale connections and forces reconnection. This guards against silent connection death — particularly after Vite HMR module replacement, which can orphan the `onmessage` closure while `readyState` remains `OPEN`.
+
+- **`lastDataTime`**: timestamp of the last `onmessage` event (hello or reindex). Updated on every received message.
+- **Health-check interval**: every 20s, checks whether `Date.now() - lastDataTime > 45_000` (3x the server heartbeat interval). If stale or `readyState !== OPEN`, closes the `EventSource` and creates a new one. The server sends `hello` on reconnect, which triggers a full refetch (existing behavior).
+- **Cleanup**: the `useEffect` cleanup function calls `es.close()` and `clearInterval(healthCheck)` to ensure Vite HMR teardown properly disposes the old connection.
+- **No backoff**: reconnect is immediate — acceptable for a single-user dev tool hitting localhost/Tailnet (ADR-0073).
+
 ## Graph Queries (`src/graph-queries.ts`)
 
 Deliberate exception to the logic-duplication rule: `docs-mcp` has no doc-level aggregation helper. The dashboard writes these queries directly.
