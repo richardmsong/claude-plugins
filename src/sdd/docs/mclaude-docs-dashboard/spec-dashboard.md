@@ -239,7 +239,8 @@ The custom renderer also:
 
 | Hash route | Component | Description |
 |------------|-----------|-------------|
-| `#/` | `Landing.tsx` | Three sections: ADRs bucketed by status (Drafts, Accepted, Implemented, Superseded, Withdrawn, Unspecified), specs grouped by directory, and audit reports grouped by type prefix (`design-`, `spec-`, `impl-`, `adr-`). All buckets collapsible, expanded by default (ADR-0035, ADR-0074). |
+| `#/` | `Landing.tsx` | ADRs bucketed by status (Drafts, Accepted, Implemented, Superseded, Withdrawn, Unspecified). Each bucket collapsible; all expanded by default (ADR-0035). Right column: specs grouped by directory. Nav bar links to Audits and Graph pages. |
+| `#/audits` | `AuditList.tsx` | Audit reports grouped by type prefix (`design-`, `spec-`, `impl-`, `adr-`). Each group collapsible, expanded by default. Display names derived from filenames with dates extracted to a separate column. Items link to `#/audit/<path>` (ADR-0074). |
 | `#/adr/<slug>` | `AdrDetail.tsx` | Rendered ADR with status badge + history dates. H2 popovers. H1 lineage marker (ADR-0031). |
 | `#/spec/<path>` | `SpecDetail.tsx` | Rendered spec. H2 popovers. H1 lineage marker (ADR-0031). |
 | `#/audit/<path>` | `AuditDetail.tsx` | Rendered audit report. Uses `MarkdownView`. No blame gutter or lineage popovers — audit docs are ephemeral reports, not versioned specs (ADR-0074). |

@@ -8,3 +8,4 @@ src/sdd/bin/
 .agent/audits/
 .playwright-mcp
 src/sdd/docs-dashboard/ui/dist/*
+.tmp

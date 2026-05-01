@@ -3,6 +3,7 @@ import Landing from "./routes/Landing";
 import AdrDetail from "./routes/AdrDetail";
 import SpecDetail from "./routes/SpecDetail";
 import AuditDetail from "./routes/AuditDetail";
+import AuditList from "./routes/AuditList";
 import SearchResults from "./routes/SearchResults";
 import Graph from "./routes/Graph";
 import SearchBar from "./components/SearchBar";
@@ -122,6 +123,8 @@ export default function App() {
   } else if (route.startsWith("/spec/")) {
     const specPath = route.slice("/spec/".length);
     content = <SpecDetail docPath={specPath} navigate={navigate} lastEvent={lastEvent} />;
+  } else if (route === "/audits") {
+    content = <AuditList navigate={navigate} lastEvent={lastEvent} />;
   } else if (route.startsWith("/audit/")) {
     const auditPath = route.slice("/audit/".length);
     content = <AuditDetail docPath={auditPath} navigate={navigate} lastEvent={lastEvent} />;
@@ -150,6 +153,9 @@ export default function App() {
           Docs Dashboard
         </a>
         <SearchBar navigate={navigate} />
+        <a href="#/audits" style={styles.navLink}>
+          Audits
+        </a>
         <a href="#/graph" style={styles.navLink}>
           Graph
         </a>

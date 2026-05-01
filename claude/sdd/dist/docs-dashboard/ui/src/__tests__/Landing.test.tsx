@@ -7,9 +7,10 @@ import Landing from "../routes/Landing";
 vi.mock("../api", () => ({
   fetchAdrs: vi.fn(),
   fetchSpecs: vi.fn(),
+  fetchAudits: vi.fn(),
 }));
 
-import { fetchAdrs, fetchSpecs } from "../api";
+import { fetchAdrs, fetchSpecs, fetchAudits } from "../api";
 
 const mockAdrs = [
   {
@@ -62,12 +63,43 @@ const mockSpecs = [
   },
 ];
 
+const mockAudits = [
+  {
+    doc_path: "docs/audits/spec-docs-dashboard-2026-04-22.md",
+    title: "Spec Alignment Audit — Docs Dashboard",
+    category: "audit",
+    status: null,
+    commit_count: 1,
+    last_status_change: "2026-04-22",
+    sections: [],
+  },
+  {
+    doc_path: "docs/audits/impl-docs-dashboard-2026-05-01.md",
+    title: "Implementation Audit — Docs Dashboard",
+    category: "audit",
+    status: null,
+    commit_count: 1,
+    last_status_change: "2026-05-01",
+    sections: [],
+  },
+  {
+    doc_path: "docs/audits/design-version-sync-2026-04-28.md",
+    title: "Design Audit — Version Sync",
+    category: "audit",
+    status: null,
+    commit_count: 1,
+    last_status_change: "2026-04-28",
+    sections: [],
+  },
+];
+
 const navigate = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
   (fetchAdrs as ReturnType<typeof vi.fn>).mockResolvedValue(mockAdrs);
   (fetchSpecs as ReturnType<typeof vi.fn>).mockResolvedValue(mockSpecs);
+  (fetchAudits as ReturnType<typeof vi.fn>).mockResolvedValue(mockAudits);
 });
 
 describe("Landing", () => {
@@ -212,6 +244,75 @@ describe("Landing", () => {
     const idx1 = container.textContent!.indexOf("ADR-0011: Newer Draft");
     const idx2 = container.textContent!.indexOf("ADR-0010: Older Draft");
     expect(idx1).toBeLessThan(idx2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audits section (ADR-0074)
+// ---------------------------------------------------------------------------
+
+describe("Landing — Audits section", () => {
+  it("renders the Audits section heading", async () => {
+    const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
+    await waitFor(() => {
+      expect(container.textContent).toContain("Audits");
+    });
+  });
+
+  it("groups spec-* audits under 'Spec alignment reports'", async () => {
+    const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
+    await waitFor(() => {
+      expect(container.textContent).toContain("Spec alignment reports");
+      expect(container.textContent).toContain("Spec Alignment Audit — Docs Dashboard");
+    });
+  });
+
+  it("groups impl-* audits under 'Implementation compliance reports'", async () => {
+    const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
+    await waitFor(() => {
+      expect(container.textContent).toContain("Implementation compliance reports");
+      expect(container.textContent).toContain("Implementation Audit — Docs Dashboard");
+    });
+  });
+
+  it("groups design-* audits under 'Design audit reports'", async () => {
+    const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
+    await waitFor(() => {
+      expect(container.textContent).toContain("Design audit reports");
+      expect(container.textContent).toContain("Design Audit — Version Sync");
+    });
+  });
+
+  it("clicking an audit navigates to /audit/<doc_path>", async () => {
+    const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
+    await waitFor(() => {
+      expect(container.textContent).toContain("Spec Alignment Audit — Docs Dashboard");
+    });
+
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const auditBtn = buttons.find((b) =>
+      b.textContent?.includes("Spec Alignment Audit — Docs Dashboard"),
+    );
+    expect(auditBtn).not.toBeUndefined();
+    fireEvent.click(auditBtn!);
+    expect(navigate).toHaveBeenCalledWith(
+      "/audit/docs/audits/spec-docs-dashboard-2026-04-22.md",
+    );
+  });
+
+  it("shows 'No audit reports found.' when fetchAudits returns an empty list", async () => {
+    (fetchAudits as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const { container } = render(<Landing navigate={navigate} lastEvent={null} />);
+    await waitFor(() => {
+      expect(container.textContent).toContain("No audit reports found.");
+    });
+  });
+
+  it("calls fetchAudits on mount", async () => {
+    render(<Landing navigate={navigate} lastEvent={null} />);
+    await waitFor(() => {
+      expect(fetchAudits).toHaveBeenCalledTimes(1);
+    });
   });
 });
 
