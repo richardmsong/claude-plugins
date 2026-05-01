@@ -1,12 +1,13 @@
 # ADR: Resilient client-side SSE hook with staleness detection
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-05-01: accepted
+- 2026-05-01: implemented — all scope CLEAN
 
 ## Overview
 
-Make the dashboard's `useEventSource` React hook resilient to stale connections by adding a heartbeat-based liveness check and explicit reconnection logic. The server already sends `:heartbeat` comments every 15 seconds (ADR-0037); the client now tracks when it last received *any* data and tears down + reconnects the `EventSource` if no data arrives for 30 seconds. This guarantees the SSE connection never silently dies — particularly after Vite HMR module replacement, which can orphan the `onmessage` closure.
+Make the dashboard's `useEventSource` React hook resilient to stale connections by adding a heartbeat-based liveness check and explicit reconnection logic. The server already sends `:heartbeat` comments every 15 seconds (ADR-0037); the client now tracks when it last received an `onmessage` event and tears down + reconnects the `EventSource` if no event arrives for 45 seconds. This guarantees the SSE connection never silently dies — particularly after Vite HMR module replacement, which can orphan the `onmessage` closure.
 
 ## Motivation
 
