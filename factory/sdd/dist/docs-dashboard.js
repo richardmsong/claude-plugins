@@ -1,16 +1,12 @@
 // @bun
 var __defProp = Object.defineProperty;
-var __returnValue = (v) => v;
-function __exportSetter(name, newValue) {
-  this[name] = __returnValue.bind(null, newValue);
-}
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, {
       get: all[name],
       enumerable: true,
       configurable: true,
-      set: __exportSetter.bind(all, name)
+      set: (newValue) => all[name] = () => newValue
     });
 };
 var __require = import.meta.require;
@@ -220,8 +216,11 @@ function parseMarkdown(content) {
   }
   return { title, status, lastStatusChange, sections };
 }
-function classifyCategory(filename) {
-  const base = filename.split("/").pop() ?? filename;
+function classifyCategory(docPath) {
+  const parts = docPath.split("/");
+  if (parts.some((p) => p === "audits"))
+    return "audit";
+  const base = parts.pop() ?? docPath;
   if (/^adr-/.test(base))
     return "adr";
   if (/^(spec-|feature-list)/.test(base))
@@ -4774,7 +4773,7 @@ var NEVER = INVALID;
 var AdrStatusEnum = exports_external.enum(["draft", "accepted", "implemented", "superseded", "withdrawn"]);
 var SearchDocsSchema = exports_external.object({
   query: exports_external.string().describe("Search query (FTS5 syntax: words, phrases, AND/OR/NOT)"),
-  category: exports_external.enum(["adr", "spec"]).optional().describe("Filter to ADRs or specs"),
+  category: exports_external.enum(["adr", "spec", "audit"]).optional().describe("Filter to ADRs, specs, or audit reports"),
   status: AdrStatusEnum.optional().describe("Filter by ADR status (draft|accepted|implemented|superseded|withdrawn)"),
   limit: exports_external.number().int().positive().default(10).describe("Max results (default 10)")
 });
@@ -4787,7 +4786,7 @@ var GetLineageSchema = exports_external.object({
   heading: exports_external.string().optional().describe("Section heading (H2 text). When provided, returns section-level lineage for that heading. " + "When omitted (or empty string), returns doc-level lineage: one row per co-committed document, " + "aggregated across all sections of the queried doc \u2014 useful for 'which ADRs shaped this whole spec?'")
 });
 var ListDocsSchema = exports_external.object({
-  category: exports_external.enum(["adr", "spec"]).optional().describe("Filter by category"),
+  category: exports_external.enum(["adr", "spec", "audit"]).optional().describe("Filter by category (adr, spec, or audit)"),
   status: AdrStatusEnum.optional().describe("Filter by ADR status (draft|accepted|implemented|superseded|withdrawn)")
 });
 function searchDocs(db, args) {
@@ -4986,6 +4985,10 @@ function handleSpecs(db) {
   const docs = listDocs(db, { category: "spec" });
   return json(docs);
 }
+function handleAudits(db) {
+  const docs = listDocs(db, { category: "audit" });
+  return json(docs);
+}
 function handleDoc(db, repoRoot, url) {
   const docPath = url.searchParams.get("path");
   if (!docPath) {
@@ -5048,7 +5051,7 @@ function handleSearch(db, url) {
   }
   const category = url.searchParams.get("category") ?? undefined;
   const status = url.searchParams.get("status") ?? undefined;
-  const validCategories = ["adr", "spec"];
+  const validCategories = ["adr", "spec", "audit"];
   if (category && !validCategories.includes(category)) {
     return badRequest(`Invalid category: ${category}`);
   }
@@ -5472,6 +5475,9 @@ async function main() {
       }
       if (req.method === "GET" && url.pathname === "/api/specs") {
         return handleSpecs(db);
+      }
+      if (req.method === "GET" && url.pathname === "/api/audits") {
+        return handleAudits(db);
       }
       if (req.method === "GET" && url.pathname === "/api/doc") {
         return handleDoc(db, gitRoot, url);

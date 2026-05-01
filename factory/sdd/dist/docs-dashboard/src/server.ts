@@ -5,6 +5,7 @@ import { boot } from "./boot.js";
 import {
   handleAdrs,
   handleSpecs,
+  handleAudits,
   handleDoc,
   handleLineage,
   handleSearch,
@@ -205,6 +206,9 @@ async function main() {
       }
       if (req.method === "GET" && url.pathname === "/api/specs") {
         return handleSpecs(db);
+      }
+      if (req.method === "GET" && url.pathname === "/api/audits") {
+        return handleAudits(db);
       }
       if (req.method === "GET" && url.pathname === "/api/doc") {
         return handleDoc(db, gitRoot, url);

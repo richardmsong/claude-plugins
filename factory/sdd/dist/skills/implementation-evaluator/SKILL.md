@@ -45,9 +45,11 @@ Omit to audit **all** discovered components in parallel.
 Agent({
   subagent_type: "implementation-evaluator",
   description: "Implementation evaluator: <component>",
-  prompt: "Evaluate the <component> component. Component root: <root>. Spec files: <list of spec paths for this component>. Also read cross-cutting specs at docs/spec-*.md. Read all spec docs and compare against the component's code."
+  prompt: "Evaluate the <component> component. Component root: <root>."
 })
 ```
+
+The prompt contains only the component name and root directory. The agent's own definition (Phase 1: "Gather docs and code") discovers spec files via glob and identifies cross-cutting specs. No file list or focus hints are passed — the agent must be adversarial and comprehensive (ADR-0075).
 
 The agent saves results to `docs/audits/impl-<component>-<YYYY-MM-DD>.md` and returns CLEAN or a gap list.
 
@@ -63,7 +65,7 @@ Then spawn one agent per component **in parallel**:
 For each discovered component:
   Agent({
     subagent_type: "implementation-evaluator",
-    prompt: "Evaluate <component>. Spec files: <paths>. Also read cross-cutting specs.",
+    prompt: "Evaluate <component>. Component root: <root>.",
     run_in_background: true
   })
 ```

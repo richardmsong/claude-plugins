@@ -3,7 +3,7 @@
 export interface ListDoc {
   doc_path: string;
   title: string | null;
-  category: "adr" | "spec" | null;
+  category: "adr" | "spec" | "audit" | null;
   status: string | null;
   commit_count: number;
   last_status_change: string | null;
@@ -13,7 +13,7 @@ export interface ListDoc {
 export interface DocResponse {
   doc_path: string;
   title: string | null;
-  category: "adr" | "spec" | null;
+  category: "adr" | "spec" | "audit" | null;
   status: "draft" | "accepted" | "implemented" | "superseded" | "withdrawn" | null;
   commit_count: number;
   raw_markdown: string;
@@ -80,6 +80,10 @@ export async function fetchAdrs(status?: string): Promise<ListDoc[]> {
 
 export async function fetchSpecs(): Promise<ListDoc[]> {
   return get<ListDoc[]>("/api/specs");
+}
+
+export async function fetchAudits(): Promise<ListDoc[]> {
+  return get<ListDoc[]>("/api/audits");
 }
 
 export async function fetchDoc(path: string): Promise<DocResponse> {

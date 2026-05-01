@@ -32,9 +32,11 @@ This is the ADR-to-spec alignment check. For implementation compliance (code vs 
 Agent({
   subagent_type: "spec-evaluator",
   description: "Spec evaluator: <slug>",
-  prompt: "Evaluate spec alignment for ADR at <adr-path>. Check all specs listed in the ADR's Impact section and any specs implied by its Component Changes section. ADR path: <adr-path>. Spec files to check: <list of discovered spec paths>."
+  prompt: "Evaluate spec alignment for ADR at <adr-path>."
 })
 ```
+
+The prompt contains only the ADR path. The agent's own definition (Phase 1: "Gather specs") discovers spec files by reading the ADR's Impact section and globbing `docs/**/spec-*.md`. No file list or focus hints are passed — the agent must be adversarial and comprehensive (ADR-0075).
 
 4. The agent saves results to `docs/audits/spec-alignment-<slug>-<YYYY-MM-DD>.md` and returns CLEAN or a gap list.
 
