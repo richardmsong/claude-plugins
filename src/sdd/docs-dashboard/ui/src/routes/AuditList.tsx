@@ -24,6 +24,11 @@ function groupAuditsByPrefix(audits: ListDoc[]): { prefix: string; label: string
       return base.startsWith(prefix);
     });
     if (items.length > 0) {
+      items.sort((a, b) => {
+        const da = auditDate(a.doc_path);
+        const db = auditDate(b.doc_path);
+        return db.localeCompare(da);
+      });
       groups.push({ prefix, label, items });
       items.forEach((item) => {
         const idx = remaining.indexOf(item);
