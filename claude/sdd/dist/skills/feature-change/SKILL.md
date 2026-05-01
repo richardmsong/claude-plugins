@@ -139,6 +139,8 @@ Why this change is being made. Include the incident, user report, scalability pr
 ## Impact
 Which specs are updated in this commit. Which components implement the change.
 
+**Exhaustive spec inventory:** For every shared concept this ADR changes (bucket names, subject patterns, KV key formats, JWT scopes, payload schemas, state field names, enum values), grep ALL spec files for references to that concept and list every spec that mentions it — not just the ones you intend to edit. If a spec references the old value, it MUST be listed here as requiring an update. Missing a spec from this list is how cross-component bugs ship.
+
 ## Scope
 What's in v1. What's explicitly deferred.
 
@@ -148,6 +150,9 @@ What's in v1. What's explicitly deferred.
 |-----------|------------------|----------------------|
 
 (Skip for docs-only or cosmetic changes with a note.)
+
+### Cross-component interface tests
+For every shared interface this ADR changes (KV buckets, NATS subjects, API contracts), include at least one test case that verifies two different components agree on the interface. Example: "SPA reads from `mclaude-sessions-{uslug}` bucket (same bucket the session-agent writes to)".
 ```
 
 For bug fixes (class A), the ADR is short — an Overview + Motivation + a one-line Impact is often enough. For features and spec changes (B/C), follow the fuller structure in `/plan-feature`. **Every ADR that touches runtime behavior must include at least one integration test case** — this is the smoke test gate that prevents regressions like missing JWT permissions from shipping undetected.
@@ -167,6 +172,10 @@ If the change is cross-cutting, edit the relevant spec file **in the same workin
 Follow the spec editing rules in `/plan-feature` (add with full payload/schema, remove entirely, change in place — no stale text).
 
 If only one spec is impacted, update it. If several are, update all in the same commit.
+
+**Cross-spec grep (mandatory for shared concepts):** After editing the primary specs, grep ALL spec files (`docs/**/spec-*.md`) for every shared identifier the ADR changes — bucket names, subject patterns, KV key formats, field names, enum values. If any other spec references the old value, update it in the same commit. This prevents the most dangerous class of bug: two specs describing the same interface differently, causing components to be implemented against incompatible contracts.
+
+Example: if the ADR renames `mclaude-sessions` to `mclaude-sessions-{uslug}`, grep all specs for `mclaude-sessions` and update every hit — not just spec-state-schema.md but also spec-web.md, spec-nats-payload-schema.md, etc.
 
 **Skip this step if no spec is impacted** — e.g., class A bugs, class D refactors. The ADR alone is the commit.
 

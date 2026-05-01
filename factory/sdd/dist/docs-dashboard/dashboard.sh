@@ -62,8 +62,10 @@ fi
 
 # ---- Backend entrypoint ----
 # Bundle in plugin installs (dist/docs-dashboard.js exists); source in local-dev.
-if [ -f "$PLATFORM_ROOT/dist/docs-dashboard.js" ]; then
-  BACKEND_ENTRY="$PLATFORM_ROOT/dist/docs-dashboard.js"
+# In plugin installs, PLATFORM_ROOT is already the dist/ directory itself, so the
+# bundle is at $PLATFORM_ROOT/docs-dashboard.js (no extra dist/ prefix).
+if [ -f "$PLATFORM_ROOT/docs-dashboard.js" ]; then
+  BACKEND_ENTRY="$PLATFORM_ROOT/docs-dashboard.js"
 else
   BACKEND_ENTRY="$PLATFORM_ROOT/docs-dashboard/src/server.ts"
 fi

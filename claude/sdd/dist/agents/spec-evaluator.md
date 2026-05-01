@@ -38,6 +38,18 @@ Only evaluate against ADRs whose status is `accepted` or `implemented`. The targ
 3. `Glob("docs/**/spec-*.md")` to discover all spec files. Then read only the specs identified in step 2 — the glob is for discovery, not for reading everything. If the ADR references a spec that doesn't exist, that's a gap (`SPEC→FIX`: spec file should be created).
 4. If the ADR's Impact says "no spec update needed": still proceed to Phase 1 (verify the claim).
 
+### Phase 0b — Cross-spec consistency check
+
+After reading the referenced specs, identify every **shared concept** the ADR touches — bucket names, subject patterns, KV key formats, JWT permission scopes, API payload schemas, enum values, state field names. For each shared concept:
+
+1. Grep ALL spec files (not just the ones the ADR references) for mentions of that concept.
+2. If any spec uses a **different name, format, or value** for the same concept, that's a cross-spec inconsistency gap — even if the ADR only explicitly references one of the specs.
+3. Record the inconsistency with direction `SPEC→FIX` on whichever spec is stale.
+
+Example: if the ADR changes KV bucket naming from `mclaude-sessions` to `mclaude-sessions-{uslug}`, and `spec-state-schema.md` uses the new name but `spec-web.md` still says `mclaude-sessions`, that's a gap on spec-web — even if the ADR's Impact section doesn't mention spec-web.
+
+This prevents the most dangerous class of bug: two specs describing the same interface differently, where the dev-harness for each component implements what its own spec says, producing components that can't talk to each other.
+
 ### Phase 1 — ADR → Spec (forward pass)
 
 Walk the ADR section by section: Decisions table, User Flow, Component Changes, Data Model, Error Handling. For each concrete decision (behavior, field, endpoint, flow, error case, schema, constraint, configuration):

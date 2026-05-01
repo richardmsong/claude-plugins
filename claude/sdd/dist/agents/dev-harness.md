@@ -40,6 +40,8 @@ Also check for these common cross-cutting docs if they exist:
 - Doc layout spec (e.g. `docs/spec-doc-layout.md`) — canonical doc partitioning and naming rules
 - Feature list (e.g. `docs/feature-list.md`) — feature IDs and platform support matrix
 
+**Cross-cutting specs are authoritative for shared interfaces.** When the component-local spec references a bucket name, subject pattern, KV key format, or payload schema, always verify the name/format against the cross-cutting spec (e.g. `spec-state-schema.md`, `spec-nats-payload-schema.md`). If the component-local spec and the cross-cutting spec disagree, the cross-cutting spec wins — STOP and report the inconsistency to the master session as backpressure. Do not implement code that follows a stale component-local spec.
+
 **ADR status filter:** Each ADR has a `**Status**:` header (`draft | accepted | implemented | superseded | withdrawn`). When discovering ADRs, read the status line and **only implement against `accepted` or `implemented` ADRs**. Skip `draft` (planning in progress, not final), `superseded` (overridden by a later ADR — follow the pointer), and `withdrawn` (abandoned). Specs (`docs/spec-*.md`) have no status — always read every spec file.
 
 ---
