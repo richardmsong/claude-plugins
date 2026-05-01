@@ -1,6 +1,6 @@
 # ADR-0074: Dashboard Audit Docs
 
-**Status:** accepted  
+**Status:** implemented  
 **Date:** 2026-05-01
 
 ## Context

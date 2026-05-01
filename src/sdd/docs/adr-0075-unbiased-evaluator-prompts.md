@@ -1,6 +1,6 @@
 # ADR-0075: Unbiased Evaluator Prompts
 
-**Status:** accepted  
+**Status:** implemented  
 **Date:** 2026-05-01
 
 ## Context
