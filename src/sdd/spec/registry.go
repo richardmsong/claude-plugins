@@ -1,18 +1,21 @@
 package spec
 
-// Registry is the methodology's own invariant registry. Day-1 contents
-// per ADR-0075. Each entry's verifier exists in src/sdd/spec/.
+// Registry is the methodology's own invariant registry.
+//
+// Day-1 contents per ADR-0075 (post-collapse): no tier field, no
+// introduced_by/promoted_by/superseded_by_consistency, no Modified/Promoted/
+// Deprecated/Superseded sub-block invariants. Two-state status, computed
+// stability, two ADR meta-edges (introduces, withdraws). Each entry's
+// verifier exists in src/sdd/spec/.
 var Registry = []Invariant{
-	// --- Registry entry field invariants (9) ---
+	// --- Registry entry field invariants (6) ---
 	{
 		ID:            "methodology.registry.id_field",
 		Definition:    "Every registry entry has an `id` field that is a unique non-empty string matching the dotted-path regex.",
 		Mechanism:     MechSchema,
 		Verifier:      "registry_test.go::TestRegistryIDField",
 		GlossaryTerms: []string{"registry entry", "id"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:            "methodology.registry.definition_field",
@@ -20,9 +23,7 @@ var Registry = []Invariant{
 		Mechanism:     MechSchema,
 		Verifier:      "registry_test.go::TestRegistryDefinitionField",
 		GlossaryTerms: []string{"registry entry", "definition"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:            "methodology.registry.mechanism_field",
@@ -30,9 +31,7 @@ var Registry = []Invariant{
 		Mechanism:     MechSchema,
 		Verifier:      "registry_test.go::TestRegistryMechanismField",
 		GlossaryTerms: []string{"registry entry", "mechanism"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:            "methodology.registry.verifier_field",
@@ -40,72 +39,33 @@ var Registry = []Invariant{
 		Mechanism:     MechSchema,
 		Verifier:      "registry_test.go::TestRegistryVerifierField",
 		GlossaryTerms: []string{"registry entry", "verifier"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
-	},
-	{
-		ID:            "methodology.registry.tier_field",
-		Definition:    "Every registry entry has a `tier` field whose value is in {draft, active}.",
-		Mechanism:     MechSchema,
-		Verifier:      "registry_test.go::TestRegistryTierField",
-		GlossaryTerms: []string{"registry entry", "tier"},
-		Tier:          TierDraft,
-		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:            "methodology.registry.status_field",
-		Definition:    "Every registry entry has a `status` field whose value is in {active, deprecated, superseded, withdrawn}.",
+		Definition:    "Every registry entry has a `status` field whose value is in {active, withdrawn}.",
 		Mechanism:     MechSchema,
 		Verifier:      "registry_test.go::TestRegistryStatusField",
 		GlossaryTerms: []string{"registry entry", "status"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
-	},
-	{
-		ID:            "methodology.registry.introduced_by_field",
-		Definition:    "Every registry entry has an `introduced_by` field referencing an ADR identifier.",
-		Mechanism:     MechSchema,
-		Verifier:      "registry_test.go::TestRegistryIntroducedByField",
-		GlossaryTerms: []string{"registry entry", "ADR identifier"},
-		Tier:          TierDraft,
-		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
-	},
-	{
-		ID:            "methodology.registry.superseded_by_consistency",
-		Definition:    "A registry entry has `superseded_by` set if and only if its `status` is `superseded`.",
-		Mechanism:     MechSchema,
-		Verifier:      "registry_test.go::TestRegistrySupersededByConsistency",
-		Requires:      []string{"methodology.registry.status_field"},
-		GlossaryTerms: []string{"registry entry", "status"},
-		Tier:          TierDraft,
-		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:            "methodology.registry.glossary_terms_field",
-		Definition:    "Every registry entry has a `glossary_terms` field that is a (possibly empty) list of strings.",
+		Definition:    "Every registry entry has a `glossary_terms` field that is a (possibly empty) list of non-empty strings.",
 		Mechanism:     MechSchema,
 		Verifier:      "registry_test.go::TestRegistryGlossaryTermsField",
 		GlossaryTerms: []string{"registry entry"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 
 	// --- Glossary entry field invariants (4) ---
 	{
 		ID:            "methodology.glossary.term_field",
-		Definition:    "Every glossary entry has a non-empty `term` field unique across all entries.",
+		Definition:    "Every glossary entry has a non-empty `term` field unique within its scope.",
 		Mechanism:     MechSchema,
 		Verifier:      "glossary_test.go::TestGlossaryTermField",
 		GlossaryTerms: []string{"glossary entry"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:            "methodology.glossary.definition_field",
@@ -113,9 +73,7 @@ var Registry = []Invariant{
 		Mechanism:     MechSchema,
 		Verifier:      "glossary_test.go::TestGlossaryDefinitionField",
 		GlossaryTerms: []string{"glossary entry"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:            "methodology.glossary.resolves_to_field",
@@ -124,9 +82,7 @@ var Registry = []Invariant{
 		Verifier:      "glossary_test.go::TestGlossaryResolvesToField",
 		Requires:      []string{"methodology.glossary.term_field"},
 		GlossaryTerms: []string{"glossary entry", "typed binding"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:            "methodology.glossary.scope_field",
@@ -134,77 +90,31 @@ var Registry = []Invariant{
 		Mechanism:     MechSchema,
 		Verifier:      "glossary_test.go::TestGlossaryScopeField",
 		GlossaryTerms: []string{"glossary entry"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 
-	// --- ADR delta sub-block invariants (6) ---
+	// --- ADR delta sub-block invariants (2) ---
 	{
 		ID:            "methodology.adr_delta.added_block",
-		Definition:    "Every `### Added` entry parses to (id, definition, mechanism, verifier, tier, requires) with valid types.",
+		Definition:    "Every `### Added` entry parses to (id, definition, mechanism, verifier, requires) with valid types; may include an optional `supersedes` sub-field naming a predecessor invariant.",
 		Mechanism:     MechAST,
 		Verifier:      "adr_delta_test.go::TestADRDeltaAddedBlock",
 		GlossaryTerms: []string{"ADR delta block"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
-	},
-	{
-		ID:            "methodology.adr_delta.modified_block",
-		Definition:    "Every `### Modified` entry parses to (id, rationale_class) with rationale_class in {mechanical, sharpening}.",
-		Mechanism:     MechAST,
-		Verifier:      "adr_delta_test.go::TestADRDeltaModifiedBlock",
-		GlossaryTerms: []string{"ADR delta block"},
-		Tier:          TierDraft,
-		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
-	},
-	{
-		ID:            "methodology.adr_delta.promoted_block",
-		Definition:    "Every `### Promoted` entry parses to (id, from_tier, to_tier) with both tier values valid.",
-		Mechanism:     MechAST,
-		Verifier:      "adr_delta_test.go::TestADRDeltaPromotedBlock",
-		GlossaryTerms: []string{"ADR delta block"},
-		Tier:          TierDraft,
-		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
-	},
-	{
-		ID:            "methodology.adr_delta.deprecated_block",
-		Definition:    "Every `### Deprecated` entry parses to (id, reason).",
-		Mechanism:     MechAST,
-		Verifier:      "adr_delta_test.go::TestADRDeltaDeprecatedBlock",
-		GlossaryTerms: []string{"ADR delta block"},
-		Tier:          TierDraft,
-		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
-	},
-	{
-		ID:            "methodology.adr_delta.superseded_block",
-		Definition:    "Every `### Superseded` entry parses to (old_id, new_id, rationale).",
-		Mechanism:     MechAST,
-		Verifier:      "adr_delta_test.go::TestADRDeltaSupersededBlock",
-		GlossaryTerms: []string{"ADR delta block"},
-		Tier:          TierDraft,
-		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:            "methodology.adr_delta.withdrawn_block",
-		Definition:    "Every `### Withdrawn` entry parses to (id, reason).",
+		Definition:    "Every `### Withdrawn` entry parses to (id, reason); the named invariant's verifier file must be deleted in the same commit.",
 		Mechanism:     MechAST,
 		Verifier:      "adr_delta_test.go::TestADRDeltaWithdrawnBlock",
 		GlossaryTerms: []string{"ADR delta block"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 
 	// --- Cross-cutting (3) ---
 	{
 		ID:         "methodology.registry.no_orphans",
-		Definition: "Every active or deprecated registry entry's verifier reference resolves to an existing file (and existing test function for Go test refs); every declared verifier reference is named by at most one registry entry.",
+		Definition: "Every active registry entry's verifier reference resolves to an existing file (and existing test function for Go test refs); every declared verifier reference is named by at most one registry entry.",
 		Mechanism:  MechCompleteness,
 		Verifier:   "cross_cutting_test.go::TestNoOrphans",
 		Requires: []string{
@@ -213,30 +123,25 @@ var Registry = []Invariant{
 			"methodology.registry.status_field",
 		},
 		GlossaryTerms: []string{"registry entry", "verifier", "status"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:         "methodology.adr.delta_reconciles",
-		Definition: "The current registry contents equal the integral of (Added minus Withdrawn) deltas across all live ADRs.",
+		Definition: "The current registry contents equal the integral of (Added minus Withdrawn) deltas across all live ADRs; supersession is recorded as Added with a supersedes sub-field, marking the predecessor withdrawn.",
 		Mechanism:  MechCompleteness,
 		Verifier:   "cross_cutting_test.go::TestDeltaReconciles",
 		Requires: []string{
 			"methodology.registry.id_field",
 			"methodology.registry.status_field",
-			"methodology.registry.introduced_by_field",
 			"methodology.adr_delta.added_block",
 			"methodology.adr_delta.withdrawn_block",
 		},
 		GlossaryTerms: []string{"registry entry", "ADR delta block"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 	{
 		ID:         "methodology.glossary.complete",
-		Definition: "Every term listed in `glossary_terms` of any active or deprecated registry entry resolves to a typed binding or a glossary entry.",
+		Definition: "Every term listed in `glossary_terms` of any active registry entry resolves to a typed binding or a glossary entry.",
 		Mechanism:  MechSchema,
 		Verifier:   "cross_cutting_test.go::TestGlossaryComplete",
 		Requires: []string{
@@ -245,8 +150,6 @@ var Registry = []Invariant{
 			"methodology.glossary.term_field",
 		},
 		GlossaryTerms: []string{"registry entry", "glossary entry", "typed binding"},
-		Tier:          TierDraft,
 		Status:        StatusActive,
-		IntroducedBy:  "adr-0075",
 	},
 }

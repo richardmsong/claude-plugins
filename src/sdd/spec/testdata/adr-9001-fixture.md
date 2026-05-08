@@ -4,34 +4,24 @@
 
 ## Overview
 
-Test fixture exercising every sub-block kind of the Invariant Delta block.
+Test fixture exercising the two sub-block kinds of the Invariant Delta block
+under the post-collapse model: Added (with optional supersedes) and Withdrawn.
 
 ## Invariant Delta
 
 ### Added
 - methodology.test.fixture_added
-  Definition: Every fixture entry parses cleanly.
+  Definition: A simple fixture invariant.
   Mechanism: schema
   Verifier: fixture_test.go::TestFixture
-  Tier: draft
   Requires: []
 
-### Modified
-- methodology.test.fixture_modified
-  Class: sharpening
-
-### Promoted
-- methodology.test.fixture_promoted
-  From_tier: draft
-  To_tier: active
-
-### Deprecated
-- methodology.test.fixture_deprecated
-  Reason: superseded by a newer invariant
-
-### Superseded
-- methodology.test.fixture_old → methodology.test.fixture_new
-  Rationale: contract changed substantively
+- methodology.test.fixture_supersession
+  Definition: Replacement for the old fixture.
+  Mechanism: schema
+  Verifier: fixture_test.go::TestFixture
+  Requires: []
+  Supersedes: methodology.test.fixture_legacy
 
 ### Withdrawn
 - methodology.test.fixture_withdrawn

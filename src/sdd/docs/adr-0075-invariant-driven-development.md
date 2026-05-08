@@ -40,9 +40,9 @@ V2 shifts the contract surface from prose to executable artifacts (test files + 
 | Per-mechanism tool choices (Go projects) | Behavior: `go test` + table tests; Property: `rapid`; Architecture: `go-arch-lint` + `depguard`; AST: `semgrep` + `go/analysis`; Schema: `protobuf` + `buf`; Type system: `exhaustive`, `nilaway`, sealed interfaces; Codegen completeness: `go:generate` + reflection; Mutation: `go-mutesting` (audit-only) | Mature, Go-native, refactor-friendly. Other languages get analogous default toolchains documented in the methodology spec. |
 | Plugin shape | Evolution of spec-driven-dev. Existing skills (`/plan-feature`, `/feature-change`) extend to support invariants additively. ADRs without Invariant Delta blocks remain valid. | Solo-developer-friendly: no parallel modes, no dispatch logic, no formal cutover. Invariants are an opt-in feature per ADR. |
 | Bootstrap project | agent-plugins itself; methodology's own invariants register first (Day 1), consumer-project invariants follow (Day N) | Self-application is evidence of generality. Proving the framework on its own meta-level before consumers bet on it de-risks adoption. |
-| Invariant stability tier | Two-tier system: `draft` / `active`. Default on introduction = `draft`. One promotion ADR per invariant (`draft → active`); evidence required (audit survival, utility, surrounding-code stability). | Four tiers (experimental/provisional/stable/core) imposed too many promotion ADRs (~12/month at scale). Two tiers cut throughput 2-3× while preserving the load-bearing distinction between "we're trying this" and "we're committed." Provisional collapses into draft (drafts can survive long); core converts to a computed attribute. |
-| Core attribute (computed) | `core: true` automatically set when ≥ 3 other ADRs rely on the invariant as load-bearing; also manually settable for explicit declarations. Affects removal ceremony (core requires successor invariant or explicit redesign justification). | Core-ness is a *consequence* of architectural significance, not a separate governance state. Computing it from the relied-on count makes the signal evidence-based and game-resistant; manual override exists for the rare case where authorial judgment precedes evidence. Reuses the lineage-dashboard concept already established for ADR↔spec relationships. |
-| Invariant lifecycle status | Orthogonal axis: `active` / `deprecated` / `superseded` / `withdrawn`. Withdrawal requires verifier file deletion in the same commit. | Separates "is this still enforced?" (status) from "how committed are we?" (tier). Allows graceful deprecation periods for active invariants and lightweight Day-2 revocation for drafts. |
+| Stability is computed | No `tier` field. Stability is derived from `citation_count(X) = |{Y : Y in Registry, X in Y.Requires}|`. Thresholds (configurable): 0 → uncited, 1-2 → stable, ≥3 → core. The dashboard renders this as a computed badge. | Stability is observed, not declared. An invariant becomes stable as the system organically depends on it; no manual promotion ceremony, no evidence-gathering ADRs. The methodology surfaces stability empirically. Manual override (`manual_stability: core`) exists for rare upfront declarations (security boundaries) but defaults are computed. |
+| Invariant status | Two states: `active` / `withdrawn`. `withdrawn` invariants may have `superseded_by` set if there's a successor; otherwise terminal. | Deprecation as a separate state was redundant — the warning function is served by the reaction process when withdrawal is proposed. Superseded as a separate state was redundant — supersession is a relationship recorded on the new invariant, with old marked withdrawn. Two states are sufficient. |
+| ADR meta-edges to invariants | Two only: `introduces` (with optional `supersedes` sub-field on each Added entry) and `withdraws` (terminal). All other lifecycle events are computed or fold into these. | Modify (Class A) is registry edit only — git log is the audit; no ADR delta needed. Modify (Class B/C) becomes Supersession (introduce new version superseding old). Promote/Deprecate are emergent or unnecessary. Two meta-edges keep the methodology's structural events minimal. |
 | Conflict resolution authority | Authority hierarchy: statement > verifier > code. Operational reality: verifier is what CI runs. When statement and verifier conflict at audit, the verifier is the bug (it should be a deterministic encoding of the statement). Statement is revised only when audit reveals the original statement was ambiguous. | Three artifacts encoding the same truth means drift is possible. An explicit hierarchy gives a deterministic resolution rule rather than living with silent drift. |
 | Verifier-required at ADR drafting | Every Added/Modified delta entry ships with its working verifier code in the same commit. ADRs cannot finalize while any newly-added invariant lacks a verifier that compiles and runs. The invariant-compiler subagent is invoked inline during ADR authoring, not as a separate post-finalization step. | Invariant statements are provisional until the verifier exists — writing the verifier is the precision-forcing function that exposes ambiguities the prose hides. Speculative invariants ("nice if we tracked X") get filtered because they can't survive verifier-authoring. The registry only contains contracts you can prove. |
 | Independence rule | Registered invariants are pairwise logically independent. If A's truth implies B's truth, B is not a separate invariant — consolidate into A or document as a corollary in A's prose. The registry is a minimal set of claims, not a decomposed catalog. New claims become new invariants if and only if they are not logically implied by any existing one. | Bounds registry growth deterministically. Decomposition isn't "lazy" or "eager" — it's a consequence of the independence rule. A schema's per-field validations are implied by "schema well-formed" and don't get registered separately; cross-row uniqueness isn't implied and does. |
@@ -132,28 +132,32 @@ The registry-coverage CI gate runs against the live set, growing with the regist
 
 ## Data Model
 
-### Invariant registry entry (format pending; conceptual shape)
+### Invariant registry entry
 
 ```
 - id: <stable_dot_separated_name>
-  definition: <one-line natural language contract; no AND; changes trigger Modified deltas>
-  comments: <free-form notes: edge cases, performance, history, hints; advisory only>
+  definition: <one-line contract; no AND; substantive changes are supersessions>
+  comments: <free-form notes; advisory only; freely editable>
   mechanism: unit | table | property | arch | ast | type | schema | completeness | integration | journey
-  verifier: <path/to/test_file::TestName | path/to/.arch/rule.yaml | ...>
-  requires: [list of invariant IDs this verifier presupposes]
+  verifier: <path/to/test_file.go::TestName | path/to/rule.yaml | ...>
+  requires: [list of invariant IDs this verifier presupposes]   # operational DAG edges
+  supersedes: <invariant ID this one replaces, if any>          # set on Added with supersedes sub-field
   glossary_terms: [list of terms in definition that need resolution]
-  tier: draft | active
-  status: active | deprecated | superseded | withdrawn
-  introduced_by: adr-NNNN
-  promoted_by: adr-MMMM            # set when tier flips draft → active
-  superseded_by: <id of replacement, if status = superseded>
-  core: <computed: true if ≥3 ADRs rely on this; can be manually overridden>
-  relied_on_by: [adr-NNNN, adr-MMMM, ...]   # populated by docs-mcp from ADR Relies On blocks
+  status: active | withdrawn
+  manual_stability: <optional override: stable | core>          # rare; for upfront declarations
 ```
 
-`definition` is the contract surface; edits trigger Modified-delta machinery. `comments` is advisory annotation; edits are free.
-`tier` governs *change process* (lightweight for draft, deprecation-period for active). `status` governs *whether the verifier runs and how the registry handles it*. `core` is a derived attribute computed from the reliance graph; it elevates the removal ceremony but doesn't add a governance state.
-`requires` lists invariant IDs that this invariant's verifier presupposes — the operational dependency edges that form the DAG. The DAG must be acyclic; CI gate enforces.
+**Computed (not stored):**
+
+```
+  citation_count = |{Y : Y in Registry, X in Y.Requires}|       # invariants that require X
+  stability       = manual_stability OR
+                    0 → "uncited"; 1-2 → "stable"; ≥3 → "core"
+  superseded_by   = <successor_id> iff some Y in Registry has Y.Supersedes == X.ID
+                    (i.e., reverse lookup; not a stored field)
+```
+
+`definition` is the contract surface; substantive changes route through Supersession (not Modified). `comments` is advisory; edits don't trigger reactions. `requires` is the operational DAG; CI gate enforces acyclicity. `supersedes` records that this invariant replaces a predecessor — the predecessor's `status` flips to `withdrawn`. Stability is computed; `manual_stability` is the rare override for upfront declarations.
 
 ### Glossary entry (format pending)
 
@@ -166,39 +170,29 @@ The registry-coverage CI gate runs against the live set, growing with the regist
 
 ### ADR Invariant Delta block
 
-Each ADR that affects invariants includes a structured block with up to six delta kinds:
+Two sub-block kinds, no more:
 
 ```markdown
 ## Invariant Delta
 
 ### Added
-- `<id>`: <definition> (mechanism: <m>, verifier: <path>, tier: draft, requires: [<ids>])
-  *(Newly registered invariants default to tier `draft` unless explicitly introduced as `active` with justification. Verifier file MUST exist and compile in the same commit. Optional: comments inline.)*
-
-### Modified
-- `<id>`: <what changed in the statement, mechanism, or verifier — and why>
-
-### Promoted
-- `<id>`: draft → active (with evidence per promotion criteria)
-  *(Tier-only change; statement and verifier unchanged.)*
-
-### Deprecated
-- `<id>`: <deprecation reason; expected withdrawal ADR / cycle>
-  *(Verifier still runs; status flips active → deprecated.)*
-
-### Superseded
-- `<id>` → `<new_id>`: <rationale; new invariant takes effect, old's verifier removed concurrently>
+- `<id>`: <definition>
+    mechanism: <m>
+    verifier: <path>
+    requires: [<ids>]
+    supersedes: <predecessor_id>   # OPTIONAL; if set, predecessor flips to withdrawn
+    comments: |
+      <optional free-form annotations>
+  *(Verifier file MUST exist and compile in the same commit. If `supersedes` is set, the predecessor's verifier file must be deleted in the same commit.)*
 
 ### Withdrawn
-- `<id>`: <reason — typically "experiment did not pan out" or "no longer required because ...">
+- `<id>`: <reason — terminal removal, no successor>
   *(Verifier file MUST be deleted in the same commit. Registry entry retained with status=withdrawn for historical traceability only.)*
-
-### Relies On
-- `<id>`: <how this ADR depends on the invariant>
-  *(Reference without modification. Feeds the reliance graph that computes `core` attribute. Required when an ADR's decisions rely on an existing invariant being true.)*
 ```
 
-The CI gate verifies that the running registry equals the sum of all ADR deltas (Added − Withdrawn, with Modified/Promoted/Deprecated/Superseded tracked through status fields and the reliance graph maintained from `Relies On` blocks).
+The CI gate verifies that the running registry equals the sum of `Added` − `Withdrawn` deltas (where supersession also marks the predecessor withdrawn). Citation count and stability are computed from the registry's `Requires` graph.
+
+**Class A (mechanical) modifications** — typo fix, mechanism rename, verifier path update — are direct registry edits without an Invariant Delta block. The git commit is the audit trail; no ADR ceremony needed for non-substantive changes.
 
 ## Self-Application: Methodology as Zeroth Invariant Set
 
@@ -347,12 +341,9 @@ Modifications to `core` invariants are stricter:
 
 #### Reaction process: how relying ADRs respond to changes
 
-When a `Modified` (Class B sharpening), `Superseded`, or `Withdrawn` delta affects an invariant, ADRs with stake in that invariant must "react" — explicitly acknowledge the change before the triggering ADR can merge. Two kinds of stake produce reaction artifacts:
+When a `Modified` (Class B sharpening), `Superseded`, or `Withdrawn` delta affects an invariant X, the change cascades to every invariant Y that has X in its `Requires` (operational dependency in the DAG). Each such Y's introducing ADR must "react" — its owner explicitly acknowledges the change before the triggering ADR can merge.
 
-1. **`relies_on` edges** — ADRs that explicitly declared reliance on the affected invariant.
-2. **Meta-edges** (`introduces`, `modifies`) — ADRs that authored the invariant or its prior modifications. These ADRs' decisions live structurally in the invariant they touched.
-
-(Meta-edges trigger reactions but still don't count toward the `core` citation count — anti-gaming for `core` is a separate concern from reaction triggering.)
+ADRs themselves do not have `relies_on` edges. An ADR's stake in any pre-existing invariant is captured *structurally* by the `requires` edges of the invariants it introduces. So when X changes, reactions cascade via the invariant DAG to the introducing ADRs of dependent invariants — not to ADRs with explicit `relies_on` declarations (which don't exist).
 
 The reaction is a data-driven workflow, not an email or hand-wave.
 
@@ -387,10 +378,8 @@ Reaction artifacts are committed alongside the triggering ADR's PR; their existe
 
 | Ack | Meaning | Effect |
 |---|---|---|
-| `migrate` | "I reviewed; my decisions still apply" | For Class B sharpening: edge stays on the now-sharpened invariant. For supersession: edge auto-migrates to the successor. For meta-edge: introduced invariant still works as-is. |
-| `update` | "I need to author a follow-up ADR adjusting my decisions" | Triggering ADR can merge only after follow-up ADR is committed. For meta-edge: follow-up amends the introduced invariant (e.g., changes its `requires`, rewrites its verifier). |
-| `accept-unpinning` | "Drop the relationship entirely" | For `relies_on`: drop the reliance edge; relying ADR is now un-pinned. For meta-edge: withdraw the introduced invariant (Withdrawn delta on it). |
-| `object` | "Don't proceed with this change" | Triggering ADR blocked until objection is resolved (escalation to project owner / discussion / re-author) |
+| `update` | "I'll author a follow-up ADR amending the dependent invariant." | Triggering ADR can merge only after the follow-up commits. The follow-up amends the dependent invariant (modifies its statement / verifier / `requires`, or withdraws it). |
+| `object` | "Don't proceed with this change." | Triggering ADR blocked until objection is resolved (escalation to project owner / discussion / re-author). |
 
 **State machine:**
 

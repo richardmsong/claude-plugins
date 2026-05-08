@@ -1,7 +1,6 @@
 package spec
 
 import (
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -62,45 +61,11 @@ func TestRegistryVerifierField(t *testing.T) {
 	}
 }
 
-// TestRegistryTierField verifies methodology.registry.tier_field.
-func TestRegistryTierField(t *testing.T) {
-	for _, inv := range Registry {
-		if !ValidTier(inv.Tier) {
-			t.Errorf("%s: tier %q not in {draft, active}", inv.ID, inv.Tier)
-		}
-	}
-}
-
 // TestRegistryStatusField verifies methodology.registry.status_field.
 func TestRegistryStatusField(t *testing.T) {
 	for _, inv := range Registry {
 		if !ValidStatus(inv.Status) {
-			t.Errorf("%s: status %q not in {active, deprecated, superseded, withdrawn}", inv.ID, inv.Status)
-		}
-	}
-}
-
-var adrIDRE = regexp.MustCompile(`^adr-[0-9]{4}(-[a-z0-9-]+)?$`)
-
-// TestRegistryIntroducedByField verifies methodology.registry.introduced_by_field.
-func TestRegistryIntroducedByField(t *testing.T) {
-	for _, inv := range Registry {
-		if inv.IntroducedBy == "" {
-			t.Errorf("%s: introduced_by is empty", inv.ID)
-			continue
-		}
-		if !adrIDRE.MatchString(inv.IntroducedBy) {
-			t.Errorf("%s: introduced_by %q not in form `adr-NNNN` or `adr-NNNN-<slug>`", inv.ID, inv.IntroducedBy)
-		}
-	}
-}
-
-// TestRegistrySupersededByConsistency verifies methodology.registry.superseded_by_consistency.
-func TestRegistrySupersededByConsistency(t *testing.T) {
-	for _, inv := range Registry {
-		if (inv.Status == StatusSuperseded) != (inv.SupersededBy != "") {
-			t.Errorf("%s: superseded_by=%q vs status=%q (must be set iff status=superseded)",
-				inv.ID, inv.SupersededBy, inv.Status)
+			t.Errorf("%s: status %q not in {active, withdrawn}", inv.ID, inv.Status)
 		}
 	}
 }

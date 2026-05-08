@@ -19,7 +19,7 @@ func TestNoOrphans(t *testing.T) {
 	seen := make(map[string]string) // verifier ref -> first invariant ID
 
 	for _, inv := range Registry {
-		if inv.Status != StatusActive && inv.Status != StatusDeprecated {
+		if inv.Status != StatusActive {
 			continue
 		}
 		ref := inv.Verifier
@@ -136,7 +136,7 @@ func TestGlossaryComplete(t *testing.T) {
 	}
 
 	for _, inv := range Registry {
-		if inv.Status != StatusActive && inv.Status != StatusDeprecated {
+		if inv.Status != StatusActive {
 			continue
 		}
 		for _, term := range inv.GlossaryTerms {

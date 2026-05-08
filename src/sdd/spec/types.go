@@ -29,49 +29,40 @@ func ValidMechanism(m Mechanism) bool {
 	return false
 }
 
-// Tier governs change ceremony.
-type Tier string
-
-const (
-	TierDraft  Tier = "draft"
-	TierActive Tier = "active"
-)
-
-func ValidTier(t Tier) bool { return t == TierDraft || t == TierActive }
-
-// Status governs whether the verifier runs and how the registry handles the entry.
+// Status is the two-state lifecycle: invariant is either active or withdrawn.
+// Supersession is encoded via the Supersedes field (forward) or computed via
+// reverse lookup (i.e., another invariant naming this one as its predecessor).
 type Status string
 
 const (
-	StatusActive     Status = "active"
-	StatusDeprecated Status = "deprecated"
-	StatusSuperseded Status = "superseded"
-	StatusWithdrawn  Status = "withdrawn"
+	StatusActive    Status = "active"
+	StatusWithdrawn Status = "withdrawn"
 )
 
-func ValidStatus(s Status) bool {
-	switch s {
-	case StatusActive, StatusDeprecated, StatusSuperseded, StatusWithdrawn:
-		return true
-	}
-	return false
-}
+func ValidStatus(s Status) bool { return s == StatusActive || s == StatusWithdrawn }
+
+// Stability is the computed governance level, derived from citation count.
+// It's not stored on the invariant; it's a query result.
+type Stability string
+
+const (
+	StabilityUncited Stability = "uncited" // citation_count == 0
+	StabilityStable  Stability = "stable"  // citation_count 1–2
+	StabilityCore    Stability = "core"    // citation_count ≥ 3 OR manual_stability override
+)
 
 // Invariant is a single registry entry.
 type Invariant struct {
-	ID            string
-	Definition    string   // Contract; one-line; changes trigger Modified deltas.
-	Comments      string   // Free-form annotations; advisory; freely editable.
-	Mechanism     Mechanism
-	Verifier      string   // Format: "path/to/file.go::TestName" or "path/to/rule.yaml".
-	Requires      []string // IDs of invariants this verifier presupposes.
-	GlossaryTerms []string // Terms in Definition that need resolution.
-	Tier          Tier
-	Status        Status
-	IntroducedBy  string // ADR reference, e.g. "adr-0075".
-	PromotedBy    string // Set when tier flips draft → active.
-	SupersededBy  string // Set when status == superseded.
-	Core          bool   // Computed; true if ≥3 ADRs rely on this.
+	ID              string
+	Definition      string    // Contract; one-line; substantive changes route through Supersession.
+	Comments        string    // Free-form annotations; advisory; freely editable.
+	Mechanism       Mechanism
+	Verifier        string    // Format: "path/to/file.go::TestName" or "path/to/rule.yaml".
+	Requires        []string  // IDs of invariants this verifier presupposes (operational DAG).
+	Supersedes      string    // ID of predecessor invariant this one replaces (optional).
+	GlossaryTerms   []string  // Terms in Definition that need resolution.
+	Status          Status    // active | withdrawn.
+	ManualStability Stability // Optional upfront override; usually empty (computed).
 }
 
 // GlossaryScope is the closed enum for glossary entry scope.
