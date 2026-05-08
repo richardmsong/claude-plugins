@@ -421,8 +421,64 @@ Any `object` ack blocks indefinitely until resolved through human discussion (wh
 
 **Dashboard surface:**
 
-- **Reactions queue** (per owner): list of pending reactions with deadlines, target invariants, triggering ADRs. One-click ack actions for simple cases.
+- **Reactions queue** (per owner): list of pending reactions with deadlines, target invariants, triggering ADRs. Grouped by LLM-suggested ack class (clear re-pins, needs judgment). One-click batch ack for high-confidence groups.
 - **Triggering-ADR view**: shows which reactions are pending, acked, expired, or objected — author sees blockers in real time.
+
+#### Reaction triage assistant (LLM-enhanced)
+
+Manually reviewing every reaction artifact is impractical at scale (a single-person project may receive dozens per quarter; multi-team projects, hundreds). The methodology includes an LLM-driven triage assistant that *prepares* each reaction for human ack — without ever making the ack itself or gating CI.
+
+**What the assistant does (per reaction artifact, fresh context per call):**
+
+Reads:
+- Triggering ADR's diff (what's changing)
+- Target invariant (old form + new form)
+- Relying ADR's full text (what decisions reference this invariant)
+- Registry entry for the invariant + its glossary terms
+
+Produces a structured suggestion that's written into the reaction artifact:
+
+```yaml
+llm_suggestion:
+  ack: re-pin              # or update, migrate, accept-unpinning, undecided
+  confidence: high         # high | medium | low
+  rationale: |
+    <one paragraph explaining why this ack is suggested, citing
+     specific decisions in the relying ADR that are or aren't
+     affected by the change>
+  draft_followup: null     # or path to draft ADR if ack=update is suggested
+  flags: []                # warnings that bias toward human review
+human_decision: null       # filled in only when owner acks
+```
+
+**Per-tier auto-ack policy (per-project, opt-in, defaults conservative):**
+
+| Target invariant | LLM confidence | Default behavior |
+|---|---|---|
+| `draft`, any confidence high | high | Auto-ack with LLM suggestion after 1 cycle of owner silence |
+| `draft`, low confidence | low | Require explicit owner ack; LLM suggestion advisory |
+| `active`, core=false, high | high | Pre-fill ack with LLM suggestion; one-click approve. No auto-ack on silence. |
+| `active`, core=false, low | low | Require explicit owner ack; LLM suggestion advisory |
+| `active`, core=true | any | **Always require explicit owner ack.** LLM suggestion advisory only. |
+
+Projects may tighten the policy (e.g., disable auto-ack entirely while building trust in the assistant) or loosen it as observed accuracy improves.
+
+**Boundaries the assistant must not cross:**
+
+1. **Never auto-`object`.** If the LLM thinks the change is dangerous, it sets `confidence: low` with a flag and routes to human review. It never blocks the triggering ADR.
+2. **Never auto-merge follow-up ADRs.** Drafted follow-ups are committed manually after owner review.
+3. **Never override owner decisions.** Owner's manual ack supersedes any LLM suggestion without complaint.
+4. **Never decide on `core` invariants.** Always advisory; explicit owner ack required.
+
+**CI / cost / failure modes:**
+
+- The triage assistant runs as part of reaction artifact generation (PR open) or on-demand. It's not a CI gate — merge gating still depends on the deterministic `human_decision` field being acked.
+- Token cost: ~20–50k per reaction; cached on triggering-ADR content hash. A typical project's reaction load is a small fraction of overall LLM spend.
+- Failure modes: LLM unavailable → reaction artifact generated without `llm_suggestion`; owner reviews manually as if assistant didn't exist. LLM produces nonsense → owner overrides with manual ack; flagged for assistant retraining/prompt-tuning if patterns recur.
+
+**Why this preserves the methodology's core principle:**
+
+LLMs at authoring time, not CI time. The triage assistant is between authoring and validation — it compresses human judgment effort by batching and pre-classifying, but every ack is still an explicit human decision recorded as data. The reaction merge-gate remains deterministic: it checks `human_decision`, not `llm_suggestion`.
 
 ### Lineage and reliance graph
 
