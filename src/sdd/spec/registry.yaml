@@ -1,0 +1,174 @@
+# Methodology's own invariant registry.
+# Day-1 contents per ADR-0075. Each entry's verifier exists in src/sdd/spec/.
+#
+# Schema (per ADR-0075):
+#   id            : stable dotted-path string
+#   definition    : one-line contract; no AND; substantive changes route through Supersession
+#   comments      : optional free-form annotations; advisory; freely editable
+#   mechanism     : unit | table | property | arch | ast | type | schema | completeness | integration | journey
+#   verifier      : path[::TestFunc] reference
+#   requires      : list of invariant IDs this verifier presupposes
+#   supersedes    : optional ID this entry replaces (predecessor flips to withdrawn)
+#   glossary_terms: list of terms in definition that need resolution
+#   status        : active | withdrawn
+#   manual_stability: optional override; values: stable | core
+#
+# Computed (not stored):
+#   citation_count = |{Y : Y in Registry, X in Y.Requires}|
+#   stability      = manual_stability OR (0 -> uncited; 1-2 -> stable; >=3 -> core)
+#   superseded_by  = reverse lookup: any Y where Y.Supersedes == X.ID
+
+# --- Registry entry field invariants (6) ---
+
+- id: methodology.registry.id_field
+  definition: Every registry entry has an `id` field that is a unique non-empty string matching the dotted-path regex.
+  mechanism: schema
+  verifier: registry_test.go::TestRegistryIDField
+  glossary_terms: [registry entry, id]
+  status: active
+
+- id: methodology.registry.definition_field
+  definition: Every registry entry has a `definition` field that is a non-empty single-line string.
+  mechanism: schema
+  verifier: registry_test.go::TestRegistryDefinitionField
+  glossary_terms: [registry entry, definition]
+  status: active
+
+- id: methodology.registry.mechanism_field
+  definition: Every registry entry has a `mechanism` field whose value is in the closed taxonomy {unit, table, property, arch, ast, type, schema, completeness, integration, journey}.
+  mechanism: schema
+  verifier: registry_test.go::TestRegistryMechanismField
+  glossary_terms: [registry entry, mechanism]
+  status: active
+
+- id: methodology.registry.verifier_field
+  definition: Every registry entry has a `verifier` field that is a non-empty string in the form `path` or `path::FuncName`.
+  mechanism: schema
+  verifier: registry_test.go::TestRegistryVerifierField
+  glossary_terms: [registry entry, verifier]
+  status: active
+
+- id: methodology.registry.status_field
+  definition: Every registry entry has a `status` field whose value is in {active, withdrawn}.
+  mechanism: schema
+  verifier: registry_test.go::TestRegistryStatusField
+  glossary_terms: [registry entry, status]
+  status: active
+
+- id: methodology.registry.glossary_terms_field
+  definition: Every registry entry has a `glossary_terms` field that is a (possibly empty) list of non-empty strings.
+  mechanism: schema
+  verifier: registry_test.go::TestRegistryGlossaryTermsField
+  glossary_terms: [registry entry]
+  status: active
+
+# --- Glossary entry field invariants (4) ---
+
+- id: methodology.glossary.term_field
+  definition: Every glossary entry has a non-empty `term` field unique within its scope.
+  mechanism: schema
+  verifier: glossary_test.go::TestGlossaryTermField
+  glossary_terms: [glossary entry]
+  status: active
+
+- id: methodology.glossary.definition_field
+  definition: Every glossary entry has a non-empty `definition` field.
+  mechanism: schema
+  verifier: glossary_test.go::TestGlossaryDefinitionField
+  glossary_terms: [glossary entry]
+  status: active
+
+- id: methodology.glossary.resolves_to_field
+  definition: Every glossary entry has a `resolves_to` field that names a typed binding, an existing registry entry ID, or another glossary term.
+  mechanism: schema
+  verifier: glossary_test.go::TestGlossaryResolvesToField
+  requires: [methodology.glossary.term_field]
+  glossary_terms: [glossary entry, typed binding]
+  status: active
+
+- id: methodology.glossary.scope_field
+  definition: Every glossary entry has a `scope` field whose value is in {methodology, project-cross-cutting, component-local}.
+  mechanism: schema
+  verifier: glossary_test.go::TestGlossaryScopeField
+  glossary_terms: [glossary entry]
+  status: active
+
+# --- ADR delta sub-block invariants (2) ---
+
+- id: methodology.adr_delta.added_block
+  definition: Every `### Added` entry parses to (id, definition, mechanism, verifier, requires) with valid types; may include an optional `supersedes` sub-field naming a predecessor invariant.
+  mechanism: ast
+  verifier: adr_delta_test.go::TestADRDeltaAddedBlock
+  glossary_terms: [ADR delta block]
+  status: active
+
+- id: methodology.adr_delta.withdrawn_block
+  definition: Every `### Withdrawn` entry parses to (id, reason); the named invariant's verifier file must be deleted in the same commit.
+  mechanism: ast
+  verifier: adr_delta_test.go::TestADRDeltaWithdrawnBlock
+  glossary_terms: [ADR delta block]
+  status: active
+
+# --- Cross-cutting (6) ---
+
+- id: methodology.registry.no_orphans
+  definition: Every active registry entry's verifier reference resolves to an existing file (and existing test function for Go test refs); every declared verifier reference is named by at most one registry entry.
+  mechanism: completeness
+  verifier: cross_cutting_test.go::TestNoOrphans
+  requires:
+    - methodology.registry.id_field
+    - methodology.registry.verifier_field
+    - methodology.registry.status_field
+  glossary_terms: [registry entry, verifier, status]
+  status: active
+
+- id: methodology.adr.delta_reconciles
+  definition: The current registry contents equal the integral of (Added minus Withdrawn) deltas across all live ADRs; supersession is recorded as Added with a supersedes sub-field, marking the predecessor withdrawn.
+  mechanism: completeness
+  verifier: cross_cutting_test.go::TestDeltaReconciles
+  requires:
+    - methodology.registry.id_field
+    - methodology.registry.status_field
+    - methodology.adr_delta.added_block
+    - methodology.adr_delta.withdrawn_block
+  glossary_terms: [registry entry, ADR delta block]
+  status: active
+
+- id: methodology.glossary.complete
+  definition: Every term listed in `glossary_terms` of any active registry entry resolves to a typed binding or a glossary entry.
+  mechanism: schema
+  verifier: cross_cutting_test.go::TestGlossaryComplete
+  requires:
+    - methodology.registry.glossary_terms_field
+    - methodology.registry.status_field
+    - methodology.glossary.term_field
+  glossary_terms: [registry entry, glossary entry, typed binding]
+  status: active
+
+- id: methodology.registry.requires_targets_exist
+  definition: Every invariant ID listed in any registry entry's `requires` field references an invariant that exists in the registry.
+  mechanism: completeness
+  verifier: registry_test.go::TestRegistryRequiresTargetsExist
+  requires: [methodology.registry.id_field]
+  glossary_terms: [registry entry, id]
+  status: active
+
+- id: methodology.registry.requires_dag_acyclic
+  definition: The directed graph formed by registry entries' `requires` edges is acyclic.
+  mechanism: completeness
+  verifier: registry_test.go::TestRegistryRequiresDAGAcyclic
+  requires:
+    - methodology.registry.id_field
+    - methodology.registry.requires_targets_exist
+  glossary_terms: [registry entry]
+  status: active
+
+- id: methodology.registry.supersedes_targets_exist
+  definition: Every registry entry's `supersedes` field, when set, references an existing registry entry whose status is `withdrawn`.
+  mechanism: completeness
+  verifier: registry_test.go::TestRegistrySupersedesTargetsExist
+  requires:
+    - methodology.registry.id_field
+    - methodology.registry.status_field
+  glossary_terms: [registry entry, status]
+  status: active

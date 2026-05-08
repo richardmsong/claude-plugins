@@ -1,0 +1,53 @@
+# Methodology's own glossary.
+# Day-1 contents are the terms used by Day-1 invariant definitions.
+#
+# Schema:
+#   term       : noun phrase or predicate; unique within scope
+#   definition : one-line operational definition
+#   resolves_to: typed binding (Type.Method), invariant ID, or another glossary term
+#   scope      : methodology | project-cross-cutting | component-local
+
+- term: registry entry
+  definition: A single record in the methodology's invariant registry, of type spec.Invariant.
+  resolves_to: spec.Invariant
+  scope: methodology
+
+- term: id
+  definition: The unique stable string identifier of a registry entry; the value of the spec.Invariant.ID field.
+  resolves_to: spec.Invariant.ID
+  scope: methodology
+
+- term: definition
+  definition: The one-line contract statement of a registry entry; the value of the spec.Invariant.Definition field.
+  resolves_to: spec.Invariant.Definition
+  scope: methodology
+
+- term: mechanism
+  definition: The verification mechanism category; the value of the spec.Invariant.Mechanism field; in the closed taxonomy declared by spec.Mechanism.
+  resolves_to: spec.Invariant.Mechanism
+  scope: methodology
+
+- term: verifier
+  definition: The reference to verifier code; the value of the spec.Invariant.Verifier field; format `path` or `path::FuncName`.
+  resolves_to: spec.Invariant.Verifier
+  scope: methodology
+
+- term: status
+  definition: The lifecycle status; the value of the spec.Invariant.Status field; in {active, withdrawn}.
+  resolves_to: spec.Invariant.Status
+  scope: methodology
+
+- term: glossary entry
+  definition: A single record in the methodology's glossary, of type spec.GlossaryEntry.
+  resolves_to: spec.GlossaryEntry
+  scope: methodology
+
+- term: typed binding
+  definition: A reference to a real Go type or method by qualified name; resolves_to target for glossary entries that anchor on the type system.
+  resolves_to: string of form `package.Type` or `package.Type.Method`
+  scope: methodology
+
+- term: ADR delta block
+  definition: The `## Invariant Delta` section of an ADR markdown file, containing structured sub-sections (Added, Withdrawn).
+  resolves_to: spec.DeltaBlock
+  scope: methodology

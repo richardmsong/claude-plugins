@@ -53,16 +53,16 @@ const (
 
 // Invariant is a single registry entry.
 type Invariant struct {
-	ID              string
-	Definition      string    // Contract; one-line; substantive changes route through Supersession.
-	Comments        string    // Free-form annotations; advisory; freely editable.
-	Mechanism       Mechanism
-	Verifier        string    // Format: "path/to/file.go::TestName" or "path/to/rule.yaml".
-	Requires        []string  // IDs of invariants this verifier presupposes (operational DAG).
-	Supersedes      string    // ID of predecessor invariant this one replaces (optional).
-	GlossaryTerms   []string  // Terms in Definition that need resolution.
-	Status          Status    // active | withdrawn.
-	ManualStability Stability // Optional upfront override; usually empty (computed).
+	ID              string    `yaml:"id"`
+	Definition      string    `yaml:"definition"`
+	Comments        string    `yaml:"comments,omitempty"`
+	Mechanism       Mechanism `yaml:"mechanism"`
+	Verifier        string    `yaml:"verifier"`
+	Requires        []string  `yaml:"requires,omitempty"`
+	Supersedes      string    `yaml:"supersedes,omitempty"`
+	GlossaryTerms   []string  `yaml:"glossary_terms,omitempty"`
+	Status          Status    `yaml:"status"`
+	ManualStability Stability `yaml:"manual_stability,omitempty"`
 }
 
 // GlossaryScope is the closed enum for glossary entry scope.
@@ -84,10 +84,10 @@ func ValidScope(s GlossaryScope) bool {
 
 // GlossaryEntry is a single glossary entry.
 type GlossaryEntry struct {
-	Term       string
-	Definition string
-	ResolvesTo string // typed binding (e.g. "spec.Invariant.ID"), invariant ID, or another glossary term.
-	Scope      GlossaryScope
+	Term       string        `yaml:"term"`
+	Definition string        `yaml:"definition"`
+	ResolvesTo string        `yaml:"resolves_to"`
+	Scope      GlossaryScope `yaml:"scope"`
 }
 
 // IDPattern is the required regex for invariant IDs.
