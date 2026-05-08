@@ -41,8 +41,9 @@ V2 shifts the contract surface from prose to executable artifacts (test files + 
 | Plugin shape | Evolution of spec-driven-dev (v2 supersedes v1); both modes coexist per-component during transition | Lower fragmentation than separate sibling plugin; existing skills extend rather than fork. v1 mode stays available as legacy fallback. |
 | Bootstrap project | agent-plugins itself; methodology's own invariants register first (Day 1), consumer-project invariants follow (Day N) | Self-application is evidence of generality. Proving the framework on its own meta-level before consumers bet on it de-risks adoption. |
 | Coexistence dispatch | Per-component mode flag (v1 markdown-spec or v2 invariant-driven) read by `/plan-feature` and `/feature-change` from a project-level config | Component-by-component opt-in matches the gradual-migration use case. File-path-based or ADR-declared flags would work but are less explicit than a config block. |
-| Invariant stability tier | Four-tier system: `experimental` / `provisional` / `stable` / `core`. Default on introduction = `experimental`. Promotion is one level per ADR with required evidence (audit survival, utility, surrounding-code stability). | Without tier, every invariant requires the same change ceremony, which forces over-investment in experimental claims and under-investment in committing to stable ones. The tier governs *change process*, not CI enforcement (verifier always runs deterministically). |
-| Invariant lifecycle status | Orthogonal axis: `active` / `deprecated` / `superseded` / `withdrawn`. Withdrawal requires verifier file deletion in the same commit. | Separates "is this still enforced?" (status) from "how committed are we?" (tier). Allows graceful deprecation periods for stable invariants and lightweight Day-2 revocation for experimental ones. |
+| Invariant stability tier | Two-tier system: `draft` / `active`. Default on introduction = `draft`. One promotion ADR per invariant (`draft → active`); evidence required (audit survival, utility, surrounding-code stability). | Four tiers (experimental/provisional/stable/core) imposed too many promotion ADRs (~12/month at scale). Two tiers cut throughput 2-3× while preserving the load-bearing distinction between "we're trying this" and "we're committed." Provisional collapses into draft (drafts can survive long); core converts to a computed attribute. |
+| Core attribute (computed) | `core: true` automatically set when an invariant is cited by ≥ 3 other ADRs as load-bearing; also manually settable for explicit declarations. Affects removal ceremony (core requires successor invariant or explicit redesign justification). | Core-ness is a *consequence* of architectural significance, not a separate governance state. Computing it from citation count makes the signal evidence-based and game-resistant; manual override exists for the rare case where authorial judgment precedes evidence. Reuses the lineage-dashboard concept already established for ADR↔spec relationships. |
+| Invariant lifecycle status | Orthogonal axis: `active` / `deprecated` / `superseded` / `withdrawn`. Withdrawal requires verifier file deletion in the same commit. | Separates "is this still enforced?" (status) from "how committed are we?" (tier). Allows graceful deprecation periods for active invariants and lightweight Day-2 revocation for drafts. |
 | Conflict resolution authority | Authority hierarchy: statement > verifier > code. Operational reality: verifier is what CI runs. When statement and verifier conflict at audit, the verifier is the bug (it should be a deterministic encoding of the statement). Statement is revised only when audit reveals the original statement was ambiguous. | Three artifacts encoding the same truth means drift is possible. An explicit hierarchy gives a deterministic resolution rule rather than living with silent drift. |
 | Invariant registry format | (decision pending: language-native const slice, YAML, separate file per invariant, comment-extracted from test files) | |
 | Glossary form | (decision pending: standalone `glossary.md`, language-native const map for type-checked references, or generated index from typed bindings) | |
@@ -137,14 +138,16 @@ Each registered with its mechanism, verifier file pointer, glossary terms used. 
   mechanism: unit | table | property | arch | ast | type | schema | completeness | integration | journey
   verifier: <path/to/test_file::TestName | path/to/.arch/rule.yaml | ...>
   glossary_terms: [list of terms in statement that need resolution]
-  tier: experimental | provisional | stable | core
+  tier: draft | active
   status: active | deprecated | superseded | withdrawn
   introduced_by: adr-NNNN
-  tier_history: [{tier: experimental, since_adr: NNNN}, {tier: provisional, since_adr: MMMM}, ...]
+  promoted_by: adr-MMMM            # set when tier flips draft → active
   superseded_by: <id of replacement, if status = superseded>
+  core: <computed: true if cited by ≥3 ADRs as load-bearing; can be manually overridden>
+  citations: [adr-NNNN, adr-MMMM, ...]   # populated by docs-mcp from ADR Cites blocks
 ```
 
-`tier` governs *change process* (lightweight for experimental, deprecation-period for stable, redesign-event for core). `status` governs *whether the verifier runs and how the registry handles it*. The two axes are orthogonal — see "Methodology Governance" section below.
+`tier` governs *change process* (lightweight for draft, deprecation-period for active). `status` governs *whether the verifier runs and how the registry handles it*. `core` is a derived attribute computed from the citation graph; it elevates the removal ceremony but doesn't add a governance state. The three axes are orthogonal — see "Methodology Governance" section below.
 
 ### Glossary entry (format pending)
 
@@ -163,18 +166,19 @@ Each ADR that affects invariants includes a structured block with up to six delt
 ## Invariant Delta
 
 ### Added
-- `<id>`: <statement> (mechanism: <m>, verifier: <path>, tier: experimental)
-  *(Newly registered invariants default to tier `experimental` unless explicitly promoted on introduction.)*
+- `<id>`: <statement> (mechanism: <m>, verifier: <path>, tier: draft)
+  *(Newly registered invariants default to tier `draft` unless explicitly introduced as `active` with justification.)*
 
 ### Modified
 - `<id>`: <what changed in the statement, mechanism, or verifier — and why>
 
 ### Promoted
-- `<id>`: experimental → provisional (or provisional → stable, etc.)
-  *(Tier-only changes; statement and verifier unchanged.)*
+- `<id>`: draft → active (with evidence per promotion criteria)
+  *(Tier-only change; statement and verifier unchanged.)*
 
-### Demoted
-- `<id>`: stable → deprecated (rare; usually precedes Superseded or Withdrawn)
+### Deprecated
+- `<id>`: <deprecation reason; expected withdrawal ADR / cycle>
+  *(Verifier still runs; status flips active → deprecated.)*
 
 ### Superseded
 - `<id>` → `<new_id>`: <rationale; new invariant takes effect, old's verifier removed concurrently>
@@ -182,9 +186,13 @@ Each ADR that affects invariants includes a structured block with up to six delt
 ### Withdrawn
 - `<id>`: <reason — typically "experiment did not pan out" or "no longer required because ...">
   *(Verifier file MUST be deleted in the same commit. Registry entry retained with status=withdrawn for historical traceability only.)*
+
+### Cites
+- `<id>`: <how this ADR depends on the invariant>
+  *(Reference without modification. Feeds the citation graph that computes `core` attribute. Required when an ADR's decisions rely on an existing invariant being true.)*
 ```
 
-The CI gate verifies that the running registry equals the sum of all ADR deltas (Added − Withdrawn, with Modified/Promoted/Demoted/Superseded tracked through tier_history and status fields).
+The CI gate verifies that the running registry equals the sum of all ADR deltas (Added − Withdrawn, with Modified/Promoted/Deprecated/Superseded tracked through status fields and the citation graph maintained from `Cites` blocks).
 
 ### Per-component mode flag
 
@@ -227,63 +235,129 @@ Every invariant carries a `tier` that governs *change process*, not enforcement.
 
 | Tier | Meaning | Change ceremony |
 |---|---|---|
-| `experimental` | New / exploratory. May be revoked or sharpened soon. The right tier for "we think this might be true" or "let's see if this constraint helps." | Lightweight ADR delta; one round of human review. Withdrawal in a Day-2 ADR is normal. |
-| `provisional` | Under evaluation; stabilizing. Has survived a few audits without revision but isn't yet committed long-term. | Standard ADR with rationale for the change. |
-| `stable` | Committed contract. Intended to hold indefinitely. Removal or weakening is a breaking change. | ADR with explicit deprecation period (mark deprecated, run with deprecation warning for a grace period, then withdraw). |
-| `core` | Methodology- or product-fundamental. Removal is a redesign event. | ADR with explicit redesign justification; multiple reviewers; usually paired with a successor invariant. |
+| `draft` | New / exploratory / stabilizing. May be revoked or sharpened. The right tier for "we think this might be true," "let's see if this constraint helps," or "we're still validating this." Drafts can stay drafts for as long as needed — there's no time pressure to promote. | Lightweight ADR delta; one round of human review. Withdrawal in a follow-up ADR is normal. |
+| `active` | Committed contract. Intended to hold indefinitely. Removal or weakening is a breaking change. | ADR with explicit deprecation period (mark deprecated, run with deprecation warning for a grace period, then withdraw). |
 
-**Promotion path:** `experimental → provisional` → `stable` → `core` (the last is rare; only by explicit methodology decision).
+**Default tier on introduction:** `draft`. Invariants start uncommitted. Promotion to `active` is a deliberate later step. The introducing ADR may declare a higher starting tier with explicit justification — used for security boundaries and other obviously-fundamental claims that don't need a probationary period.
 
-**Default tier on introduction:** `experimental`. Invariants start uncommitted. Promotion is a deliberate later step. The introducing ADR may declare a higher starting tier with explicit justification — used for security boundaries and other obviously-fundamental claims that don't need a probationary period.
+#### Core attribute (computed, not a tier)
 
-**Promotion is one level per ADR.** `experimental → stable` in a single ADR is not allowed; the invariant goes through `provisional` first. This forces deliberate progression and creates audit checkpoints.
+`core: true` is set on an invariant when it has accumulated significant architectural weight — measured by citation count from other ADRs. It is *not* a separate governance state; it's an attribute that *amplifies* the removal ceremony of an `active` invariant.
+
+**Computation rule (default):** `core = true` iff the invariant is cited as load-bearing by ≥ 3 other ADRs. The citation graph is computed by docs-mcp from structured `### Cites` blocks in ADR Invariant Delta sections (see Lineage section below).
+
+**Manual override:** an ADR may declare `core: true` explicitly when authorial judgment precedes citation evidence (e.g., a security boundary declared core on Day 1 because the architectural significance is obvious). This sets a sticky flag that survives recomputation.
+
+**Effect of `core: true`:**
+
+- Removal requires either a successor invariant (Supersession) or an explicit redesign-impact analysis in the withdrawal ADR.
+- Deprecation period defaults to ≥ 2 audit cycles (vs. 1 for non-core active).
+- Citation graph from the dashboard surfaces all ADRs that depend on it, so the redesign blast radius is visible up-front.
 
 #### Promotion criteria
 
-Each promotion is its own ADR (a pure tier-change delta). The promoting ADR must include the evidence required by the target tier; the audit gate flags promotions that lack it.
+The single promotion `draft → active` is its own ADR (a pure tier-change delta). The promoting ADR must include the evidence below; the audit advisory flags promotions that lack it.
 
-**Experimental → Provisional** requires:
+**Draft → Active** requires:
 
-1. **Survival**: the invariant has existed for ≥ 2 audit cycles (~6 months at quarterly cadence) without being modified or revoked.
-2. **Stability of statement and verifier**: no audit advisory output in those 2 cycles proposed sharpening, modifying, or removing it; verifier hasn't needed re-compilation due to drift; statement-↔-verifier roundtrip passed in the most recent audit.
-
-**Provisional → Stable** requires:
-
-1. **Survival**: ≥ 2 additional audit cycles at provisional (~12 months total since introduction).
-2. **Utility evidence**, at least one of:
+1. **Survival**: the invariant has existed for ≥ 2 audit cycles (~6 months at quarterly cadence) without being modified or revoked. (No upper bound — drafts can stay drafts indefinitely.)
+2. **Stability of statement and verifier**: no audit advisory output proposed sharpening, modifying, or removing it in the survival window; verifier hasn't needed re-compilation due to drift; statement-↔-verifier roundtrip passed in the most recent audit.
+3. **Utility evidence**, at least one of:
    - The verifier has caught a real violation (i.e., a code change broke this verifier and was prevented from merging).
-   - This invariant ID is cited as a load-bearing assumption by ≥ 1 other ADR.
+   - This invariant ID is cited by ≥ 1 other ADR.
    - A differential regeneration audit demonstrated convergence on the constrained behavior.
-3. **Surrounding-code stability**: the production code that satisfies this invariant hasn't been substantially refactored (>30% line churn in the verifier's target files) in the last 2 cycles. If surrounding code is churning, the invariant isn't stable — it's just lucky.
-4. **No outstanding modification proposals**: no audit advisory item proposes alternative formulations.
+4. **Surrounding-code stability**: the production code that satisfies this invariant hasn't been substantially refactored (>30% line churn in the verifier's target files) in the last 2 cycles. If surrounding code is churning, the invariant isn't stable — it's just lucky.
 
-**Stable → Core** requires:
-
-1. **Multi-ADR citations**: ≥ 3 ADRs reference this invariant as load-bearing.
-2. **Removal would be a redesign event**: an explicit dependency-impact analysis in the promotion ADR.
-3. **Methodology decision**: explicitly approved as a fundamental, not just a stable contract.
+These criteria can be batched: a single quarterly "invariant promotions" ADR can promote multiple invariants at once, listing evidence per ID.
 
 #### Demotion / removal path
 
-Any tier → `deprecated` (status, not tier) → `withdrawn`. The ceremony required is inherited from the original tier:
+Any tier → `deprecated` (status, not tier) → `withdrawn`. The ceremony required depends on the current tier and the `core` attribute:
 
-| Original tier | Demotion ceremony |
+| Tier + core | Demotion ceremony |
 |---|---|
-| `experimental` | Single ADR can transition `active` → `withdrawn` directly; deprecation period optional. Verifier file deleted in same commit. |
-| `provisional` | Single ADR; brief justification expected. Optional deprecation period. |
-| `stable` | ADR with deprecation reasoning; required deprecation period (default 1 cycle) before withdrawal; deprecation period documented in the ADR. |
-| `core` | ADR with redesign justification; required deprecation period (default 2 cycles); often paired with a successor invariant via Supersession rather than plain Withdrawal. |
+| `draft` | Single ADR transitions `active` → `withdrawn` directly; deprecation period optional. Verifier file deleted in same commit. |
+| `active`, core=false | ADR with deprecation reasoning; required deprecation period (default 1 audit cycle) before withdrawal; deprecation documented in the ADR. |
+| `active`, core=true | ADR with redesign justification or successor invariant (Supersession); required deprecation period (default 2 cycles); citation-graph blast-radius surfaced from the dashboard. |
 
 #### Operational effect of tier
 
-CI enforcement is identical across tiers — a verifier failure blocks merge regardless of whether the invariant is `experimental` or `core`. Tier governs *invariant-level governance*, not enforcement.
+CI enforcement is identical across tiers — a verifier failure blocks merge regardless of whether the invariant is `draft` or `active` or `core`. Tier governs *invariant-level governance*, not CI enforcement.
 
-| Tier | Audit treatment | Refactor friction |
+| Tier + core | Audit treatment | Refactor friction |
 |---|---|---|
-| experimental | Light review; freely revocable | Low — Day-2 ADR can withdraw |
-| provisional | Tracked against promotion criteria | Medium — needs justification to revoke |
-| stable | Reviewed for deprecation only | High — deprecation period required |
-| core | Reviewed for redesign only | Very high — redesign event |
+| draft | Light review; freely revocable | Low — follow-up ADR can withdraw |
+| active, core=false | Reviewed for deprecation only | High — deprecation period required |
+| active, core=true | Reviewed for redesign or supersession | Very high — redesign event with blast-radius analysis |
+
+### Lineage and citation graph
+
+The methodology builds a typed graph over its artifacts. This is a direct extension of the lineage dashboard already established in agent-plugins (ADR-0029-31, 0036, 0040, 0042, 0050) for ADR↔spec relationships — same docs-mcp, same dashboard, new node and edge types.
+
+#### Node types
+
+- **ADR** (existing) — every `docs/adr-NNNN-*.md` file.
+- **Spec** (existing) — every `docs/spec-*.md` file.
+- **Invariant** (new) — every entry in the registry.
+- **Verifier** (new) — every test file, lint rule, or schema referenced by an invariant.
+- **Glossary term** (new) — every entry in the glossary.
+
+#### Edge types
+
+| Edge | From → To | Source of truth | Maintained by |
+|---|---|---|---|
+| `cites` | ADR → Invariant | ADR `### Cites` block in Invariant Delta | docs-mcp parser |
+| `introduces` | ADR → Invariant | ADR `### Added` block | docs-mcp parser |
+| `modifies` | ADR → Invariant | ADR `### Modified` block | docs-mcp parser |
+| `promotes` | ADR → Invariant | ADR `### Promoted` block | docs-mcp parser |
+| `deprecates` | ADR → Invariant | ADR `### Deprecated` block | docs-mcp parser |
+| `withdraws` | ADR → Invariant | ADR `### Withdrawn` block | docs-mcp parser |
+| `supersedes` | Invariant → Invariant | Registry `superseded_by` field | Registry |
+| `pinned_by` | Invariant → Verifier | Registry `verifier` field | Registry |
+| `uses_term` | Invariant → Glossary term | Registry `glossary_terms` field | Registry |
+| `defines_term` | Type/Method → Glossary term | Glossary `resolves_to` field | Glossary |
+
+#### Citation graph computation
+
+`core` is computed from the citation graph:
+
+```
+citations(invariant) = | { adr | (adr, invariant) ∈ cites } |
+core(invariant) = (citations(invariant) ≥ 3) OR manually_set(invariant)
+```
+
+The default threshold (3) is per-project configurable. The threshold is *not* across-tier — `cites` edges from ADRs that introduce, modify, or withdraw the invariant are excluded from the citation count, since they're already meta-edges. Only ADRs that *depend on* the invariant being true (without modifying it) increment the citation counter.
+
+#### MCP tools (extension of existing docs-mcp)
+
+| Tool | Returns |
+|---|---|
+| `list_invariants` | All registered invariants with tier/status/core flag |
+| `search_invariants` | Full-text + structured search across statements, glossary terms, mechanisms |
+| `get_invariant` | Full registry entry + computed citation count + cited-by ADR list |
+| `get_invariant_lineage` | All ADRs in the invariant's history (introduces/modifies/promotes/deprecates/withdraws/cites) |
+| `get_adr_invariants` | All invariants an ADR introduces, modifies, or cites — extends existing ADR lineage view |
+| `get_verifier_invariants` | Reverse mapping: which invariants does this test/rule/schema pin? |
+
+#### Dashboard views (extension of existing docs-dashboard)
+
+- **Invariants tab** — sortable list with columns: ID, statement, tier, status, mechanism, citation count, last audit. Filter by component, tier, status, mechanism. Click → detail view.
+- **Invariant detail** — full registry entry, statement, glossary terms (linked), verifier file (linked, with last-modified diff), citation list (each ADR linked), supersession chain (if applicable), audit history, drift health indicators.
+- **Citation graph view** — force-directed graph rendering of ADR↔invariant↔verifier↔glossary edges. Hover for details, click to navigate.
+- **Core candidates panel** — invariants with citation count ≥ 2 (one citation away from auto-core); audit reviewers can promote manually via ADR or wait for the threshold.
+- **Drift heatmap** — invariants overlaid with last-audit-status color (green = roundtrip OK, yellow = pending audit, red = drift detected).
+- **Tier distribution** — bar chart of invariant counts by tier × component, highlighting components heavy in drafts (potential consolidation targets) vs heavy in actives (mature surfaces).
+- **Promotion candidates** — drafts that have met all promotion criteria (survival, utility, surrounding-code stability) but haven't been promoted yet; one-click "draft promotion ADR" action.
+
+#### Why this extension is natural
+
+The existing dashboard infrastructure already does:
+- File parsing (markdown → typed sections)
+- Co-commit detection (git log analysis for lineage edges)
+- SSE streaming for live updates
+- React rendering with shadcn/ui components
+
+Adding invariants as a node type, registry-as-data-source, and the new edge types listed above is incremental: new MCP indexer module for invariants/verifiers/glossary; new dashboard tab + detail components; reuse of existing graph rendering and search. Spec-quality work, not new-product work.
 
 ### Lifecycle status (orthogonal to tier)
 
