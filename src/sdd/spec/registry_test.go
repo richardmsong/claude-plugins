@@ -99,3 +99,84 @@ func TestRegistryRequiresTargetsExist(t *testing.T) {
 		}
 	}
 }
+
+// TestRegistryRequiresDAGAcyclic verifies methodology.registry.requires_dag_acyclic.
+//
+// Walks the requires graph from each invariant; uses three-color DFS to detect
+// back-edges (cycles). Reports the cycle path on detection.
+func TestRegistryRequiresDAGAcyclic(t *testing.T) {
+	const (
+		white = 0 // unvisited
+		gray  = 1 // in current DFS stack
+		black = 2 // fully explored
+	)
+	color := make(map[string]int, len(Registry))
+	requires := make(map[string][]string, len(Registry))
+	for _, inv := range Registry {
+		color[inv.ID] = white
+		requires[inv.ID] = inv.Requires
+	}
+
+	var stack []string
+	var visit func(id string) bool
+	visit = func(id string) bool {
+		if color[id] == gray {
+			// Cycle detected. Find where in stack it started.
+			cycleStart := 0
+			for i, s := range stack {
+				if s == id {
+					cycleStart = i
+					break
+				}
+			}
+			t.Errorf("requires DAG has cycle: %s -> %s",
+				strings.Join(stack[cycleStart:], " -> "), id)
+			return false
+		}
+		if color[id] == black {
+			return true
+		}
+		color[id] = gray
+		stack = append(stack, id)
+		for _, dep := range requires[id] {
+			if !visit(dep) {
+				return false
+			}
+		}
+		stack = stack[:len(stack)-1]
+		color[id] = black
+		return true
+	}
+	for _, inv := range Registry {
+		if color[inv.ID] == white {
+			visit(inv.ID)
+		}
+	}
+}
+
+// TestRegistrySupersedesTargetsExist verifies methodology.registry.supersedes_targets_exist.
+//
+// If an entry has Supersedes set, it must point at an existing registry entry
+// whose Status is StatusWithdrawn. Catches stale supersession links and
+// supersessions that didn't properly retire the predecessor.
+func TestRegistrySupersedesTargetsExist(t *testing.T) {
+	byID := make(map[string]Invariant, len(Registry))
+	for _, inv := range Registry {
+		byID[inv.ID] = inv
+	}
+	for _, inv := range Registry {
+		if inv.Supersedes == "" {
+			continue
+		}
+		predecessor, ok := byID[inv.Supersedes]
+		if !ok {
+			t.Errorf("%s: supersedes references non-existent invariant %q",
+				inv.ID, inv.Supersedes)
+			continue
+		}
+		if predecessor.Status != StatusWithdrawn {
+			t.Errorf("%s: supersedes %q whose status is %q (expected withdrawn)",
+				inv.ID, inv.Supersedes, predecessor.Status)
+		}
+	}
+}

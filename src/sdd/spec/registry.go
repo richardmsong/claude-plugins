@@ -123,6 +123,30 @@ var Registry = []Invariant{
 		GlossaryTerms: []string{"registry entry", "id"},
 		Status:        StatusActive,
 	},
+	{
+		ID:         "methodology.registry.requires_dag_acyclic",
+		Definition: "The directed graph formed by registry entries' `requires` edges is acyclic.",
+		Mechanism:  MechCompleteness,
+		Verifier:   "registry_test.go::TestRegistryRequiresDAGAcyclic",
+		Requires: []string{
+			"methodology.registry.id_field",
+			"methodology.registry.requires_targets_exist",
+		},
+		GlossaryTerms: []string{"registry entry"},
+		Status:        StatusActive,
+	},
+	{
+		ID:         "methodology.registry.supersedes_targets_exist",
+		Definition: "Every registry entry's `supersedes` field, when set, references an existing registry entry whose status is `withdrawn`.",
+		Mechanism:  MechCompleteness,
+		Verifier:   "registry_test.go::TestRegistrySupersedesTargetsExist",
+		Requires: []string{
+			"methodology.registry.id_field",
+			"methodology.registry.status_field",
+		},
+		GlossaryTerms: []string{"registry entry", "status"},
+		Status:        StatusActive,
+	},
 
 	{
 		ID:         "methodology.registry.no_orphans",
