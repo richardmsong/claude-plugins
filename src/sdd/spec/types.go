@@ -4,31 +4,6 @@ package spec
 
 import "regexp"
 
-// Mechanism is the closed taxonomy of verification mechanisms.
-type Mechanism string
-
-const (
-	MechUnit         Mechanism = "unit"
-	MechTable        Mechanism = "table"
-	MechProperty     Mechanism = "property"
-	MechArch         Mechanism = "arch"
-	MechAST          Mechanism = "ast"
-	MechType         Mechanism = "type"
-	MechSchema       Mechanism = "schema"
-	MechCompleteness Mechanism = "completeness"
-	MechIntegration  Mechanism = "integration"
-	MechJourney      Mechanism = "journey"
-)
-
-func ValidMechanism(m Mechanism) bool {
-	switch m {
-	case MechUnit, MechTable, MechProperty, MechArch, MechAST,
-		MechType, MechSchema, MechCompleteness, MechIntegration, MechJourney:
-		return true
-	}
-	return false
-}
-
 // Status is the two-state lifecycle: invariant is either active or withdrawn.
 // Supersession is encoded via the Supersedes field (forward) or computed via
 // reverse lookup (i.e., another invariant naming this one as its predecessor).
@@ -56,7 +31,6 @@ type Invariant struct {
 	ID              string    `yaml:"id"`
 	Definition      string    `yaml:"definition"`
 	Comments        string    `yaml:"comments,omitempty"`
-	Mechanism       Mechanism `yaml:"mechanism"`
 	Verifier        string    `yaml:"verifier"`
 	Requires        []string  `yaml:"requires,omitempty"`
 	Supersedes      string    `yaml:"supersedes,omitempty"`

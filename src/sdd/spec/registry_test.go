@@ -35,15 +35,6 @@ func TestRegistryDefinitionField(t *testing.T) {
 	}
 }
 
-// TestRegistryMechanismField verifies methodology.registry.mechanism_field.
-func TestRegistryMechanismField(t *testing.T) {
-	for _, inv := range Registry {
-		if !ValidMechanism(inv.Mechanism) {
-			t.Errorf("%s: mechanism %q not in taxonomy", inv.ID, inv.Mechanism)
-		}
-	}
-}
-
 // TestRegistryVerifierField verifies methodology.registry.verifier_field.
 func TestRegistryVerifierField(t *testing.T) {
 	for _, inv := range Registry {

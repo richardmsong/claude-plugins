@@ -37,9 +37,6 @@ func TestADRDeltaAddedBlock(t *testing.T) {
 		if e.Definition == "" {
 			t.Errorf("Added[%s]: definition missing", e.ID)
 		}
-		if !ValidMechanism(Mechanism(e.Mechanism)) {
-			t.Errorf("Added[%s]: mechanism %q not in taxonomy", e.ID, e.Mechanism)
-		}
 		if e.Verifier == "" {
 			t.Errorf("Added[%s]: verifier missing", e.ID)
 		}

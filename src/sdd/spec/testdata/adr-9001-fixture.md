@@ -12,13 +12,11 @@ under the post-collapse model: Added (with optional supersedes) and Withdrawn.
 ### Added
 - methodology.test.fixture_added
   Definition: A simple fixture invariant.
-  Mechanism: schema
   Verifier: fixture_test.go::TestFixture
   Requires: []
 
 - methodology.test.fixture_supersession
   Definition: Replacement for the old fixture.
-  Mechanism: schema
   Verifier: fixture_test.go::TestFixture
   Requires: []
   Supersedes: methodology.test.fixture_legacy

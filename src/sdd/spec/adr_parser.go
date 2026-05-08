@@ -23,10 +23,9 @@ type DeltaBlock struct {
 type AddedEntry struct {
 	ID         string
 	Definition string
-	Mechanism  string
 	Verifier   string
-	Tier       string
 	Requires   []string
+	Supersedes string
 	Raw        string // raw text for debugging
 }
 
@@ -213,9 +212,8 @@ func parseAddedEntries(block *DeltaBlock, text string) error {
 		entry := AddedEntry{
 			ID:         id,
 			Definition: fields["Definition"],
-			Mechanism:  fields["Mechanism"],
 			Verifier:   fields["Verifier"],
-			Tier:       fields["Tier"],
+			Supersedes: fields["Supersedes"],
 			Raw:        strings.Join(group, "\n"),
 		}
 		if reqs, ok := fields["Requires"]; ok && reqs != "" && reqs != "[]" {

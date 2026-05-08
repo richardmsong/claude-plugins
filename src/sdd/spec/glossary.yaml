@@ -22,11 +22,6 @@
   resolves_to: spec.Invariant.Definition
   scope: methodology
 
-- term: mechanism
-  definition: The verification mechanism category; the value of the spec.Invariant.Mechanism field; in the closed taxonomy declared by spec.Mechanism.
-  resolves_to: spec.Invariant.Mechanism
-  scope: methodology
-
 - term: verifier
   definition: The reference to verifier code; the value of the spec.Invariant.Verifier field; format `path` or `path::FuncName`.
   resolves_to: spec.Invariant.Verifier
