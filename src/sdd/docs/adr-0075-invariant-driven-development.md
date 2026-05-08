@@ -344,8 +344,85 @@ The hard rule: **Class C must be Supersession.** If the contract is changing, wi
 
 Modifications to `core` invariants are stricter:
 - Class A allowed without extra ceremony.
-- Class B requires a 1-cycle deprecation phase before the new statement takes effect — relying ADRs have time to react.
+- Class B requires a 1-cycle deprecation phase before the new statement takes effect — relying ADRs have time to react (see Reaction process below).
 - Class C (Supersession of a core invariant) requires redesign justification, blast-radius analysis from the dashboard, and ideally a paired successor invariant.
+
+#### Reaction process: how relying ADRs respond to changes
+
+When a `Modified` (Class B sharpening), `Superseded`, or `Withdrawn` delta affects an invariant with relying ADRs, those ADRs must "react" — explicitly acknowledge the change before the triggering ADR can merge. The reaction is a data-driven workflow, not an email or hand-wave.
+
+**Reaction artifact (one per relying ADR):**
+
+When the triggering ADR opens as a PR, a CI hook scans the reliance graph and generates one artifact per relying ADR:
+
+```yaml
+# docs/reactions/<triggering_adr>-<target_invariant>-<relying_adr>.yaml
+triggering_adr: adr-NNNN
+target_invariant: <invariant_id>
+delta_kind: sharpening | supersession | withdrawal
+new_invariant: <successor_id>     # for supersession only
+relying_adr: adr-MMMM
+relying_adr_owner: <git author or explicit Owner: frontmatter>
+state: pending
+created: <date>
+deadline: <date, cycle-based per target tier>
+ack: null
+ack_rationale: null
+```
+
+Reaction artifacts are committed alongside the triggering ADR's PR; their existence is what makes "reaction" trackable.
+
+**Owner identification:**
+
+- ADR may declare an explicit `Owner: <name or team>` in frontmatter.
+- Default = original ADR commit's git author.
+- Per-project fallback owner declared in `.sdd/components.yaml` for un-owned ADRs.
+
+**Reaction options (owner picks one per pending artifact):**
+
+| Ack | Meaning | Effect |
+|---|---|---|
+| `re-pin` | "I reviewed; my decisions still apply" | Reliance edge stays; for supersession, edge auto-migrates to successor invariant |
+| `update` | "I need to author a follow-up ADR adjusting my decisions" | Triggering ADR can merge only after follow-up ADR is committed |
+| `migrate` | (Supersession only) "Redeclare reliance on successor explicitly via small ADR amendment" | Same effect as re-pin, but explicit acknowledgment |
+| `accept-unpinning` | (Withdrawal only) "I accept losing the reliance edge; my ADR is now un-pinned" | Reliance removed; ADR flagged as un-pinned for future review |
+| `object` | "Don't proceed with this change" | Triggering ADR blocked until objection is resolved (escalation to project owner / discussion / re-author) |
+
+**State machine:**
+
+```
+pending → acked (with one of the reaction types)
+pending → expired (deadline passed without action)
+acked → (terminal)
+expired → (terminal, default disposition applied)
+```
+
+**Expiration disposition by tier (default policy, per-project tunable):**
+
+| Target invariant tier | Default on expired | Rationale |
+|---|---|---|
+| `draft` | `accept-unpinning` | Drafts move fast; non-response = implicit consent |
+| `active`, core=false | `accept-unpinning` | Owner had a deprecation cycle; silence ≈ consent |
+| `active`, core=true | **block** | Core changes require explicit decisions; silence is not consent |
+
+**Merge gating:**
+
+Triggering ADR cannot merge until *all* reactions are either:
+- `acked` (any type except `object`), OR
+- `expired` AND default disposition is acceptable per the table above.
+
+Any `object` ack blocks indefinitely until resolved through human discussion (which usually re-authors the triggering ADR or escalates to a different strategy).
+
+**CI gates that drive this:**
+
+1. **Reaction generator** — runs on PR open; reads reliance graph; emits one artifact per relying ADR. Deterministic, can't be skipped.
+2. **Reaction merge-gate** — checks that all reaction artifacts are `acked` or `expired` (with acceptable disposition) before allowing merge.
+3. **Object-clear gate** — any artifact in `objected` state blocks merge.
+
+**Dashboard surface:**
+
+- **Reactions queue** (per owner): list of pending reactions with deadlines, target invariants, triggering ADRs. One-click ack actions for simple cases.
+- **Triggering-ADR view**: shows which reactions are pending, acked, expired, or objected — author sees blockers in real time.
 
 ### Lineage and reliance graph
 
