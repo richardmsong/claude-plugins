@@ -41,6 +41,9 @@ V2 shifts the contract surface from prose to executable artifacts (test files + 
 | Plugin shape | Evolution of spec-driven-dev (v2 supersedes v1); both modes coexist per-component during transition | Lower fragmentation than separate sibling plugin; existing skills extend rather than fork. v1 mode stays available as legacy fallback. |
 | Bootstrap project | agent-plugins itself; methodology's own invariants register first (Day 1), consumer-project invariants follow (Day N) | Self-application is evidence of generality. Proving the framework on its own meta-level before consumers bet on it de-risks adoption. |
 | Coexistence dispatch | Per-component mode flag (v1 markdown-spec or v2 invariant-driven) read by `/plan-feature` and `/feature-change` from a project-level config | Component-by-component opt-in matches the gradual-migration use case. File-path-based or ADR-declared flags would work but are less explicit than a config block. |
+| Invariant stability tier | Four-tier system: `experimental` / `provisional` / `stable` / `core`. Default on introduction = `experimental`. Promotion is one level per ADR with required evidence (audit survival, utility, surrounding-code stability). | Without tier, every invariant requires the same change ceremony, which forces over-investment in experimental claims and under-investment in committing to stable ones. The tier governs *change process*, not CI enforcement (verifier always runs deterministically). |
+| Invariant lifecycle status | Orthogonal axis: `active` / `deprecated` / `superseded` / `withdrawn`. Withdrawal requires verifier file deletion in the same commit. | Separates "is this still enforced?" (status) from "how committed are we?" (tier). Allows graceful deprecation periods for stable invariants and lightweight Day-2 revocation for experimental ones. |
+| Conflict resolution authority | Authority hierarchy: statement > verifier > code. Operational reality: verifier is what CI runs. When statement and verifier conflict at audit, the verifier is the bug (it should be a deterministic encoding of the statement). Statement is revised only when audit reveals the original statement was ambiguous. | Three artifacts encoding the same truth means drift is possible. An explicit hierarchy gives a deterministic resolution rule rather than living with silent drift. |
 | Invariant registry format | (decision pending: language-native const slice, YAML, separate file per invariant, comment-extracted from test files) | |
 | Glossary form | (decision pending: standalone `glossary.md`, language-native const map for type-checked references, or generated index from typed bindings) | |
 | Verifier file layout | (decision pending: co-located with code, dedicated `internal/spec/` subdirectory, separate spec package, or hybrid by mechanism) | |
@@ -134,9 +137,14 @@ Each registered with its mechanism, verifier file pointer, glossary terms used. 
   mechanism: unit | table | property | arch | ast | type | schema | completeness | integration | journey
   verifier: <path/to/test_file::TestName | path/to/.arch/rule.yaml | ...>
   glossary_terms: [list of terms in statement that need resolution]
+  tier: experimental | provisional | stable | core
+  status: active | deprecated | superseded | withdrawn
   introduced_by: adr-NNNN
-  status: active | superseded
+  tier_history: [{tier: experimental, since_adr: NNNN}, {tier: provisional, since_adr: MMMM}, ...]
+  superseded_by: <id of replacement, if status = superseded>
 ```
+
+`tier` governs *change process* (lightweight for experimental, deprecation-period for stable, redesign-event for core). `status` governs *whether the verifier runs and how the registry handles it*. The two axes are orthogonal — see "Methodology Governance" section below.
 
 ### Glossary entry (format pending)
 
@@ -149,22 +157,34 @@ Each registered with its mechanism, verifier file pointer, glossary terms used. 
 
 ### ADR Invariant Delta block
 
-Each ADR that affects invariants includes:
+Each ADR that affects invariants includes a structured block with up to six delta kinds:
 
 ```markdown
 ## Invariant Delta
 
 ### Added
-- `<id>`: <statement> (mechanism: <m>, verifier: <path>)
+- `<id>`: <statement> (mechanism: <m>, verifier: <path>, tier: experimental)
+  *(Newly registered invariants default to tier `experimental` unless explicitly promoted on introduction.)*
 
 ### Modified
-- `<id>`: <what changed and why>
+- `<id>`: <what changed in the statement, mechanism, or verifier — and why>
 
-### Removed
-- `<id>`: <reason — typically "superseded by <new id>" or "no longer required because ...">
+### Promoted
+- `<id>`: experimental → provisional (or provisional → stable, etc.)
+  *(Tier-only changes; statement and verifier unchanged.)*
+
+### Demoted
+- `<id>`: stable → deprecated (rare; usually precedes Superseded or Withdrawn)
+
+### Superseded
+- `<id>` → `<new_id>`: <rationale; new invariant takes effect, old's verifier removed concurrently>
+
+### Withdrawn
+- `<id>`: <reason — typically "experiment did not pan out" or "no longer required because ...">
+  *(Verifier file MUST be deleted in the same commit. Registry entry retained with status=withdrawn for historical traceability only.)*
 ```
 
-The CI gate verifies that the running registry equals the sum of all ADR deltas (Added − Removed, with Modifies tracked).
+The CI gate verifies that the running registry equals the sum of all ADR deltas (Added − Withdrawn, with Modified/Promoted/Demoted/Superseded tracked through tier_history and status fields).
 
 ### Per-component mode flag
 
@@ -196,6 +216,114 @@ The methodology is self-applicable. The same registry, glossary, CI gates, and s
 - Filesystem and `git`.
 - Human judgment for the differential regeneration audit triage.
 - Day-0 bootstrap: this ADR (English) is the schema for the registry until the registry exists to hold its own invariants.
+
+## Methodology Governance: Stability, Lifecycle, and Conflict Resolution
+
+The methodology has three load-bearing artifacts that *encode the same truth in three forms*: invariant statements (intent, English), verifiers (enforcement, deterministic), production code (implementation, runtime). Three artifacts means duplication, and duplication means drift. This section addresses (a) how invariants evolve over time without process overhead exploding, and (b) what happens when the three artifacts disagree.
+
+### Stability tier
+
+Every invariant carries a `tier` that governs *change process*, not enforcement. CI runs the verifier deterministically regardless of tier; tier dictates how much ceremony is required to revoke or modify the invariant.
+
+| Tier | Meaning | Change ceremony |
+|---|---|---|
+| `experimental` | New / exploratory. May be revoked or sharpened soon. The right tier for "we think this might be true" or "let's see if this constraint helps." | Lightweight ADR delta; one round of human review. Withdrawal in a Day-2 ADR is normal. |
+| `provisional` | Under evaluation; stabilizing. Has survived a few audits without revision but isn't yet committed long-term. | Standard ADR with rationale for the change. |
+| `stable` | Committed contract. Intended to hold indefinitely. Removal or weakening is a breaking change. | ADR with explicit deprecation period (mark deprecated, run with deprecation warning for a grace period, then withdraw). |
+| `core` | Methodology- or product-fundamental. Removal is a redesign event. | ADR with explicit redesign justification; multiple reviewers; usually paired with a successor invariant. |
+
+**Promotion path:** `experimental → provisional` → `stable` → `core` (the last is rare; only by explicit methodology decision).
+
+**Default tier on introduction:** `experimental`. Invariants start uncommitted. Promotion is a deliberate later step. The introducing ADR may declare a higher starting tier with explicit justification — used for security boundaries and other obviously-fundamental claims that don't need a probationary period.
+
+**Promotion is one level per ADR.** `experimental → stable` in a single ADR is not allowed; the invariant goes through `provisional` first. This forces deliberate progression and creates audit checkpoints.
+
+#### Promotion criteria
+
+Each promotion is its own ADR (a pure tier-change delta). The promoting ADR must include the evidence required by the target tier; the audit gate flags promotions that lack it.
+
+**Experimental → Provisional** requires:
+
+1. **Survival**: the invariant has existed for ≥ 2 audit cycles (~6 months at quarterly cadence) without being modified or revoked.
+2. **Stability of statement and verifier**: no audit advisory output in those 2 cycles proposed sharpening, modifying, or removing it; verifier hasn't needed re-compilation due to drift; statement-↔-verifier roundtrip passed in the most recent audit.
+
+**Provisional → Stable** requires:
+
+1. **Survival**: ≥ 2 additional audit cycles at provisional (~12 months total since introduction).
+2. **Utility evidence**, at least one of:
+   - The verifier has caught a real violation (i.e., a code change broke this verifier and was prevented from merging).
+   - This invariant ID is cited as a load-bearing assumption by ≥ 1 other ADR.
+   - A differential regeneration audit demonstrated convergence on the constrained behavior.
+3. **Surrounding-code stability**: the production code that satisfies this invariant hasn't been substantially refactored (>30% line churn in the verifier's target files) in the last 2 cycles. If surrounding code is churning, the invariant isn't stable — it's just lucky.
+4. **No outstanding modification proposals**: no audit advisory item proposes alternative formulations.
+
+**Stable → Core** requires:
+
+1. **Multi-ADR citations**: ≥ 3 ADRs reference this invariant as load-bearing.
+2. **Removal would be a redesign event**: an explicit dependency-impact analysis in the promotion ADR.
+3. **Methodology decision**: explicitly approved as a fundamental, not just a stable contract.
+
+#### Demotion / removal path
+
+Any tier → `deprecated` (status, not tier) → `withdrawn`. The ceremony required is inherited from the original tier:
+
+| Original tier | Demotion ceremony |
+|---|---|
+| `experimental` | Single ADR can transition `active` → `withdrawn` directly; deprecation period optional. Verifier file deleted in same commit. |
+| `provisional` | Single ADR; brief justification expected. Optional deprecation period. |
+| `stable` | ADR with deprecation reasoning; required deprecation period (default 1 cycle) before withdrawal; deprecation period documented in the ADR. |
+| `core` | ADR with redesign justification; required deprecation period (default 2 cycles); often paired with a successor invariant via Supersession rather than plain Withdrawal. |
+
+#### Operational effect of tier
+
+CI enforcement is identical across tiers — a verifier failure blocks merge regardless of whether the invariant is `experimental` or `core`. Tier governs *invariant-level governance*, not enforcement.
+
+| Tier | Audit treatment | Refactor friction |
+|---|---|---|
+| experimental | Light review; freely revocable | Low — Day-2 ADR can withdraw |
+| provisional | Tracked against promotion criteria | Medium — needs justification to revoke |
+| stable | Reviewed for deprecation only | High — deprecation period required |
+| core | Reviewed for redesign only | Very high — redesign event |
+
+### Lifecycle status (orthogonal to tier)
+
+| Status | Verifier runs in CI? | Registry coverage CI gate behavior |
+|---|---|---|
+| `active` | Yes | Must have a live verifier file |
+| `deprecated` | Yes (still enforced) | Annotated "scheduled-for-removal in ADR-NNNN"; future ADR will withdraw |
+| `superseded` | No (replaced) | Points to replacement invariant ID via `superseded_by`; verifier file removed concurrently with the supersession ADR |
+| `withdrawn` | No (removed) | Verifier file MUST be deleted in the same commit as the ADR that withdraws. Registry entry retained with status=withdrawn for historical audit traceability only. |
+
+This means the `methodology.registry.no_orphans` CI gate has a refined contract: every *active or deprecated* invariant has a live verifier; every verifier pins an active or deprecated invariant. Superseded and withdrawn entries don't have verifiers — the verifier files were removed in the same commit that flipped status.
+
+### Conflict resolution: who is right when artifacts disagree?
+
+The three artifacts encode the same truth differently and can drift. The methodology declares an authority hierarchy:
+
+**Authority order (intent):** statement > verifier > code.
+**Operational reality (what CI checks):** verifier is what actually runs.
+
+These two are in tension. In practice the verifier IS the operational truth (CI passes if it passes), and the statement is *aspirational* unless audit mechanisms keep it aligned with the verifier.
+
+| Conflict shape | Diagnosis | Fix |
+|---|---|---|
+| Statement ↔ verifier disagree (different truths) | Verifier under- or wrong-captures the statement | Fix the verifier (re-compile from statement). Statement is authoritative. If statement was ambiguous, sharpen it first, then re-derive. |
+| Statement ↔ code disagree | Code violates the contract | Fix the code. The verifier should have caught this; if it didn't, also fix the verifier. |
+| Verifier ↔ code disagree (CI fails) | Either code is wrong OR verifier is wrong | Default: code is wrong (fix it). If statement was ambiguous and the verifier interpreted incorrectly, fix verifier too. |
+| All three pass but the statement is silently wrong | Statement is stale, or LLM-author misunderstood | Audit ritual catches this — see below |
+
+**Drift detection mechanisms** (because resolution rules are useless if drift is not detected):
+
+1. **Roundtrip at audit time.** Feed verifier to a fresh LLM, ask it to write the invariant statement, diff against the registered statement. Mismatch = drift.
+2. **Differential regeneration.** Regenerate code from the statement; if regenerated code differs from existing in *behavior* but both pass the verifier — verifier under-captures statement.
+3. **Mutation testing of the implementation.** Mutate code in ways that should violate the statement; verifier should fail. If it doesn't, verifier under-captures.
+4. **Coverage-of-statement audit (LLM-assisted, quarterly).** Read invariant + verifier together; ask "does this verifier fully prove this statement?" Output is advisory; flagged invariants get re-compiled.
+
+**Why this duplication is worth the cost:**
+
+The alternatives are worse. *Verifier-only (no statement)*: no ADR traceability (test functions break on rename), no glossary anchoring, no audit substrate. *Statement-only (no verifier)*: not deterministic — LLM has to interpret spec at every CI run, which is the v1 SDD failure mode v2 exists to fix. The duplication is the *price of having both intent and enforcement deterministic*. The methodology pays it upfront with drift-detection rather than pretending the artifacts can't drift.
+
+**Operational summary:** when statement and verifier conflict in audit, treat the verifier as the bug — it's the artifact that's *supposed* to be a deterministic encoding of the statement. The statement only gets revised when the audit reveals the original statement was itself ambiguous or wrong, in which case the fix is "sharpen the statement, re-derive the verifier." This keeps the authority hierarchy stable while admitting the operational reality that verifiers can drift from statements.
 
 ## Error Handling
 
