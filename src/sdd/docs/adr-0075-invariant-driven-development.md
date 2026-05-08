@@ -347,7 +347,14 @@ Modifications to `core` invariants are stricter:
 
 #### Reaction process: how relying ADRs respond to changes
 
-When a `Modified` (Class B sharpening), `Superseded`, or `Withdrawn` delta affects an invariant with relying ADRs, those ADRs must "react" — explicitly acknowledge the change before the triggering ADR can merge. The reaction is a data-driven workflow, not an email or hand-wave.
+When a `Modified` (Class B sharpening), `Superseded`, or `Withdrawn` delta affects an invariant, ADRs with stake in that invariant must "react" — explicitly acknowledge the change before the triggering ADR can merge. Two kinds of stake produce reaction artifacts:
+
+1. **`relies_on` edges** — ADRs that explicitly declared reliance on the affected invariant.
+2. **Meta-edges** (`introduces`, `modifies`) — ADRs that authored the invariant or its prior modifications. These ADRs' decisions live structurally in the invariant they touched.
+
+(Meta-edges trigger reactions but still don't count toward the `core` citation count — anti-gaming for `core` is a separate concern from reaction triggering.)
+
+The reaction is a data-driven workflow, not an email or hand-wave.
 
 **Reaction artifact (one per relying ADR):**
 
@@ -380,10 +387,9 @@ Reaction artifacts are committed alongside the triggering ADR's PR; their existe
 
 | Ack | Meaning | Effect |
 |---|---|---|
-| `re-pin` | "I reviewed; my decisions still apply" | Reliance edge stays; for supersession, edge auto-migrates to successor invariant |
-| `update` | "I need to author a follow-up ADR adjusting my decisions" | Triggering ADR can merge only after follow-up ADR is committed |
-| `migrate` | (Supersession only) "Redeclare reliance on successor explicitly via small ADR amendment" | Same effect as re-pin, but explicit acknowledgment |
-| `accept-unpinning` | (Withdrawal only) "I accept losing the reliance edge; my ADR is now un-pinned" | Reliance removed; ADR flagged as un-pinned for future review |
+| `migrate` | "I reviewed; my decisions still apply" | For Class B sharpening: edge stays on the now-sharpened invariant. For supersession: edge auto-migrates to the successor. For meta-edge: introduced invariant still works as-is. |
+| `update` | "I need to author a follow-up ADR adjusting my decisions" | Triggering ADR can merge only after follow-up ADR is committed. For meta-edge: follow-up amends the introduced invariant (e.g., changes its `requires`, rewrites its verifier). |
+| `accept-unpinning` | "Drop the relationship entirely" | For `relies_on`: drop the reliance edge; relying ADR is now un-pinned. For meta-edge: withdraw the introduced invariant (Withdrawn delta on it). |
 | `object` | "Don't proceed with this change" | Triggering ADR blocked until objection is resolved (escalation to project owner / discussion / re-author) |
 
 **State machine:**
@@ -419,7 +425,7 @@ Any `object` ack blocks indefinitely until resolved through human discussion (wh
 
 **Dashboard surface:**
 
-- **Reactions queue** (per owner): list of pending reactions with deadlines, target invariants, triggering ADRs. Grouped by LLM-suggested ack class (clear re-pins, needs judgment). One-click batch ack for high-confidence groups.
+- **Reactions queue** (per owner): list of pending reactions with deadlines, target invariants, triggering ADRs. Grouped by LLM-suggested ack class (clear migrates, needs judgment). One-click batch ack for high-confidence groups.
 - **Triggering-ADR view**: shows which reactions are pending, acked, expired, or objected — author sees blockers in real time.
 
 #### Reaction triage assistant (LLM-enhanced)
@@ -438,7 +444,7 @@ Produces a structured suggestion that's written into the reaction artifact:
 
 ```yaml
 llm_suggestion:
-  ack: re-pin              # or update, migrate, accept-unpinning, undecided
+  ack: migrate             # or update, accept-unpinning, undecided
   confidence: high         # high | medium | low
   rationale: |
     <one paragraph explaining why this ack is suggested, citing
@@ -507,7 +513,6 @@ Every reaction action is a slash command in your Claude Code session. Commands m
 | `/ack-batch --confidence high --action approve` | Bulk-acks all reactions where LLM suggestion is high-confidence; one review for many decisions |
 | `/draft-followup <id>` | For ack=update suggestions, generates the follow-up ADR draft locally; you review and commit |
 | `/object-reaction <id> <reason>` | Flips state to `objected`; blocks merge until resolved |
-| `/migrate-reaction <id>` | (Supersession only) Records explicit reliance migration to successor invariant |
 
 The whole resolution loop stays in your terminal: read the queue, ack what's clear, draft follow-ups for what needs an update, object on what's actually broken. No PR comment threads, no web clicks, no context switch.
 
@@ -604,7 +609,7 @@ The dashboard is the *visualization, discovery, and async-monitoring* layer; CLI
 - **Drift heatmap** — invariants overlaid with last-audit-status color (green = roundtrip OK, yellow = pending audit, red = drift detected).
 - **Tier distribution** — bar chart of invariant counts by tier × component, highlighting components heavy in drafts (potential consolidation targets) vs heavy in actives (mature surfaces).
 - **Promotion candidates** — drafts that have met all promotion criteria (survival, utility, surrounding-code stability) but haven't been promoted yet; one-click "draft promotion ADR" action.
-- **Reactions queue** — pending reactions across all open PRs, grouped by LLM-suggested ack class (clear re-pins, needs judgment); per-owner filter; deadlines visible.
+- **Reactions queue** — pending reactions across all open PRs, grouped by LLM-suggested ack class (clear migrates, needs judgment); per-owner filter; deadlines visible.
 
 **Write actions (parity with CLI slash commands):**
 
@@ -618,7 +623,6 @@ Every CLI action has a dashboard equivalent. The dashboard writes the same artif
 | Bulk ack high-confidence | `/ack-batch --confidence high --action approve` | Queue panel → "Approve all clear cases" button |
 | Draft follow-up ADR | `/draft-followup <id>` | Detail pane → "Draft follow-up" button |
 | Object | `/object-reaction <id> <reason>` | Detail pane → "Object" button + reason textbox |
-| Migrate reliance | `/migrate-reaction <id>` | Detail pane → "Migrate to successor" button |
 | Promote draft → active | (slash command in /plan-feature) | Promotion candidates panel → "Generate promotion ADR" button |
 
 **How dashboard write actions actually commit:**
@@ -646,7 +650,7 @@ Whichever venue the action comes from, the artifact YAML records:
 
 ```yaml
 human_decision:
-  ack: re-pin
+  ack: migrate
   rationale: "verifiability still holds"
   acked_by: <git author or GitHub username>
   acked_at: <ISO 8601 timestamp>
