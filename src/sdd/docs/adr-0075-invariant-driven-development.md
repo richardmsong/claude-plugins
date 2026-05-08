@@ -44,6 +44,12 @@ V2 shifts the contract surface from prose to executable artifacts (test files + 
 | Core attribute (computed) | `core: true` automatically set when ≥ 3 other ADRs rely on the invariant as load-bearing; also manually settable for explicit declarations. Affects removal ceremony (core requires successor invariant or explicit redesign justification). | Core-ness is a *consequence* of architectural significance, not a separate governance state. Computing it from the relied-on count makes the signal evidence-based and game-resistant; manual override exists for the rare case where authorial judgment precedes evidence. Reuses the lineage-dashboard concept already established for ADR↔spec relationships. |
 | Invariant lifecycle status | Orthogonal axis: `active` / `deprecated` / `superseded` / `withdrawn`. Withdrawal requires verifier file deletion in the same commit. | Separates "is this still enforced?" (status) from "how committed are we?" (tier). Allows graceful deprecation periods for active invariants and lightweight Day-2 revocation for drafts. |
 | Conflict resolution authority | Authority hierarchy: statement > verifier > code. Operational reality: verifier is what CI runs. When statement and verifier conflict at audit, the verifier is the bug (it should be a deterministic encoding of the statement). Statement is revised only when audit reveals the original statement was ambiguous. | Three artifacts encoding the same truth means drift is possible. An explicit hierarchy gives a deterministic resolution rule rather than living with silent drift. |
+| Verifier-required at ADR drafting | Every Added/Modified delta entry ships with its working verifier code in the same commit. ADRs cannot finalize while any newly-added invariant lacks a verifier that compiles and runs. The invariant-compiler subagent is invoked inline during ADR authoring, not as a separate post-finalization step. | Invariant statements are provisional until the verifier exists — writing the verifier is the precision-forcing function that exposes ambiguities the prose hides. Speculative invariants ("nice if we tracked X") get filtered because they can't survive verifier-authoring. The registry only contains contracts you can prove. |
+| Independence rule | Registered invariants are pairwise logically independent. If A's truth implies B's truth, B is not a separate invariant — consolidate into A or document as a corollary in A's prose. The registry is a minimal set of claims, not a decomposed catalog. | Bounds registry growth deterministically. If you find yourself wanting an `implies` edge between two registered invariants, one of them shouldn't be registered. Forces precision: every invariant must defend its independence from existing ones. |
+| Lazy decomposition by independent governance | An aspect of an invariant becomes its own invariant only when an ADR proposes evolving that aspect independently of the parent. Until then, it's part of the parent's verifier as an internal sub-check. | Avoids speculative decomposition. Field-level invariants emerge from real evolution history, not from authors imagining future evolution. Day 1 starts with coarse invariants; granularity grows organically when migrations or refactors force fields/aspects into independent governance. |
+| Edge taxonomy | DAG edges between invariants are `requires` and `supersedes` only. `requires` (operational): A's verifier presupposes B's truth; A can't be checked if B is broken. `supersedes` (temporal): B replaces A in time. `composed_of` and `implies` are dropped — the first is redundant aggregation; the second indicates a registration error (consolidate or document inline). | Two edge types, both encoding non-logical relationships. The DAG is purely operational dependency, used for verification ordering, withdrawal cascade, audit prioritization. Logical relationships between invariants don't earn an edge type because they shouldn't exist between *registered* invariants. |
+| Composite invariants | Composites exist only when they encode cross-cutting contracts that aren't the conjunction of leaves (e.g., cross-row uniqueness, referential integrity, aggregate counts, ordering). Such composites are themselves standalone invariants with `requires` edges to the leaves they presuppose, not aggregations of them. ADRs default to relying on leaves; composite reliance is audit-flagged as suspicion. | Aggregations are smells — "row well-formed" tells reliers nothing about which fields they actually depend on. Real composites are non-redundant table-level claims that no leaf can express. |
+| Definition vs Comments fields | Registry entry has two text fields: `Definition` (the contract; changes trigger Modified deltas and reactions) and `Comments` (free-form annotations: insights, edge cases, performance notes, historical context; changes do not trigger reactions; freely editable). | Most documentation refinement isn't a contract change. Splitting allows informational annotations to accumulate without ceremony, while keeping the contract surface stable. Comments are advisory — wrong comments don't fail CI; the audit flags suspect ones. LLM tools (compiler, triage, audit) read comments as context. |
 | Invariant registry format | (decision pending: language-native const slice, YAML, separate file per invariant, comment-extracted from test files) | |
 | Glossary form | (decision pending: standalone `glossary.md`, language-native const map for type-checked references, or generated index from typed bindings) | |
 | Verifier file layout | (decision pending: co-located with code, dedicated `internal/spec/` subdirectory, separate spec package, or hybrid by mechanism) | |
@@ -111,20 +117,19 @@ The development cycle for a v2 component (in any consumer project):
 
 ### Methodology's own registry
 
-`src/sdd/spec/invariants.<lang>` — the methodology's own invariant registry. Day 1 contents:
+`src/sdd/spec/invariants.<lang>` — the methodology's own invariant registry. Initial contents are DAG roots (no `requires` edges), authorable with just registry/glossary/ADR-block parsers:
 
-```
-methodology.registry.no_orphans
-methodology.glossary.complete
-methodology.adr.delta_reconciles
-methodology.invariant.has_mechanism
-methodology.invariant.statement_atomic
-methodology.skills.context_isolation
-methodology.subagent.fresh_context
-methodology.audit.advisory_only
-```
+- `methodology.registry_entry.well_formed` — schema validity for registry entries (replaces 12+ field-level invariants from earlier sketches under the "schema is one invariant until evolution forces split" rule)
+- `methodology.glossary_entry.well_formed` — schema validity for glossary entries
+- `methodology.adr.delta_block.well_formed` — schema validity for ADR Invariant Delta blocks
+- `methodology.registry.no_orphans` — every active/deprecated entry has live verifier; every verifier referenced by exactly one entry
+- `methodology.adr.delta_reconciles` — sum of live ADR deltas equals current registry contents
 
-Each registered with its mechanism, verifier file pointer, glossary terms used. The registry-coverage CI gate runs against this set first, proving the machinery before any consumer adopts.
+Layer 1 (requires roots): `methodology.glossary.complete`, `methodology.registry.references_have_delta_blocks`, the reliance-graph anti-gaming invariants — these enter the registry once the prereq machinery is authorable.
+
+Deeper layers (audit, reaction process, triage, dashboard, MCP) enter as their respective tooling lands and verifiers become authorable. The full methodology DAG grows from ~5 roots to ~30-40 standalone invariants over the implementation arc; speculative or aggregation-style invariants are excluded by the independence and lazy-decomposition rules.
+
+The registry-coverage CI gate runs against the live set, growing with the registry. Each invariant in the registry has working verifier code in the same commit — no draft-without-verifier state.
 
 ## Data Model
 
@@ -132,10 +137,12 @@ Each registered with its mechanism, verifier file pointer, glossary terms used. 
 
 ```
 - id: <stable_dot_separated_name>
-  statement: <one-line natural language; no AND>
+  definition: <one-line natural language contract; no AND; changes trigger Modified deltas>
+  comments: <free-form notes: edge cases, performance, history, hints; advisory only>
   mechanism: unit | table | property | arch | ast | type | schema | completeness | integration | journey
   verifier: <path/to/test_file::TestName | path/to/.arch/rule.yaml | ...>
-  glossary_terms: [list of terms in statement that need resolution]
+  requires: [list of invariant IDs this verifier presupposes]
+  glossary_terms: [list of terms in definition that need resolution]
   tier: draft | active
   status: active | deprecated | superseded | withdrawn
   introduced_by: adr-NNNN
@@ -145,7 +152,9 @@ Each registered with its mechanism, verifier file pointer, glossary terms used. 
   relied_on_by: [adr-NNNN, adr-MMMM, ...]   # populated by docs-mcp from ADR Relies On blocks
 ```
 
-`tier` governs *change process* (lightweight for draft, deprecation-period for active). `status` governs *whether the verifier runs and how the registry handles it*. `core` is a derived attribute computed from the reliance graph; it elevates the removal ceremony but doesn't add a governance state. The three axes are orthogonal — see "Methodology Governance" section below.
+`definition` is the contract surface; edits trigger Modified-delta machinery. `comments` is advisory annotation; edits are free.
+`tier` governs *change process* (lightweight for draft, deprecation-period for active). `status` governs *whether the verifier runs and how the registry handles it*. `core` is a derived attribute computed from the reliance graph; it elevates the removal ceremony but doesn't add a governance state.
+`requires` lists invariant IDs that this invariant's verifier presupposes — the operational dependency edges that form the DAG. The DAG must be acyclic; CI gate enforces.
 
 ### Glossary entry (format pending)
 
@@ -164,8 +173,8 @@ Each ADR that affects invariants includes a structured block with up to six delt
 ## Invariant Delta
 
 ### Added
-- `<id>`: <statement> (mechanism: <m>, verifier: <path>, tier: draft)
-  *(Newly registered invariants default to tier `draft` unless explicitly introduced as `active` with justification.)*
+- `<id>`: <definition> (mechanism: <m>, verifier: <path>, tier: draft, requires: [<ids>])
+  *(Newly registered invariants default to tier `draft` unless explicitly introduced as `active` with justification. Verifier file MUST exist and compile in the same commit. Optional: comments inline.)*
 
 ### Modified
 - `<id>`: <what changed in the statement, mechanism, or verifier — and why>
@@ -196,11 +205,18 @@ The CI gate verifies that the running registry equals the sum of all ADR deltas 
 
 The methodology is self-applicable. The same registry, glossary, CI gates, and skill conventions that verify consumer-project invariants also verify *the methodology's own invariants*. This isn't a curiosity — it's evidence the framework is general, and it determines the implementation order.
 
-**Bootstrap order:**
+**Bootstrap is DAG-shaped, not temporally phased.** Invariants ship as their verifiers are authorable. The DAG of `requires` edges determines order: a `requires`-leaf invariant (one whose verifier doesn't presuppose another invariant) can be authored standalone; a deeper invariant needs its prerequisites in place first.
 
-1. **Day 0**: Registry empty. Methodology lives in this ADR + `spec-invariant-driven-development.md` (English).
-2. **Day 1**: Register the methodology's own ~9 invariants (listed above). Build their deterministic CI gates. Verify the registry/glossary/CI-gate machinery works end-to-end on a small invariant set, in agent-plugins's own repo.
-3. **Day N**: Consumer projects (starting with mclaude per its ADR-0100) register their own invariants. Every consumer-project invariant immediately benefits from methodology-invariant CI gates that already work.
+**DAG roots** (no `requires` edges; verifiable with just parsers):
+- Schema-validity invariants on registry entries, glossary entries, ADR delta blocks. These are the foundational set.
+
+**DAG layers grow as tooling lands:**
+- Layer 1 invariants (those that `require` schema-validity) ship after the registry/glossary parsers exist.
+- Audit-related invariants ship after `/audit-invariants` exists.
+- Reaction-process invariants ship after the reaction artifact generator exists.
+- Dashboard / MCP invariants ship after those tools exist.
+
+The methodology's own registry grows leaf-up. Most invariants don't exist on the first commit; they enter the registry as their verifiers become authorable. Consumer projects (mclaude per ADR-0100) start adopting once enough of agent-plugins's own DAG is verifiable to prove the machinery.
 
 **Where the recursion bottoms out** (trusted primitives — not invariant-checked):
 - Language toolchain (`go build`, `go test`, type system, AST parser).
