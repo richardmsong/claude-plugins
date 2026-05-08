@@ -290,6 +290,63 @@ CI enforcement is identical across tiers — a verifier failure blocks merge reg
 | active, core=false | Reviewed for deprecation only | High — deprecation period required |
 | active, core=true | Reviewed for redesign or supersession | Very high — redesign event with blast-radius analysis |
 
+#### Modification policy and runbook
+
+Modification is the most dangerous delta type because it can silently change the contract: statement and verifier can drift, reliance edges become stale (ADRs relied on the old form, may not realize the new form differs), and "Modified" covers everything from typo fixes to substantive rewrites without distinction. The methodology classifies modifications by impact and routes substantive changes away from `Modified` to `Supersession`.
+
+**Three classes of modification:**
+
+| Class | What changed | Example | Routing |
+|---|---|---|---|
+| **A — Mechanical** | Wording / mechanism-name / verifier-path; statement *meaning* unchanged | Typo fix; mechanism rename in the taxonomy; test file moved | `Modified` delta; lightweight |
+| **B — Sharpening** | Statement narrowed or clarified without changing intent | "active user" → "user with non-null `login_at`" (was fuzzy, now precise); "all writes" → "all writes via API surface" | `Modified` delta; full runbook |
+| **C — Substantive** | Statement meaning changed; the contract is now different | "users have email" → "users have email or phone"; "JWT signed HS256" → "JWT signed RS256" | **Forbidden as `Modified`. Use `Supersession` instead.** |
+
+The hard rule: **Class C must be Supersession.** If the contract is changing, withdraw the old invariant and introduce a new one with a new ID. Relying ADRs explicitly redeclare reliance on the new — which is the *right* behavior, since they should review whether the new form still supports their decisions. The audit advisory flags "this Modified delta looks substantive; consider Supersession," but final classification is the author's call (humans review).
+
+**Runbook per class:**
+
+**Class A — Mechanical:**
+
+1. `Modified` delta; rationale = `"mechanical: <what changed>"`.
+2. If verifier path changed: update `verifier` field in registry.
+3. If statement wording changed but meaning unchanged: re-run statement-↔-verifier roundtrip (advisory; should still pass).
+4. Reliance review: not required.
+5. Single commit: ADR + registry + (optional) verifier path update.
+
+**Class B — Sharpening:**
+
+1. `Modified` delta; rationale = `"sharpening: <what was clarified>"`.
+2. Re-compile verifier from new statement via the `invariant-compiler` subagent.
+3. Human reviews verifier diff (old vs. new).
+4. CI gate: statement-↔-verifier roundtrip on the new pair must pass.
+5. Reliance scan: dashboard surfaces every ADR with a `relies_on` edge to this invariant.
+6. Advisory notification on each relying ADR: "invariant X you rely on was sharpened; review whether your decisions still apply."
+7. If any relying ADR objects → escalate to `Supersession` (Class C).
+8. If invariant has `core: true`: extra review — same ceremony as withdrawal of a core invariant; may be paired with a successor (i.e., promoted to `Supersession`).
+9. Single commit: ADR + registry + new verifier.
+
+**Class C — Substantive (forbidden as `Modified`; required as `Supersession`):**
+
+1. Withdraw `<old_id>` (reason: "superseded by `<new_id>`").
+2. Introduce `<new_id>` with the new statement (default tier: `draft`, unless explicit higher-tier introduction with justification).
+3. Verifier file for `<old_id>` deleted in the same commit; new verifier for `<new_id>` authored in the same commit.
+4. ADRs that relied on `<old_id>` are flagged: must explicitly redeclare reliance on `<new_id>` in a follow-up ADR (or explicitly accept being un-pinned, which itself requires review).
+5. Standard withdrawal + introduction commit semantics.
+
+**CI gates the runbook depends on:**
+
+1. Statement-↔-verifier roundtrip on every `Modified` delta (catches A/B done wrong).
+2. `methodology.registry.no_orphans` enforces verifier-deletion on withdrawal (catches C done wrong).
+3. Advisory: "Modified delta classification" — audit LLM reads the diff and proposes A/B/C; flags suspected misclassification. Advisory only.
+
+**Default disposition for `core` invariants:**
+
+Modifications to `core` invariants are stricter:
+- Class A allowed without extra ceremony.
+- Class B requires a 1-cycle deprecation phase before the new statement takes effect — relying ADRs have time to react.
+- Class C (Supersession of a core invariant) requires redesign justification, blast-radius analysis from the dashboard, and ideally a paired successor invariant.
+
 ### Lineage and reliance graph
 
 The methodology builds a typed graph over its artifacts. This is a direct extension of the lineage dashboard already established in agent-plugins (ADR-0029-31, 0036, 0040, 0042, 0050) for ADR↔spec relationships — same docs-mcp, same dashboard, new node and edge types.
