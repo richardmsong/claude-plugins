@@ -317,16 +317,39 @@ The methodology builds a typed graph over its artifacts. This is a direct extens
 | `uses_term` | Invariant → Glossary term | Registry `glossary_terms` field | Registry |
 | `defines_term` | Type/Method → Glossary term | Glossary `resolves_to` field | Glossary |
 
+#### Citation detection: explicit Cites section, not inline
+
+Citations are detected from a structured `### Cites` block in the ADR's Invariant Delta section. **Inline mentions of invariant IDs in ADR prose do not count.** This is the load-bearing anti-gaming rule:
+
+- Inline detection has too many failure modes — incidental mentions count alongside dependencies, renames silently break references, gameable by mention frequency, requires NLP heuristics that aren't deterministic.
+- Explicit declaration is unambiguous, deterministic to parse, deliberate by friction, mechanical to maintain across renames, and reviewers can challenge "you cited this but I don't see the dependency."
+
+Inline mentions get an *advisory* signal only: the audit advisory may flag "ADR mentions invariant X but doesn't list it in Cites — intentional?" Authors decide; not a CI gate.
+
 #### Citation graph computation
 
-`core` is computed from the citation graph:
+`core` is computed from the citation graph with strict anti-gaming rules:
 
 ```
-citations(invariant) = | { adr | (adr, invariant) ∈ cites } |
+citations(invariant) = |{ adr | adr ∈ cites_block(invariant) }|
+                       where adr satisfies all of:
+                         1. adr is "live" (status ≠ withdrawn ∧ ≠ superseded-as-doc)
+                         2. adr has no meta-edge to invariant
+                            (no Added / Modified / Promoted / Deprecated /
+                             Withdrawn / Supersedes edge from this same ADR)
+                         3. invariant appears at most once in adr's Cites block
+                            (set cardinality, not line count)
+
 core(invariant) = (citations(invariant) ≥ 3) OR manually_set(invariant)
 ```
 
-The default threshold (3) is per-project configurable. The threshold is *not* across-tier — `cites` edges from ADRs that introduce, modify, or withdraw the invariant are excluded from the citation count, since they're already meta-edges. Only ADRs that *depend on* the invariant being true (without modifying it) increment the citation counter.
+**Rationale for each anti-gaming rule:**
+
+1. **Live ADRs only.** Withdrawn or superseded ADRs don't vote. Otherwise old ADRs that everyone has moved past would still inflate counts indefinitely.
+2. **No double-counting via meta-edges.** If ADR-X already introduces, modifies, or withdraws an invariant, it doesn't *also* count as a citation — the meta-edge is a stronger relationship; conflating them lets every introducing ADR auto-count toward core-ness.
+3. **One ADR = one citation.** Even if the ADR's Cites block lists the same invariant ID three times for three different reasons, that's one citation. Counts go off the deduplicated set per ADR, not the raw line count.
+
+The default threshold (3) is per-project configurable. Threshold-tuning is the right knob to turn if `core` ends up too restrictive or too permissive in practice — the underlying signal stays clean.
 
 #### MCP tools (extension of existing docs-mcp)
 
