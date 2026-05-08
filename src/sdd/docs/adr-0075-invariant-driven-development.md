@@ -217,7 +217,50 @@ The methodology's own registry grows leaf-up. Most invariants don't exist on the
 - Human judgment for the differential regeneration audit triage.
 - Day-0 bootstrap: this ADR (English) is the schema for the registry until the registry exists to hold its own invariants.
 
+## Decision history (rationale notes)
+
+This section preserves the *why* behind decisions captured tersely in the Decisions table. Each note is 1-3 sentences on a design choice that emerged from pushback during authoring; future maintainers shouldn't have to re-derive these.
+
+**Why the ack enum is `update` + `object` only.** Started at 5 (`re-pin`/`update`/`migrate`/`accept-unpinning`/`object`). `re-pin` and `migrate` collapsed because both meant "edge auto-redirects via supersession chain"; renamed to `migrate` then dropped because under verifier-required + tightly-coupled tests, "the invariant changed but no code change needed" is structurally rare (verifier IS the operational expression of the invariant; they evolve together). `accept-unpinning` collapsed because dropping any edge requires touching ADR delta blocks (immutable history) → that's a follow-up ADR → that's `update`.
+
+**Why ADRs don't have `relies_on` edges.** An ADR's stake in any pre-existing invariant should be captured by the *invariants it introduces* whose verifiers `requires` the existing one. If an ADR has prose-level decisions depending on X without operationalizing those decisions as invariants, that dependency is hidden — methodology can't catch it. So `relies_on` from ADRs is replaced by `requires` between invariants.
+
+**Why meta-edges trigger reactions but don't count toward `core`.** The original "no double-counting via meta-edges" rule conflated two concerns: (a) citation count anti-gaming for `core` computation, (b) reaction trigger eligibility. Decoupled them: anti-gaming for `core` excludes meta-edges (so introducing ADRs don't auto-bump their introduced invariants to core); but meta-edges DO trigger reactions (so introducing ADRs get notified when their introduced invariants are affected by later changes).
+
+**Why composite invariants don't exist.** Cross-row uniqueness, referential integrity, etc. were initially called "composites." User pushback: those aren't composed of leaves; they're standalone invariants with `requires` edges to the leaves they presuppose. `composed_of` as edge type was either redundant aggregation (smell — "row well-formed" tells reliers nothing about which fields they actually depend on) or a misnamed standalone with `requires`. Drop the concept entirely; everything in the registry is a standalone invariant connected by `requires` and `supersedes`.
+
+**Why `tier` field, `core` flag, and lifecycle events were collapsed into computed stability.** Stability is *observed* (architectural usage), not *declared* (authorial promotion). Citation count from invariant→invariant `requires` edges is the metric: 0 → uncited, 1-2 → stable, ≥3 → core. Eliminates the entire promotion ADR machinery, deprecation phases, Class A/B/C modification policy, and `### Promoted` / `### Deprecated` / `### Modified` / `### Superseded` sub-blocks. Manual override (`manual_stability`) exists for rare upfront declarations (security boundaries) but defaults are computed.
+
+**Why ADR meta-edges collapsed to `introduces` + `withdraws`.** When adr-B "supersedes X with X'," the substantive event is *X' replaces X* — that's a property of X' (and X), not of adr-B. adr-B is the historical record of when this happened. Encoding supersession as a sub-field of `Added` (rather than a separate `### Superseded` block) follows from this. Same logic eliminates `Modified` (Class A is registry edit only; Class B/C become Supersession), `Promoted` (tier is computed), `Deprecated` (warning function is served by reaction process when withdrawal is proposed).
+
+**Why mechanism field was dropped.** It wasn't driving anything operational — CI ignored it; reactions ignored it; verifier reference is what runs. Just enum validation against itself. Documentation/tag, not contract. If audit dashboards or triage hints later want it, can come back as part of the ADR that actually uses it.
+
+**Why YAML over Go slice for the registry.** The "compile-time validation" claim for Go was overstated: most cross-references in registry entries (`Verifier`, `Requires`, `Supersedes`, `GlossaryTerms`) are stringly-typed regardless. Go would only catch enum violations and field-name typos — both replicable by YAML schema validation. YAML is more honest about the registry's stringly-typed nature, easier to read, diff, and edit. Trade-off accepted: parsing happens at runtime instead of compile time.
+
+**Why each field is its own invariant (Pattern B over Pattern A).** Bloat-fighting discipline: an invariant shouldn't exist unless something depends on it; therefore a field shouldn't exist unless its invariant earns its place. AI-generated bloat-fields can't survive the requirement to author their invariant + verifier. Pattern A (one schema invariant aggregating all fields) would have logically implied each field invariant — violates the independence rule.
+
+**Why "introducing ≠ relies_on" with anti-gaming rationale.** If introducing ADRs auto-counted toward citation, every newly-introduced invariant would be `core` immediately (its introducer always cites it). Citation count needs to measure *external* architectural significance — invariants other ADRs depended on without authoring them — not the trivial fact that an invariant has an author.
+
+**Registry is event-sourced view of ADR history; only `comments` is non-event-sourced.** All stored fields are mostly computed from cumulative ADR deltas. `comments` is the exception (free-form, freely editable, no event source, doesn't trigger reactions). `delta_reconciles` enforces consistency between events (ADRs) and current state (registry). Both are complementary canonical sources, not one-derives-the-other.
+
+**Verifier path format.** `path::FuncName` for Go tests; just `path` for non-Go verifiers (lint configs, schemas). Format is decided in code (`splitVerifierRef`); the verifier-field invariant validates the form.
+
+**Glossary uniqueness scoping.** Glossary terms are unique *within scope*, not globally. Different scopes (methodology, project-cross-cutting, component-local) can have terms with the same name carrying different meanings.
+
+**Stability thresholds are configurable.** Default 0/1-2/≥3 → uncited/stable/core. Per-project tunability deferred (not currently implemented; the defaults are hardcoded in `StabilityOf`).
+
 ## Methodology Governance: Stability, Lifecycle, and Conflict Resolution
+
+> **STALE — superseded by the Decisions table and Decision history above.**
+>
+> The subsections below describe the original tier/promotion/deprecation/modification machinery, written before the methodology collapsed to:
+> - 2 ack options (`update`, `object`) — not 5
+> - 2 ADR meta-edges (`introduces`, `withdraws`) — not 6
+> - 2-state status (`active`, `withdrawn`) — not 4
+> - Computed stability (no `tier` field, no manual `core` flag)
+> - Class A is registry edit only; B/C are Supersession; no `Modified`/`Promoted`/`Deprecated`/`Superseded` sub-blocks
+>
+> Read the Decisions table (lines 27-62) for current rules. The text below is preserved as the design journey's record but contradicts the locked methodology in many places. To be cleaned up in a follow-up ADR.
 
 The methodology has three load-bearing artifacts that *encode the same truth in three forms*: invariant statements (intent, English), verifiers (enforcement, deterministic), production code (implementation, runtime). Three artifacts means duplication, and duplication means drift. This section addresses (a) how invariants evolve over time without process overhead exploding, and (b) what happens when the three artifacts disagree.
 
@@ -418,6 +461,8 @@ Any `object` ack blocks indefinitely until resolved through human discussion (wh
 - **Triggering-ADR view**: shows which reactions are pending, acked, expired, or objected — author sees blockers in real time.
 
 #### Reaction triage assistant (LLM-enhanced)
+
+> **STALE** — was written when ack enum had 5 options (`re-pin`, `update`, `migrate`, `accept-unpinning`, `object`) and reactions fired on `Modified` Class B / Supersession / Withdrawal. Current ack enum is 2 options (`update`, `object`); reactions fire on Supersession and Withdrawal only (`Modified` delta no longer exists). The general principle (LLM compresses owner workload via batched suggestions; never auto-objects, never auto-merges follow-ups, never decides on core invariants) carries forward but the specifics below need rewriting.
 
 Manually reviewing every reaction artifact is impractical at scale (a single-person project may receive dozens per quarter; multi-team projects, hundreds). The methodology includes an LLM-driven triage assistant that *prepares* each reaction for human ack — without ever making the ack itself or gating CI.
 
