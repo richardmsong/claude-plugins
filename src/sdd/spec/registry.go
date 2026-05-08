@@ -111,7 +111,19 @@ var Registry = []Invariant{
 		Status:        StatusActive,
 	},
 
-	// --- Cross-cutting (3) ---
+	// --- Cross-cutting (4) ---
+	{
+		ID:         "methodology.registry.requires_targets_exist",
+		Definition: "Every invariant ID listed in any registry entry's `requires` field references an invariant that exists in the registry.",
+		Mechanism:  MechCompleteness,
+		Verifier:   "registry_test.go::TestRegistryRequiresTargetsExist",
+		Requires: []string{
+			"methodology.registry.id_field",
+		},
+		GlossaryTerms: []string{"registry entry", "id"},
+		Status:        StatusActive,
+	},
+
 	{
 		ID:         "methodology.registry.no_orphans",
 		Definition: "Every active registry entry's verifier reference resolves to an existing file (and existing test function for Go test refs); every declared verifier reference is named by at most one registry entry.",

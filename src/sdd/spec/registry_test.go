@@ -80,3 +80,22 @@ func TestRegistryGlossaryTermsField(t *testing.T) {
 		}
 	}
 }
+
+// TestRegistryRequiresTargetsExist verifies methodology.registry.requires_targets_exist.
+//
+// Every invariant ID listed in any entry's Requires field must reference an
+// invariant that actually exists in the Registry. Catches typos, stale
+// references after withdrawal, and dangling DAG edges.
+func TestRegistryRequiresTargetsExist(t *testing.T) {
+	ids := make(map[string]bool, len(Registry))
+	for _, inv := range Registry {
+		ids[inv.ID] = true
+	}
+	for _, inv := range Registry {
+		for _, req := range inv.Requires {
+			if !ids[req] {
+				t.Errorf("%s: requires references non-existent invariant %q", inv.ID, req)
+			}
+		}
+	}
+}
