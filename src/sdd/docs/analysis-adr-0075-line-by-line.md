@@ -25,600 +25,600 @@ Every invariant identified in the analysis is defined here exactly once. The Lin
 ## Schema / structural / lifecycle
 
 ### inv-methodology-invariant-has-id
-**ID**: `methodology.invariant.has_id`
-**Statement**: Every registry entry has a unique stable string ID matching `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_.]*$`.
-**Mechanism**: schema check on registry.
+- **ID**: `methodology.invariant.has_id`
+- **Statement**: Every registry entry has a unique stable string ID matching `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_.]*$`.
+- **Mechanism**: schema check on registry.
 
 ### inv-methodology-invariant-has-mechanism
-**ID**: `methodology.invariant.has_mechanism`
-**Statement**: Every registry entry has a non-null `mechanism` field.
-**Mechanism**: schema check.
+- **ID**: `methodology.invariant.has_mechanism`
+- **Statement**: Every registry entry has a non-null `mechanism` field.
+- **Mechanism**: schema check.
 
 ### inv-methodology-invariant-mechanism-in-taxonomy
-**ID**: `methodology.invariant.mechanism_in_taxonomy`
-**Statement**: `mechanism` field's value is in the closed enum {unit, table, property, arch, ast, type, schema, completeness, integration, journey}.
-**Mechanism**: schema check.
+- **ID**: `methodology.invariant.mechanism_in_taxonomy`
+- **Statement**: `mechanism` field's value is in the closed enum {unit, table, property, arch, ast, type, schema, completeness, integration, journey}.
+- **Mechanism**: schema check.
 
 ### inv-methodology-invariant-statement-atomic
-**ID**: `methodology.invariant.statement_atomic`
-**Statement**: Statement field contains no logical "AND" connector at the top level — invariants must be atomic.
-**Mechanism**: lint heuristic on registry.
+- **ID**: `methodology.invariant.statement_atomic`
+- **Statement**: Statement field contains no logical "AND" connector at the top level — invariants must be atomic.
+- **Mechanism**: lint heuristic on registry.
 
 ### inv-methodology-invariant-statement-single-line
-**ID**: `methodology.invariant.statement_single_line`
-**Statement**: Statement field contains no newline character.
-**Mechanism**: schema.
+- **ID**: `methodology.invariant.statement_single_line`
+- **Statement**: Statement field contains no newline character.
+- **Mechanism**: schema.
 
 ### inv-methodology-invariant-tier-in-enum
-**ID**: `methodology.invariant.tier_in_enum`
-**Statement**: `tier` field's value is in {draft, active}.
-**Mechanism**: schema.
+- **ID**: `methodology.invariant.tier_in_enum`
+- **Statement**: `tier` field's value is in {draft, active}.
+- **Mechanism**: schema.
 
 ### inv-methodology-invariant-tier-default-draft
-**ID**: `methodology.invariant.tier_default_draft`
-**Statement**: Newly registered invariants default to `tier=draft` unless the introducing ADR includes an explicit higher-tier-justification subsection.
-**Mechanism**: AST scan on Added delta entries.
+- **ID**: `methodology.invariant.tier_default_draft`
+- **Statement**: Newly registered invariants default to `tier=draft` unless the introducing ADR includes an explicit higher-tier-justification subsection.
+- **Mechanism**: AST scan on Added delta entries.
 
 ### inv-methodology-invariant-higher-tier-justification
-**ID**: `methodology.invariant.higher_tier_introduction_requires_justification`
-**Statement**: Adding an invariant at tier=active requires an explicit `### Justification` subsection in the introducing ADR's Added entry.
-**Mechanism**: AST scan.
+- **ID**: `methodology.invariant.higher_tier_introduction_requires_justification`
+- **Statement**: Adding an invariant at tier=active requires an explicit `### Justification` subsection in the introducing ADR's Added entry.
+- **Mechanism**: AST scan.
 
 ### inv-methodology-invariant-status-in-enum
-**ID**: `methodology.invariant.status_in_enum`
-**Statement**: `status` field is in {active, deprecated, superseded, withdrawn}.
-**Mechanism**: schema.
+- **ID**: `methodology.invariant.status_in_enum`
+- **Statement**: `status` field is in {active, deprecated, superseded, withdrawn}.
+- **Mechanism**: schema.
 
 ### inv-methodology-invariant-introduced-by-live-adr
-**ID**: `methodology.invariant.introduced_by_live_adr`
-**Statement**: `introduced_by` field references an ADR file that exists and has status ≠ withdrawn.
-**Mechanism**: schema cross-check.
+- **ID**: `methodology.invariant.introduced_by_live_adr`
+- **Statement**: `introduced_by` field references an ADR file that exists and has status ≠ withdrawn.
+- **Mechanism**: schema cross-check.
 
 ### inv-methodology-invariant-promoted-by-iff-active
-**ID**: `methodology.invariant.promoted_by_set_iff_active`
-**Statement**: `promoted_by` field is set if and only if `tier == active`.
-**Mechanism**: schema.
+- **ID**: `methodology.invariant.promoted_by_set_iff_active`
+- **Statement**: `promoted_by` field is set if and only if `tier == active`.
+- **Mechanism**: schema.
 
 ### inv-methodology-invariant-superseded-by-iff-superseded
-**ID**: `methodology.invariant.superseded_by_set_iff_superseded`
-**Statement**: `superseded_by` field is set if and only if `status == superseded`; if set, points to a live invariant ID.
-**Mechanism**: schema cross-check.
+- **ID**: `methodology.invariant.superseded_by_set_iff_superseded`
+- **Statement**: `superseded_by` field is set if and only if `status == superseded`; if set, points to a live invariant ID.
+- **Mechanism**: schema cross-check.
 
 ### inv-methodology-invariant-core-computed-correctly
-**ID**: `methodology.invariant.core_computed_correctly`
-**Statement**: `core` field equals `(relied_on_count ≥ threshold) OR manually_set`, recomputed on every commit affecting the citation graph.
-**Mechanism**: codegen completeness — derived field consistency check.
+- **ID**: `methodology.invariant.core_computed_correctly`
+- **Statement**: `core` field equals `(relied_on_count ≥ threshold) OR manually_set`, recomputed on every commit affecting the citation graph.
+- **Mechanism**: codegen completeness — derived field consistency check.
 
 ### inv-methodology-invariant-relied-on-by-matches-graph
-**ID**: `methodology.invariant.relied_on_by_matches_graph`
-**Statement**: `relied_on_by` field equals the set of live ADRs with Relies On edge to this invariant per anti-gaming rules.
-**Mechanism**: codegen completeness — derived field.
+- **ID**: `methodology.invariant.relied_on_by_matches_graph`
+- **Statement**: `relied_on_by` field equals the set of live ADRs with Relies On edge to this invariant per anti-gaming rules.
+- **Mechanism**: codegen completeness — derived field.
 
 ### inv-methodology-invariant-glossary-terms-populated
-**ID**: `methodology.invariant.glossary_terms_field_populated`
-**Statement**: `glossary_terms` lists every term from the statement that requires resolution; populated at compile time.
-**Mechanism**: codegen consistency.
+- **ID**: `methodology.invariant.glossary_terms_field_populated`
+- **Statement**: `glossary_terms` lists every term from the statement that requires resolution; populated at compile time.
+- **Mechanism**: codegen consistency.
 
 ### inv-methodology-invariant-withdrawal-deletes-verifier
-**ID**: `methodology.invariant.withdrawal_deletes_verifier`
-**Statement**: When an ADR's Withdrawn delta names an invariant, the same commit deletes the verifier file referenced in the registry.
-**Mechanism**: deterministic script (CI gate, git-aware).
+- **ID**: `methodology.invariant.withdrawal_deletes_verifier`
+- **Statement**: When an ADR's Withdrawn delta names an invariant, the same commit deletes the verifier file referenced in the registry.
+- **Mechanism**: deterministic script (CI gate, git-aware).
 
 ### inv-methodology-registry-no-orphans
-**ID**: `methodology.registry.no_orphans`
-**Statement**: Every active or deprecated registry entry has a live verifier; every verifier file is referenced by exactly one registered invariant.
-**Mechanism**: deterministic script (CI gate).
+- **ID**: `methodology.registry.no_orphans`
+- **Statement**: Every active or deprecated registry entry has a live verifier; every verifier file is referenced by exactly one registered invariant.
+- **Mechanism**: deterministic script (CI gate).
 
 ### inv-methodology-adr-delta-reconciles
-**ID**: `methodology.adr.delta_reconciles`
-**Statement**: Sum of all live ADRs' (Added − Withdrawn) deltas equals the current registry contents.
-**Mechanism**: deterministic script (CI gate).
+- **ID**: `methodology.adr.delta_reconciles`
+- **Statement**: Sum of all live ADRs' (Added − Withdrawn) deltas equals the current registry contents.
+- **Mechanism**: deterministic script (CI gate).
 
 ### inv-methodology-adr-delta-block-required
-**ID**: `methodology.adr.delta_block_required_for_invariant_changes`
-**Statement**: Any ADR that introduces, modifies, deprecates, supersedes, or withdraws an invariant has an `## Invariant Delta` section.
-**Mechanism**: AST scan on ADR markdown.
+- **ID**: `methodology.adr.delta_block_required_for_invariant_changes`
+- **Statement**: Any ADR that introduces, modifies, deprecates, supersedes, or withdraws an invariant has an `## Invariant Delta` section.
+- **Mechanism**: AST scan on ADR markdown.
 
 ### inv-methodology-adr-delta-block-kinds-in-enum
-**ID**: `methodology.adr.delta_block_kinds_in_enum`
-**Statement**: Every sub-heading inside `## Invariant Delta` is one of the 7 declared kinds (Added, Modified, Promoted, Deprecated, Superseded, Withdrawn, Relies On).
-**Mechanism**: AST scan.
+- **ID**: `methodology.adr.delta_block_kinds_in_enum`
+- **Statement**: Every sub-heading inside `## Invariant Delta` is one of the 7 declared kinds (Added, Modified, Promoted, Deprecated, Superseded, Withdrawn, Relies On).
+- **Mechanism**: AST scan.
 
 ### inv-methodology-added-block-complete
-**ID**: `methodology.adr.added_block_complete`
-**Statement**: Each Added entry includes id + statement + mechanism + verifier (and optional tier).
-**Mechanism**: schema scan.
+- **ID**: `methodology.adr.added_block_complete`
+- **Statement**: Each Added entry includes id + statement + mechanism + verifier (and optional tier).
+- **Mechanism**: schema scan.
 
 ### inv-methodology-deprecated-block-includes-reason
-**ID**: `methodology.deprecated_block_includes_reason_and_target`
-**Statement**: Deprecated entry includes reason and expected withdrawal ADR / cycle.
-**Mechanism**: schema.
+- **ID**: `methodology.deprecated_block_includes_reason_and_target`
+- **Statement**: Deprecated entry includes reason and expected withdrawal ADR / cycle.
+- **Mechanism**: schema.
 
 ### inv-methodology-superseded-block-maps-old-new
-**ID**: `methodology.superseded_block_maps_old_to_new`
-**Statement**: Superseded entry references both old and new invariant IDs.
-**Mechanism**: schema.
+- **ID**: `methodology.superseded_block_maps_old_to_new`
+- **Statement**: Superseded entry references both old and new invariant IDs.
+- **Mechanism**: schema.
 
 ## Glossary
 
 ### inv-methodology-glossary-complete
-**ID**: `methodology.glossary.complete`
-**Statement**: Every term in any active invariant statement resolves to a typed binding (Go type/method) or an entry in the glossary file.
-**Mechanism**: deterministic script (CI gate).
+- **ID**: `methodology.glossary.complete`
+- **Statement**: Every term in any active invariant statement resolves to a typed binding (Go type/method) or an entry in the glossary file.
+- **Mechanism**: deterministic script (CI gate).
 
 ### inv-methodology-glossary-term-unique
-**ID**: `methodology.glossary.term_unique`
-**Statement**: Every glossary term is unique within its scope.
-**Mechanism**: schema.
+- **ID**: `methodology.glossary.term_unique`
+- **Statement**: Every glossary term is unique within its scope.
+- **Mechanism**: schema.
 
 ### inv-methodology-glossary-resolves-to-valid
-**ID**: `methodology.glossary.resolves_to_valid_target`
-**Statement**: `resolves_to` value is a real type/method, an existing invariant ID, or another glossary term.
-**Mechanism**: schema cross-check.
+- **ID**: `methodology.glossary.resolves_to_valid_target`
+- **Statement**: `resolves_to` value is a real type/method, an existing invariant ID, or another glossary term.
+- **Mechanism**: schema cross-check.
 
 ### inv-methodology-glossary-scope-in-enum
-**ID**: `methodology.glossary.scope_in_enum`
-**Statement**: `scope` value is in {methodology, project-cross-cutting, component-local}.
-**Mechanism**: schema.
+- **ID**: `methodology.glossary.scope_in_enum`
+- **Statement**: `scope` value is in {methodology, project-cross-cutting, component-local}.
+- **Mechanism**: schema.
 
 ## Skills
 
 ### inv-methodology-adr-authoring-uses-plan-feature
-**ID**: `methodology.adr_authoring.uses_plan_feature`
-**Statement**: Any new or modified ADR that touches invariants is authored via `/plan-feature` (not by direct file write outside the skill).
-**Mechanism**: integration test + advisory.
+- **ID**: `methodology.adr_authoring.uses_plan_feature`
+- **Statement**: Any new or modified ADR that touches invariants is authored via `/plan-feature` (not by direct file write outside the skill).
+- **Mechanism**: integration test + advisory.
 
 ### inv-methodology-plan-feature-includes-delta-when-present
-**ID**: `methodology.plan_feature.includes_invariant_delta_when_present`
-**Statement**: When the author indicates the ADR introduces invariants, `/plan-feature` includes the Invariant Delta block in the template; otherwise produces a standard ADR.
-**Mechanism**: integration test.
+- **ID**: `methodology.plan_feature.includes_invariant_delta_when_present`
+- **Statement**: When the author indicates the ADR introduces invariants, `/plan-feature` includes the Invariant Delta block in the template; otherwise produces a standard ADR.
+- **Mechanism**: integration test.
 
 ### inv-methodology-plan-feature-blocks-unmechanism
-**ID**: `methodology.plan_feature.blocks_unmechanism_invariants`
-**Statement**: `/plan-feature` cannot transition an ADR from draft → accepted while any proposed invariant lacks a mechanism field.
-**Mechanism**: integration test on /plan-feature finalization step.
+- **ID**: `methodology.plan_feature.blocks_unmechanism_invariants`
+- **Statement**: `/plan-feature` cannot transition an ADR from draft → accepted while any proposed invariant lacks a mechanism field.
+- **Mechanism**: integration test on /plan-feature finalization step.
 
 ### inv-methodology-plan-feature-blocks-unresolved-terms
-**ID**: `methodology.plan_feature.blocks_unresolved_terms`
-**Statement**: `/plan-feature` cannot finalize ADRs with unresolved terms in proposed invariant statements.
-**Mechanism**: integration test.
+- **ID**: `methodology.plan_feature.blocks_unresolved_terms`
+- **Statement**: `/plan-feature` cannot finalize ADRs with unresolved terms in proposed invariant statements.
+- **Mechanism**: integration test.
 
 ### inv-methodology-feature-change-uses-verifier-suite
-**ID**: `methodology.feature_change.uses_verifier_suite_when_invariants_present`
-**Statement**: When an ADR includes an Invariant Delta block, `/feature-change` adds the verifier suite as a success criterion alongside the existing implementation-evaluator.
-**Mechanism**: integration test.
+- **ID**: `methodology.feature_change.uses_verifier_suite_when_invariants_present`
+- **Statement**: When an ADR includes an Invariant Delta block, `/feature-change` adds the verifier suite as a success criterion alongside the existing implementation-evaluator.
+- **Mechanism**: integration test.
 
 ### inv-methodology-glossary-check-deterministic
-**ID**: `methodology.glossary_check.is_deterministic_script`
-**Statement**: `/check-glossary` is implemented as a non-LLM script (CI-runnable; same input → same output).
-**Mechanism**: arch rule (forbid LLM imports in the script).
+- **ID**: `methodology.glossary_check.is_deterministic_script`
+- **Statement**: `/check-glossary` is implemented as a non-LLM script (CI-runnable; same input → same output).
+- **Mechanism**: arch rule (forbid LLM imports in the script).
 
 ### inv-methodology-registry-check-deterministic
-**ID**: `methodology.registry_check.is_deterministic_script`
-**Statement**: `/check-registry-coverage` is implemented as a non-LLM script.
-**Mechanism**: arch rule (forbid LLM imports).
+- **ID**: `methodology.registry_check.is_deterministic_script`
+- **Statement**: `/check-registry-coverage` is implemented as a non-LLM script.
+- **Mechanism**: arch rule (forbid LLM imports).
 
 ### inv-methodology-cli-list-reactions
-**ID**: `methodology.cli.list_reactions.shape`
-**Statement**: `/list-reactions` output is a structured table including reaction id, target invariant, ack state, deadline, and LLM suggestion summary.
-**Mechanism**: integration test (golden output).
+- **ID**: `methodology.cli.list_reactions.shape`
+- **Statement**: `/list-reactions` output is a structured table including reaction id, target invariant, ack state, deadline, and LLM suggestion summary.
+- **Mechanism**: integration test (golden output).
 
 ### inv-methodology-cli-show-reaction
-**ID**: `methodology.cli.show_reaction.complete`
-**Statement**: `/show-reaction` output includes registry entry + LLM suggestion + relying-ADR full text excerpt.
-**Mechanism**: integration test.
+- **ID**: `methodology.cli.show_reaction.complete`
+- **Statement**: `/show-reaction` output includes registry entry + LLM suggestion + relying-ADR full text excerpt.
+- **Mechanism**: integration test.
 
 ### inv-methodology-cli-ack-reaction
-**ID**: `methodology.cli.ack_reaction.idempotent`
-**Statement**: `/ack-reaction` re-running with same args produces the same artifact state.
-**Mechanism**: integration test.
+- **ID**: `methodology.cli.ack_reaction.idempotent`
+- **Statement**: `/ack-reaction` re-running with same args produces the same artifact state.
+- **Mechanism**: integration test.
 
 ### inv-methodology-cli-ack-batch
-**ID**: `methodology.cli.ack_batch.respects_filters`
-**Statement**: `/ack-batch` only modifies artifacts matching the declared filters.
-**Mechanism**: integration test.
+- **ID**: `methodology.cli.ack_batch.respects_filters`
+- **Statement**: `/ack-batch` only modifies artifacts matching the declared filters.
+- **Mechanism**: integration test.
 
 ### inv-methodology-cli-draft-followup
-**ID**: `methodology.cli.draft_followup.outputs_valid_adr`
-**Statement**: `/draft-followup` output ADR file passes ADR template schema validation.
-**Mechanism**: integration test + schema check.
+- **ID**: `methodology.cli.draft_followup.outputs_valid_adr`
+- **Statement**: `/draft-followup` output ADR file passes ADR template schema validation.
+- **Mechanism**: integration test + schema check.
 
 ## Subagents
 
 ### inv-methodology-subagent-fresh-context
-**ID**: `methodology.subagent.fresh_context`
-**Statement**: Subagents run with no inherited conversation history from the master session.
-**Mechanism**: agent definition check + integration test.
+- **ID**: `methodology.subagent.fresh_context`
+- **Statement**: Subagents run with no inherited conversation history from the master session.
+- **Mechanism**: agent definition check + integration test.
 
 ### inv-methodology-invariant-compiler-is-subagent
-**ID**: `methodology.invariant_compiler.is_subagent`
-**Statement**: Verifier code generation runs in a dedicated subagent (`invariant-compiler`), not inline in the master session.
-**Mechanism**: skill/agent definition check.
+- **ID**: `methodology.invariant_compiler.is_subagent`
+- **Statement**: Verifier code generation runs in a dedicated subagent (`invariant-compiler`), not inline in the master session.
+- **Mechanism**: skill/agent definition check.
 
 ### inv-methodology-invariant-compiler-input-is-adr-delta
-**ID**: `methodology.invariant_compiler.input_is_adr_delta`
-**Statement**: invariant-compiler subagent input is the ADR's Invariant Delta block contents only — not the full ADR or unrelated context.
-**Mechanism**: integration test on subagent invocation.
+- **ID**: `methodology.invariant_compiler.input_is_adr_delta`
+- **Statement**: invariant-compiler subagent input is the ADR's Invariant Delta block contents only — not the full ADR or unrelated context.
+- **Mechanism**: integration test on subagent invocation.
 
 ### inv-methodology-invariant-compiler-outputs-match-mechanism
-**ID**: `methodology.invariant_compiler.outputs_match_mechanism`
-**Statement**: invariant-compiler output file type matches the invariant's mechanism (test file for unit/property/integration; lint rule for arch/ast; schema file for schema mechanism).
-**Mechanism**: integration test.
+- **ID**: `methodology.invariant_compiler.outputs_match_mechanism`
+- **Statement**: invariant-compiler output file type matches the invariant's mechanism (test file for unit/property/integration; lint rule for arch/ast; schema file for schema mechanism).
+- **Mechanism**: integration test.
 
 ### inv-methodology-invariant-compiler-output-in-pr-branch
-**ID**: `methodology.invariant_compiler.output_in_pr_branch`
-**Statement**: invariant-compiler generated verifier files are committed to the same PR branch as the ADR delta.
-**Mechanism**: integration test.
+- **ID**: `methodology.invariant_compiler.output_in_pr_branch`
+- **Statement**: invariant-compiler generated verifier files are committed to the same PR branch as the ADR delta.
+- **Mechanism**: integration test.
 
 ### inv-methodology-invariant-compiler-outputs-compilable
-**ID**: `methodology.invariant_compiler.outputs_compilable_code`
-**Statement**: invariant-compiler generated verifier code compiles in the consumer-language toolchain.
-**Mechanism**: build check.
+- **ID**: `methodology.invariant_compiler.outputs_compilable_code`
+- **Statement**: invariant-compiler generated verifier code compiles in the consumer-language toolchain.
+- **Mechanism**: build check.
 
 ## Audit
 
 ### inv-methodology-audit-advisory-only
-**ID**: `methodology.audit.advisory_only`
-**Statement**: Audit findings do not gate CI or block any merge; they are advisory output reviewed by humans.
-**Mechanism**: integration test (audit failure does not change CI status).
+- **ID**: `methodology.audit.advisory_only`
+- **Statement**: Audit findings do not gate CI or block any merge; they are advisory output reviewed by humans.
+- **Mechanism**: integration test (audit failure does not change CI status).
 
 ### inv-methodology-audit-differential-regeneration-per-cadence
-**ID**: `methodology.audit.differential_regeneration_per_cadence`
-**Statement**: Audit removes production code, regenerates N times from registry, diffs outputs, and classifies divergence.
-**Mechanism**: integration test on /audit-invariants.
+- **ID**: `methodology.audit.differential_regeneration_per_cadence`
+- **Statement**: Audit removes production code, regenerates N times from registry, diffs outputs, and classifies divergence.
+- **Mechanism**: integration test on /audit-invariants.
 
 ### inv-methodology-audit-outputs-structured-findings
-**ID**: `methodology.audit.outputs_structured_findings`
-**Statement**: Audit produces a Markdown file at a known path (`docs/audit/audit-<date>.md`) with a declared schema for findings.
-**Mechanism**: integration test on output.
+- **ID**: `methodology.audit.outputs_structured_findings`
+- **Statement**: Audit produces a Markdown file at a known path (`docs/audit/audit-<date>.md`) with a declared schema for findings.
+- **Mechanism**: integration test on output.
 
 ### inv-methodology-audit-runs-per-cadence
-**ID**: `methodology.audit.runs_per_cadence`
-**Statement**: `/audit-invariants` runs at the cadence configured per project.
-**Mechanism**: integration test + scheduled-job config check.
+- **ID**: `methodology.audit.runs_per_cadence`
+- **Statement**: `/audit-invariants` runs at the cadence configured per project.
+- **Mechanism**: integration test + scheduled-job config check.
 
 ### inv-methodology-audit-input-scope
-**ID**: `methodology.audit.input_scope`
-**Statement**: Audit input is registry + ADRs in the configured time window; no production code.
-**Mechanism**: integration test.
+- **ID**: `methodology.audit.input_scope`
+- **Statement**: Audit input is registry + ADRs in the configured time window; no production code.
+- **Mechanism**: integration test.
 
 ### inv-methodology-audit-roundtrip
-**ID**: `methodology.audit.roundtrip_runs_per_audit_cycle`
-**Statement**: Each audit cycle includes a statement-↔-verifier roundtrip per registered invariant.
-**Mechanism**: integration test on /audit-invariants.
+- **ID**: `methodology.audit.roundtrip_runs_per_audit_cycle`
+- **Statement**: Each audit cycle includes a statement-↔-verifier roundtrip per registered invariant.
+- **Mechanism**: integration test on /audit-invariants.
 
 ## Modification policy
 
 ### inv-methodology-modification-class-c-via-supersession
-**ID**: `methodology.modification.class_c_via_supersession`
-**Statement**: Substantive content changes (Class C) cannot use the Modified delta; must be authored as Supersession.
-**Mechanism**: LLM-advisory + reviewer enforcement.
+- **ID**: `methodology.modification.class_c_via_supersession`
+- **Statement**: Substantive content changes (Class C) cannot use the Modified delta; must be authored as Supersession.
+- **Mechanism**: LLM-advisory + reviewer enforcement.
 
 ### inv-methodology-modified-has-rationale
-**ID**: `methodology.modified.has_rationale_field`
-**Statement**: Every Modified delta has a rationale field naming the class (mechanical / sharpening).
-**Mechanism**: schema.
+- **ID**: `methodology.modified.has_rationale_field`
+- **Statement**: Every Modified delta has a rationale field naming the class (mechanical / sharpening).
+- **Mechanism**: schema.
 
 ### inv-methodology-modified-verifier-recompiled
-**ID**: `methodology.modified.verifier_recompiled_for_class_b`
-**Statement**: A Class B Modified delta includes a verifier diff in the same commit (re-compiled output).
-**Mechanism**: schema/git check.
+- **ID**: `methodology.modified.verifier_recompiled_for_class_b`
+- **Statement**: A Class B Modified delta includes a verifier diff in the same commit (re-compiled output).
+- **Mechanism**: schema/git check.
 
 ### inv-methodology-modified-roundtrip-after-class-b
-**ID**: `methodology.modified.roundtrip_after_class_b`
-**Statement**: Statement-↔-verifier roundtrip is run on every Class B Modified delta and must pass.
-**Mechanism**: integration test.
+- **ID**: `methodology.modified.roundtrip_after_class_b`
+- **Statement**: Statement-↔-verifier roundtrip is run on every Class B Modified delta and must pass.
+- **Mechanism**: integration test.
 
 ### inv-methodology-modified-classification-advisory
-**ID**: `methodology.modified.classification_advisory`
-**Statement**: Audit LLM proposes A/B/C class for every Modified delta and flags suspected misclassification.
-**Mechanism**: integration test on advisory.
+- **ID**: `methodology.modified.classification_advisory`
+- **Statement**: Audit LLM proposes A/B/C class for every Modified delta and flags suspected misclassification.
+- **Mechanism**: integration test on advisory.
 
 ### inv-methodology-removal-ceremony-respects-core
-**ID**: `methodology.removal_ceremony.respects_core`
-**Statement**: Withdrawing or substantively modifying a core=true invariant requires a successor (Supersession) or an explicit redesign-impact analysis subsection in the withdrawal ADR.
-**Mechanism**: AST scan + reaction-process gating.
+- **ID**: `methodology.removal_ceremony.respects_core`
+- **Statement**: Withdrawing or substantively modifying a core=true invariant requires a successor (Supersession) or an explicit redesign-impact analysis subsection in the withdrawal ADR.
+- **Mechanism**: AST scan + reaction-process gating.
 
 ### inv-methodology-deprecation-period-per-tier
-**ID**: `methodology.deprecation.period_per_tier`
-**Statement**: Active core invariants deprecate ≥ 2 audit cycles before withdrawal; non-core ≥ 1 cycle.
-**Mechanism**: AST scan + reaction-process gating (deadline calculations).
+- **ID**: `methodology.deprecation.period_per_tier`
+- **Statement**: Active core invariants deprecate ≥ 2 audit cycles before withdrawal; non-core ≥ 1 cycle.
+- **Mechanism**: AST scan + reaction-process gating (deadline calculations).
 
 ### inv-methodology-promotion-is-pure-tier-change-adr
-**ID**: `methodology.promotion.is_pure_tier_change_adr`
-**Statement**: A Promoted delta does not modify the invariant's statement, mechanism, or verifier; only its tier.
-**Mechanism**: schema (compare before/after).
+- **ID**: `methodology.promotion.is_pure_tier_change_adr`
+- **Statement**: A Promoted delta does not modify the invariant's statement, mechanism, or verifier; only its tier.
+- **Mechanism**: schema (compare before/after).
 
 ### inv-methodology-promotion-evidence-advisory
-**ID**: `methodology.promotion.evidence_advisory`
-**Statement**: Audit advisory flags promotion ADRs that lack the required evidence sections (survival cycles, utility evidence, surrounding-code-stability metric).
-**Mechanism**: AST scan + advisory.
+- **ID**: `methodology.promotion.evidence_advisory`
+- **Statement**: Audit advisory flags promotion ADRs that lack the required evidence sections (survival cycles, utility evidence, surrounding-code-stability metric).
+- **Mechanism**: AST scan + advisory.
 
 ## Reaction process
 
 ### inv-methodology-reaction-required
-**ID**: `methodology.reaction.required_for_class_b_supersession_withdrawal`
-**Statement**: Any Class B / Supersession / Withdrawal delta affecting an invariant with one or more relying ADRs requires reaction artifacts to be generated.
-**Mechanism**: integration test on PR-open hook.
+- **ID**: `methodology.reaction.required_for_class_b_supersession_withdrawal`
+- **Statement**: Any Class B / Supersession / Withdrawal delta affecting an invariant with one or more relying ADRs requires reaction artifacts to be generated.
+- **Mechanism**: integration test on PR-open hook.
 
 ### inv-methodology-reaction-artifact-on-pr-open
-**ID**: `methodology.reaction.artifact_generated_on_pr_open`
-**Statement**: Opening a PR with a triggering delta triggers reaction artifact generation; CI hook does this on every push.
-**Mechanism**: integration test.
+- **ID**: `methodology.reaction.artifact_generated_on_pr_open`
+- **Statement**: Opening a PR with a triggering delta triggers reaction artifact generation; CI hook does this on every push.
+- **Mechanism**: integration test.
 
 ### inv-methodology-reaction-one-per-relying
-**ID**: `methodology.reaction.one_artifact_per_relying_adr`
-**Statement**: Number of artifacts generated equals number of live ADRs with relies_on edge to the affected invariant(s).
-**Mechanism**: integration test.
+- **ID**: `methodology.reaction.one_artifact_per_relying_adr`
+- **Statement**: Number of artifacts generated equals number of live ADRs with relies_on edge to the affected invariant(s).
+- **Mechanism**: integration test.
 
 ### inv-methodology-reaction-artifact-schema
-**ID**: `methodology.reaction.artifact_yaml_schema`
-**Statement**: Every reaction artifact validates against the declared schema (triggering_adr, target_invariant, delta_kind, optional new_invariant, relying_adr, owner, state, created, deadline, ack, ack_rationale).
-**Mechanism**: schema.
+- **ID**: `methodology.reaction.artifact_yaml_schema`
+- **Statement**: Every reaction artifact validates against the declared schema (triggering_adr, target_invariant, delta_kind, optional new_invariant, relying_adr, owner, state, created, deadline, ack, ack_rationale).
+- **Mechanism**: schema.
 
 ### inv-methodology-reaction-artifacts-pr-branch
-**ID**: `methodology.reaction.artifacts_in_pr_branch`
-**Statement**: Reaction artifacts live in `docs/reactions/` on the PR branch (and persist to main on merge).
-**Mechanism**: integration test.
+- **ID**: `methodology.reaction.artifacts_in_pr_branch`
+- **Statement**: Reaction artifacts live in `docs/reactions/` on the PR branch (and persist to main on merge).
+- **Mechanism**: integration test.
 
 ### inv-methodology-reaction-artifacts-persist
-**ID**: `methodology.reaction.artifacts_persist_in_main`
-**Statement**: On merge of triggering ADR, reaction artifacts remain in main's git history (optionally archived).
-**Mechanism**: integration test.
+- **ID**: `methodology.reaction.artifacts_persist_in_main`
+- **Statement**: On merge of triggering ADR, reaction artifacts remain in main's git history (optionally archived).
+- **Mechanism**: integration test.
 
 ### inv-methodology-reaction-owner-resolution
-**ID**: `methodology.reaction.owner_resolution`
-**Statement**: Owner is resolved as: explicit Owner frontmatter > git author of original ADR commit > project fallback in `.sdd/components.yaml`.
-**Mechanism**: codegen completeness on resolution function.
+- **ID**: `methodology.reaction.owner_resolution`
+- **Statement**: Owner is resolved as: explicit Owner frontmatter > git author of original ADR commit > project fallback in `.sdd/components.yaml`.
+- **Mechanism**: codegen completeness on resolution function.
 
 ### inv-methodology-reaction-ack-in-enum
-**ID**: `methodology.reaction.ack_in_enum`
-**Statement**: `human_decision.ack` field is in {re-pin, update, migrate, accept-unpinning, object}.
-**Mechanism**: schema.
+- **ID**: `methodology.reaction.ack_in_enum`
+- **Statement**: `human_decision.ack` field is in {re-pin, update, migrate, accept-unpinning, object}.
+- **Mechanism**: schema.
 
 ### inv-methodology-reaction-repin
-**ID**: `methodology.reaction.repin_preserves_or_migrates_edge`
-**Statement**: re-pin ack preserves the reliance edge (or auto-migrates to successor for Supersession).
-**Mechanism**: integration test.
+- **ID**: `methodology.reaction.repin_preserves_or_migrates_edge`
+- **Statement**: re-pin ack preserves the reliance edge (or auto-migrates to successor for Supersession).
+- **Mechanism**: integration test.
 
 ### inv-methodology-reaction-update
-**ID**: `methodology.reaction.update_blocks_until_followup`
-**Statement**: update ack requires a follow-up ADR before merge can proceed.
-**Mechanism**: integration test on merge gate.
+- **ID**: `methodology.reaction.update_blocks_until_followup`
+- **Statement**: update ack requires a follow-up ADR before merge can proceed.
+- **Mechanism**: integration test on merge gate.
 
 ### inv-methodology-reaction-migrate-records
-**ID**: `methodology.reaction.migrate_records_successor`
-**Statement**: migrate ack records the successor invariant ID in the reaction artifact.
-**Mechanism**: schema.
+- **ID**: `methodology.reaction.migrate_records_successor`
+- **Statement**: migrate ack records the successor invariant ID in the reaction artifact.
+- **Mechanism**: schema.
 
 ### inv-methodology-reaction-unpinning
-**ID**: `methodology.reaction.unpinning_marks_adr`
-**Statement**: accept-unpinning ack flags the relying ADR as un-pinned in its frontmatter or status.
-**Mechanism**: schema.
+- **ID**: `methodology.reaction.unpinning_marks_adr`
+- **Statement**: accept-unpinning ack flags the relying ADR as un-pinned in its frontmatter or status.
+- **Mechanism**: schema.
 
 ### inv-methodology-reaction-objection
-**ID**: `methodology.reaction.objection_blocks_merge`
-**Statement**: object ack blocks merge until the artifact's state changes (escalation / re-author / withdrawal of objection).
-**Mechanism**: integration test.
+- **ID**: `methodology.reaction.objection_blocks_merge`
+- **Statement**: object ack blocks merge until the artifact's state changes (escalation / re-author / withdrawal of objection).
+- **Mechanism**: integration test.
 
 ### inv-methodology-reaction-state-machine
-**ID**: `methodology.reaction.state_machine_valid`
-**Statement**: Reaction state transitions follow the declared graph (pending → acked / expired; acked / expired terminal).
-**Mechanism**: codegen completeness.
+- **ID**: `methodology.reaction.state_machine_valid`
+- **Statement**: Reaction state transitions follow the declared graph (pending → acked / expired; acked / expired terminal).
+- **Mechanism**: codegen completeness.
 
 ### inv-methodology-reaction-expiration-per-tier
-**ID**: `methodology.reaction.expiration_disposition_per_tier`
-**Statement**: On expiration, draft and non-core active default to accept-unpinning; core active blocks until explicit ack.
-**Mechanism**: integration test.
+- **ID**: `methodology.reaction.expiration_disposition_per_tier`
+- **Statement**: On expiration, draft and non-core active default to accept-unpinning; core active blocks until explicit ack.
+- **Mechanism**: integration test.
 
 ### inv-methodology-reaction-merge-gate
-**ID**: `methodology.reaction.merge_blocked_until_acked`
-**Statement**: Merge gate fails when any reaction artifact is in pending state (with non-acceptable expiration) or in objected state.
-**Mechanism**: integration test on CI gate.
+- **ID**: `methodology.reaction.merge_blocked_until_acked`
+- **Statement**: Merge gate fails when any reaction artifact is in pending state (with non-acceptable expiration) or in objected state.
+- **Mechanism**: integration test on CI gate.
 
 ### inv-methodology-reaction-attribution
-**ID**: `methodology.reaction.author_attribution_recorded`
-**Statement**: Every acked reaction artifact has populated `human_decision.ack`, `acked_by`, `acked_at`, `venue` fields.
-**Mechanism**: schema.
+- **ID**: `methodology.reaction.author_attribution_recorded`
+- **Statement**: Every acked reaction artifact has populated `human_decision.ack`, `acked_by`, `acked_at`, `venue` fields.
+- **Mechanism**: schema.
 
 ### inv-methodology-reaction-venue-enum
-**ID**: `methodology.reaction.venue_in_enum`
-**Statement**: `venue` field is in {cli, dashboard-local, dashboard-hosted}.
-**Mechanism**: schema.
+- **ID**: `methodology.reaction.venue_in_enum`
+- **Statement**: `venue` field is in {cli, dashboard-local, dashboard-hosted}.
+- **Mechanism**: schema.
 
 ### inv-methodology-reaction-cli-action-parity
-**ID**: `methodology.reaction.cli_action_parity`
-**Statement**: Every reaction-related action declared in this ADR has a corresponding slash command implementation.
-**Mechanism**: codegen completeness.
+- **ID**: `methodology.reaction.cli_action_parity`
+- **Statement**: Every reaction-related action declared in this ADR has a corresponding slash command implementation.
+- **Mechanism**: codegen completeness.
 
 ### inv-methodology-reaction-cli-writes-direct
-**ID**: `methodology.reaction.cli_writes_artifact_directly`
-**Statement**: Slash commands modify the artifact YAML files in the working tree (do not bypass via APIs).
-**Mechanism**: integration test.
+- **ID**: `methodology.reaction.cli_writes_artifact_directly`
+- **Statement**: Slash commands modify the artifact YAML files in the working tree (do not bypass via APIs).
+- **Mechanism**: integration test.
 
 ### inv-methodology-reaction-ci-always-on
-**ID**: `methodology.reaction.ci_always_on_with_registry`
-**Statement**: Any project with a non-empty invariant registry has CI gates for reaction generation, triage, and merge enforcement.
-**Mechanism**: project-config check.
+- **ID**: `methodology.reaction.ci_always_on_with_registry`
+- **Statement**: Any project with a non-empty invariant registry has CI gates for reaction generation, triage, and merge enforcement.
+- **Mechanism**: project-config check.
 
 ## Triage assistant
 
 ### inv-methodology-triage-input-scope
-**ID**: `methodology.triage.input_scope`
-**Statement**: Triage assistant receives the ADR diff, target invariant entry, relying ADR full text, and registry entry; no other context.
-**Mechanism**: integration test on subagent invocation.
+- **ID**: `methodology.triage.input_scope`
+- **Statement**: Triage assistant receives the ADR diff, target invariant entry, relying ADR full text, and registry entry; no other context.
+- **Mechanism**: integration test on subagent invocation.
 
 ### inv-methodology-triage-suggestion-schema
-**ID**: `methodology.triage.suggestion_schema`
-**Statement**: `llm_suggestion` block has the declared fields (ack, confidence, rationale, draft_followup, flags) with validated types.
-**Mechanism**: schema.
+- **ID**: `methodology.triage.suggestion_schema`
+- **Statement**: `llm_suggestion` block has the declared fields (ack, confidence, rationale, draft_followup, flags) with validated types.
+- **Mechanism**: schema.
 
 ### inv-methodology-triage-human-decision-null
-**ID**: `methodology.triage.human_decision_initially_null`
-**Statement**: Newly generated reaction artifact has `human_decision: null`.
-**Mechanism**: schema/integration test.
+- **ID**: `methodology.triage.human_decision_initially_null`
+- **Statement**: Newly generated reaction artifact has `human_decision: null`.
+- **Mechanism**: schema/integration test.
 
 ### inv-methodology-triage-auto-ack-policy
-**ID**: `methodology.triage.auto_ack_per_tier_policy`
-**Statement**: Auto-ack only fires per the declared per-tier policy table; never on `core` invariants regardless of confidence.
-**Mechanism**: integration test.
+- **ID**: `methodology.triage.auto_ack_per_tier_policy`
+- **Statement**: Auto-ack only fires per the declared per-tier policy table; never on `core` invariants regardless of confidence.
+- **Mechanism**: integration test.
 
 ### inv-methodology-triage-no-auto-object
-**ID**: `methodology.triage.never_auto_objects`
-**Statement**: Triage never sets `human_decision.ack = object` autonomously; it can flag concerns but routes to human review.
-**Mechanism**: integration test on triage output handling.
+- **ID**: `methodology.triage.never_auto_objects`
+- **Statement**: Triage never sets `human_decision.ack = object` autonomously; it can flag concerns but routes to human review.
+- **Mechanism**: integration test on triage output handling.
 
 ### inv-methodology-triage-no-auto-merge
-**ID**: `methodology.triage.never_auto_merges_followups`
-**Statement**: Generated follow-up ADR drafts are placed in the working tree but not committed by triage.
-**Mechanism**: integration test.
+- **ID**: `methodology.triage.never_auto_merges_followups`
+- **Statement**: Generated follow-up ADR drafts are placed in the working tree but not committed by triage.
+- **Mechanism**: integration test.
 
 ### inv-methodology-triage-respects-human
-**ID**: `methodology.triage.respects_human_decision`
-**Statement**: If `human_decision` is non-null, triage does not modify it.
-**Mechanism**: integration test.
+- **ID**: `methodology.triage.respects_human_decision`
+- **Statement**: If `human_decision` is non-null, triage does not modify it.
+- **Mechanism**: integration test.
 
 ### inv-methodology-triage-advisory-only
-**ID**: `methodology.triage.advisory_only`
-**Statement**: Reaction merge-gate only checks `human_decision`; `llm_suggestion` is advisory.
-**Mechanism**: integration test.
+- **ID**: `methodology.triage.advisory_only`
+- **Statement**: Reaction merge-gate only checks `human_decision`; `llm_suggestion` is advisory.
+- **Mechanism**: integration test.
 
 ## Lineage / reliance / MCP
 
 ### inv-methodology-lineage-node-types
-**ID**: `methodology.lineage.node_types_in_enum`
-**Statement**: All graph nodes are typed as one of {ADR, Spec, Invariant, Verifier, GlossaryTerm}.
-**Mechanism**: schema.
+- **ID**: `methodology.lineage.node_types_in_enum`
+- **Statement**: All graph nodes are typed as one of {ADR, Spec, Invariant, Verifier, GlossaryTerm}.
+- **Mechanism**: schema.
 
 ### inv-methodology-lineage-edge-types
-**ID**: `methodology.lineage.edge_types_in_enum`
-**Statement**: All graph edges are typed as one of the 10 declared kinds {relies_on, introduces, modifies, promotes, deprecates, withdraws, supersedes, pinned_by, uses_term, defines_term}.
-**Mechanism**: schema.
+- **ID**: `methodology.lineage.edge_types_in_enum`
+- **Statement**: All graph edges are typed as one of the 10 declared kinds {relies_on, introduces, modifies, promotes, deprecates, withdraws, supersedes, pinned_by, uses_term, defines_term}.
+- **Mechanism**: schema.
 
 ### inv-methodology-lineage-edge-sources
-**ID**: `methodology.lineage.edge_sources_consistent`
-**Statement**: Each edge type's data matches its declared source-of-truth (ADR section / registry field / glossary field).
-**Mechanism**: codegen completeness.
+- **ID**: `methodology.lineage.edge_sources_consistent`
+- **Statement**: Each edge type's data matches its declared source-of-truth (ADR section / registry field / glossary field).
+- **Mechanism**: codegen completeness.
 
 ### inv-methodology-reliance-inline-advisory
-**ID**: `methodology.reliance.inline_mentions_advisory`
-**Statement**: Inline mentions of invariant IDs in ADR prose do not contribute to the reliance count; only explicit Relies On blocks do.
-**Mechanism**: integration test.
+- **ID**: `methodology.reliance.inline_mentions_advisory`
+- **Statement**: Inline mentions of invariant IDs in ADR prose do not contribute to the reliance count; only explicit Relies On blocks do.
+- **Mechanism**: integration test.
 
 ### inv-methodology-reliance-live-only
-**ID**: `methodology.reliance.live_adrs_only`
-**Statement**: Reliance count excludes withdrawn ADRs and superseded-as-doc ADRs.
-**Mechanism**: codegen completeness.
+- **ID**: `methodology.reliance.live_adrs_only`
+- **Statement**: Reliance count excludes withdrawn ADRs and superseded-as-doc ADRs.
+- **Mechanism**: codegen completeness.
 
 ### inv-methodology-reliance-no-meta-double-count
-**ID**: `methodology.reliance.no_meta_double_count`
-**Statement**: An ADR with any meta-edge (introduces / modifies / promotes / deprecates / withdraws / supersedes) to an invariant cannot also have a Relies On edge to that invariant; if both are declared, the meta-edge wins.
-**Mechanism**: schema/AST scan.
+- **ID**: `methodology.reliance.no_meta_double_count`
+- **Statement**: An ADR with any meta-edge (introduces / modifies / promotes / deprecates / withdraws / supersedes) to an invariant cannot also have a Relies On edge to that invariant; if both are declared, the meta-edge wins.
+- **Mechanism**: schema/AST scan.
 
 ### inv-methodology-reliance-set-cardinality
-**ID**: `methodology.reliance.set_cardinality`
-**Statement**: Per-ADR Relies On entries deduplicate to a set; multiple entries for the same invariant ID count as one.
-**Mechanism**: codegen completeness.
+- **ID**: `methodology.reliance.set_cardinality`
+- **Statement**: Per-ADR Relies On entries deduplicate to a set; multiple entries for the same invariant ID count as one.
+- **Mechanism**: codegen completeness.
 
 ### inv-methodology-mcp-list
-**ID**: `methodology.mcp.list_invariants_complete`
-**Statement**: `list_invariants` returns every registered invariant with tier/status/core/mechanism/verifier path.
-**Mechanism**: integration test on docs-mcp.
+- **ID**: `methodology.mcp.list_invariants_complete`
+- **Statement**: `list_invariants` returns every registered invariant with tier/status/core/mechanism/verifier path.
+- **Mechanism**: integration test on docs-mcp.
 
 ### inv-methodology-mcp-search
-**ID**: `methodology.mcp.search_invariants_supports_dimensions`
-**Statement**: `search_invariants` supports full-text + structured filters on statement, glossary terms, mechanism, tier, status.
-**Mechanism**: integration test.
+- **ID**: `methodology.mcp.search_invariants_supports_dimensions`
+- **Statement**: `search_invariants` supports full-text + structured filters on statement, glossary terms, mechanism, tier, status.
+- **Mechanism**: integration test.
 
 ### inv-methodology-mcp-get
-**ID**: `methodology.mcp.get_invariant_returns_computed_fields`
-**Statement**: `get_invariant` returns full registry entry with computed `relied_on_count`, `core`, `relied_on_by` fields populated.
-**Mechanism**: integration test.
+- **ID**: `methodology.mcp.get_invariant_returns_computed_fields`
+- **Statement**: `get_invariant` returns full registry entry with computed `relied_on_count`, `core`, `relied_on_by` fields populated.
+- **Mechanism**: integration test.
 
 ### inv-methodology-mcp-lineage
-**ID**: `methodology.mcp.get_invariant_lineage_complete`
-**Statement**: `get_invariant_lineage` returns all 6 ADR-edge types and the supersession chain.
-**Mechanism**: integration test.
+- **ID**: `methodology.mcp.get_invariant_lineage_complete`
+- **Statement**: `get_invariant_lineage` returns all 6 ADR-edge types and the supersession chain.
+- **Mechanism**: integration test.
 
 ### inv-methodology-mcp-adr-invariants
-**ID**: `methodology.mcp.get_adr_invariants_extends_lineage`
-**Statement**: For an ADR, `get_adr_invariants` returns all introduces/modifies/promotes/deprecates/withdraws/relies-on edges to invariants.
-**Mechanism**: integration test.
+- **ID**: `methodology.mcp.get_adr_invariants_extends_lineage`
+- **Statement**: For an ADR, `get_adr_invariants` returns all introduces/modifies/promotes/deprecates/withdraws/relies-on edges to invariants.
+- **Mechanism**: integration test.
 
 ### inv-methodology-mcp-verifier-invariants
-**ID**: `methodology.mcp.get_verifier_invariants_reverse`
-**Statement**: For a verifier file path, `get_verifier_invariants` returns the set of invariants pinned by it.
-**Mechanism**: integration test.
+- **ID**: `methodology.mcp.get_verifier_invariants_reverse`
+- **Statement**: For a verifier file path, `get_verifier_invariants` returns the set of invariants pinned by it.
+- **Mechanism**: integration test.
 
 ## Dashboard
 
 ### inv-methodology-dashboard-views
-**ID**: `methodology.dashboard.declared_views_present`
-**Statement**: Dashboard route table includes all 8 declared read views (Invariants tab, Invariant detail, Reliance graph view, Core candidates panel, Drift heatmap, Tier distribution, Promotion candidates, Reactions queue).
-**Mechanism**: codegen completeness on dashboard route table.
+- **ID**: `methodology.dashboard.declared_views_present`
+- **Statement**: Dashboard route table includes all 8 declared read views (Invariants tab, Invariant detail, Reliance graph view, Core candidates panel, Drift heatmap, Tier distribution, Promotion candidates, Reactions queue).
+- **Mechanism**: codegen completeness on dashboard route table.
 
 ### inv-methodology-dashboard-cli-parity
-**ID**: `methodology.dashboard.cli_parity`
-**Statement**: Each CLI slash command has a corresponding dashboard write action; bijection enforced by codegen.
-**Mechanism**: codegen completeness.
+- **ID**: `methodology.dashboard.cli_parity`
+- **Statement**: Each CLI slash command has a corresponding dashboard write action; bijection enforced by codegen.
+- **Mechanism**: codegen completeness.
 
 ### inv-methodology-dashboard-same-format
-**ID**: `methodology.dashboard.same_artifact_format`
-**Statement**: Dashboard write actions produce artifact YAML files identical in shape to those produced by CLI.
-**Mechanism**: integration test (compare CLI and dashboard outputs for same input).
+- **ID**: `methodology.dashboard.same_artifact_format`
+- **Statement**: Dashboard write actions produce artifact YAML files identical in shape to those produced by CLI.
+- **Mechanism**: integration test (compare CLI and dashboard outputs for same input).
 
 ### inv-methodology-dashboard-local-mode
-**ID**: `methodology.dashboard.local_mode_uses_local_git`
-**Statement**: Local-mode dashboard write actions execute via local git operations (add/commit/optional push) using the developer's git identity.
-**Mechanism**: integration test.
+- **ID**: `methodology.dashboard.local_mode_uses_local_git`
+- **Statement**: Local-mode dashboard write actions execute via local git operations (add/commit/optional push) using the developer's git identity.
+- **Mechanism**: integration test.
 
 ## Self-application + cross-cutting
 
 ### inv-methodology-self-application-same-machinery
-**ID**: `methodology.self_application.same_machinery`
-**Statement**: agent-plugins's own invariant registry uses the same registry format, glossary system, and CI gates that consumer projects use.
-**Mechanism**: integration check (no methodology-specific paths).
+- **ID**: `methodology.self_application.same_machinery`
+- **Statement**: agent-plugins's own invariant registry uses the same registry format, glossary system, and CI gates that consumer projects use.
+- **Mechanism**: integration check (no methodology-specific paths).
 
 ### inv-methodology-local-ci-same-code
-**ID**: `methodology.local_ci.same_code`
-**Statement**: Slash command implementations and CI hook implementations call the same underlying function.
-**Mechanism**: arch rule (forbid divergent implementations).
+- **ID**: `methodology.local_ci.same_code`
+- **Statement**: Slash command implementations and CI hook implementations call the same underlying function.
+- **Mechanism**: arch rule (forbid divergent implementations).
 
 ### inv-methodology-local-ci-idempotent
-**ID**: `methodology.local_ci.idempotent`
-**Statement**: Same triggering ADR + reliance graph produces the same reaction artifacts and triage suggestions regardless of venue.
-**Mechanism**: integration test (run locally and in CI; diff outputs).
+- **ID**: `methodology.local_ci.idempotent`
+- **Statement**: Same triggering ADR + reliance graph produces the same reaction artifacts and triage suggestions regardless of venue.
+- **Mechanism**: integration test (run locally and in CI; diff outputs).
 
 ## CI behavior
 
 ### inv-methodology-ci-runs-verifier-suite
-**ID**: `methodology.ci.runs_verifier_suite_on_every_commit`
-**Statement**: CI workflow includes a job that runs the verifier suite for every PR commit.
-**Mechanism**: GH Actions config schema check.
+- **ID**: `methodology.ci.runs_verifier_suite_on_every_commit`
+- **Statement**: CI workflow includes a job that runs the verifier suite for every PR commit.
+- **Mechanism**: GH Actions config schema check.
 
 ### inv-methodology-ci-failures-attributed
-**ID**: `methodology.ci.failures_attributed_to_invariant_id`
-**Statement**: When a verifier fails, the CI output identifies the failing invariant ID.
-**Mechanism**: integration test on CI output format.
+- **ID**: `methodology.ci.failures_attributed_to_invariant_id`
+- **Statement**: When a verifier fails, the CI output identifies the failing invariant ID.
+- **Mechanism**: integration test on CI output format.
 
 ### inv-methodology-llm-no-recurring-validation
-**ID**: `methodology.llm.no_recurring_validation`
-**Statement**: No CI gate's pass/fail decision invokes an LLM; LLM calls only appear in skills/subagents that produce committed artifacts (invariant-compiler, audit, triage).
-**Mechanism**: arch-rule (forbid LLM-call imports inside CI gate scripts) + AST scan.
+- **ID**: `methodology.llm.no_recurring_validation`
+- **Statement**: No CI gate's pass/fail decision invokes an LLM; LLM calls only appear in skills/subagents that produce committed artifacts (invariant-compiler, audit, triage).
+- **Mechanism**: arch-rule (forbid LLM-call imports inside CI gate scripts) + AST scan.
 
 ## Mechanism documentation
 
 ### inv-methodology-mechanism-tool-documented
-**ID**: `methodology.mechanism.tool_documented`
-**Statement**: Every mechanism in the taxonomy has a documented default tool in `spec-verifier-conventions.md` (per language).
-**Mechanism**: codegen completeness on the spec doc.
+- **ID**: `methodology.mechanism.tool_documented`
+- **Statement**: Every mechanism in the taxonomy has a documented default tool in `spec-verifier-conventions.md` (per language).
+- **Mechanism**: codegen completeness on the spec doc.
 
 ## Marginal
 
 ### inv-methodology-language-matches-consumer
-**ID**: `methodology.language.matches_consumer`
-**Statement**: A v2 component's verifier files are written in the same language as the production code they verify.
-**Mechanism**: schema check on per-component config + arch rule.
+- **ID**: `methodology.language.matches_consumer`
+- **Statement**: A v2 component's verifier files are written in the same language as the production code they verify.
+- **Mechanism**: schema check on per-component config + arch rule.
 
 ---
 
