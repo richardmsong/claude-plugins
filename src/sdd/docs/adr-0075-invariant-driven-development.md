@@ -8,7 +8,7 @@
 
 Evolve the `spec-driven-dev` plugin from markdown-spec methodology (v1) to **invariant-driven development with compiled verification** (v2). Named **invariants** — not markdown spec prose — become the canonical contract surface, and verification is performed by deterministic CPU-bound mechanisms (test files, lint rules, schemas, type-system checks) rather than LLM-as-judge spec-evaluators. LLMs appear only at *authoring* time (compiling invariants into verifier code) and *audit* time (quarterly differential regeneration to detect spec gaps and dead code), never in the recurring CI validation path.
 
-V1 markdown-spec methodology coexists with v2 invariant-driven methodology during transition. Consumer projects opt in per-component; both modes ship in the same plugin and share the existing skills (`/plan-feature`, `/feature-change`) which dispatch internally based on the per-component mode.
+The methodology is **additive**, not a parallel mode. ADRs that introduce invariants include an Invariant Delta block; ADRs that don't, don't. Existing markdown-spec ADRs continue to work as-is — the registry/CI/glossary machinery only activates when an ADR has invariants to register. No per-component mode flag, no dispatch logic, no formal cutover.
 
 The plugin's own development uses v2 from Day 1 — `agent-plugins` is the bootstrap project, registering the methodology's own ~7–10 invariants first to prove the registry/glossary/CI-gate machinery before any consumer (the first being mclaude per its ADR-0100) bets on it.
 
@@ -38,9 +38,8 @@ V2 shifts the contract surface from prose to executable artifacts (test files + 
 | Vocabulary precision | Hybrid: types-as-glossary primary (entities → language types, predicates → methods); explicit `glossary.md` for cross-cutting concepts and ambiguous domain terms | Invariant statements use *terms*; un-pinned terms drift at the vocabulary layer. Types carry most of the load (compile-checked, refactor-safe); a small glossary covers what types can't express. CI gate: every term in an invariant statement resolves to a typed binding or glossary entry. |
 | Registry framework approach | Custom thin per-language layer (~200 LOC) + reuse of per-mechanism tools; no off-the-shelf "invariant registry framework" exists that fits | Closest adjacent frameworks (ArchUnit, fitness functions, TLA+, OPA/Rego, CUE, Concordion, JML, Cucumber) cover slices but none combines named registry + multi-mechanism verification + CI-gateable coverage. Building thin and reusing mature per-mechanism tools is the right shape. |
 | Per-mechanism tool choices (Go projects) | Behavior: `go test` + table tests; Property: `rapid`; Architecture: `go-arch-lint` + `depguard`; AST: `semgrep` + `go/analysis`; Schema: `protobuf` + `buf`; Type system: `exhaustive`, `nilaway`, sealed interfaces; Codegen completeness: `go:generate` + reflection; Mutation: `go-mutesting` (audit-only) | Mature, Go-native, refactor-friendly. Other languages get analogous default toolchains documented in the methodology spec. |
-| Plugin shape | Evolution of spec-driven-dev (v2 supersedes v1); both modes coexist per-component during transition | Lower fragmentation than separate sibling plugin; existing skills extend rather than fork. v1 mode stays available as legacy fallback. |
+| Plugin shape | Evolution of spec-driven-dev. Existing skills (`/plan-feature`, `/feature-change`) extend to support invariants additively. ADRs without Invariant Delta blocks remain valid. | Solo-developer-friendly: no parallel modes, no dispatch logic, no formal cutover. Invariants are an opt-in feature per ADR. |
 | Bootstrap project | agent-plugins itself; methodology's own invariants register first (Day 1), consumer-project invariants follow (Day N) | Self-application is evidence of generality. Proving the framework on its own meta-level before consumers bet on it de-risks adoption. |
-| Coexistence dispatch | Per-component mode flag (v1 markdown-spec or v2 invariant-driven) read by `/plan-feature` and `/feature-change` from a project-level config | Component-by-component opt-in matches the gradual-migration use case. File-path-based or ADR-declared flags would work but are less explicit than a config block. |
 | Invariant stability tier | Two-tier system: `draft` / `active`. Default on introduction = `draft`. One promotion ADR per invariant (`draft → active`); evidence required (audit survival, utility, surrounding-code stability). | Four tiers (experimental/provisional/stable/core) imposed too many promotion ADRs (~12/month at scale). Two tiers cut throughput 2-3× while preserving the load-bearing distinction between "we're trying this" and "we're committed." Provisional collapses into draft (drafts can survive long); core converts to a computed attribute. |
 | Core attribute (computed) | `core: true` automatically set when ≥ 3 other ADRs rely on the invariant as load-bearing; also manually settable for explicit declarations. Affects removal ceremony (core requires successor invariant or explicit redesign justification). | Core-ness is a *consequence* of architectural significance, not a separate governance state. Computing it from the relied-on count makes the signal evidence-based and game-resistant; manual override exists for the rare case where authorial judgment precedes evidence. Reuses the lineage-dashboard concept already established for ADR↔spec relationships. |
 | Invariant lifecycle status | Orthogonal axis: `active` / `deprecated` / `superseded` / `withdrawn`. Withdrawal requires verifier file deletion in the same commit. | Separates "is this still enforced?" (status) from "how committed are we?" (tier). Allows graceful deprecation periods for active invariants and lightweight Day-2 revocation for drafts. |
@@ -57,12 +56,12 @@ V2 shifts the contract surface from prose to executable artifacts (test files + 
 The development cycle for a v2 component (in any consumer project):
 
 1. **Change request enters.** User asks for a feature, fix, refactor, etc.
-2. **Master session authors an ADR draft** via `/plan-feature`. The skill detects v2 mode for the affected component(s) and uses the v2 ADR template, which includes a structured **Invariant Delta** block (added/modified/removed invariants with mechanism + verifier pointer).
+2. **Master session authors an ADR draft** via `/plan-feature`. If the ADR will introduce or modify invariants, the author includes the structured **Invariant Delta** block (added/modified/removed invariants with mechanism + verifier pointer). If not, the ADR proceeds as a standard markdown ADR.
 3. **Invariant decomposition.** Each new invariant is named, statemented in one line, and tagged with its primary verification mechanism. Invariants that can't name a mechanism are either inadmissible or need sharpening — this is the precision forcing function. The skill blocks ADR finalization until every proposed invariant has a mechanism.
 4. **Glossary check.** A deterministic script (`/check-glossary` or run inline) verifies every term in invariant statements resolves to a typed binding or a glossary entry. New terms either get typed or get glossary entries before the ADR finalizes.
 5. **LLM compiles invariants → verifier code.** The `invariant-compiler` subagent reads the new/modified invariants from the ADR delta and generates the corresponding test files, lint rules, schemas. Output is staged alongside the ADR.
 6. **Human reviews compiled verifiers.** Same review bar as hand-written code. The LLM's output is not blessed because an LLM wrote it; it's blessed because a human read it and understood what each verifier proves.
-7. **Implementation follows.** `/feature-change` invokes dev-harness, which writes production code that makes the verifier suite pass. For v2 components, the implementation-evaluator step is replaced by the deterministic verifier suite — `<lang> test` + lint/schema runs are the answer.
+7. **Implementation follows.** `/feature-change` invokes dev-harness. If the ADR introduced invariants, the verifier suite (`<lang> test` + lint + schema runs) is the success criterion. If not, the existing implementation-evaluator path is used. The two are complementary, not exclusive.
 8. **CI runs the verifier suite on every commit.** Pure CPU, sub-minute, no model dependency. Failures localize to specific invariants by ID.
 9. **Periodic differential regeneration audit** (`/audit-invariants`). Quarterly or per major refactor checkpoint: `rm` production code, regenerate from invariants × N, diff results. Convergence-with-correctness validates spec precision. Divergence-with-correctness reveals appropriate underconstraint. Divergence-with-incorrectness localizes spec gaps to specific decisions. Output is a triaged Markdown file reviewed by a human; spec changes are authored as new ADRs.
 10. **Periodic LLM audit run (advisory).** Reads the invariant registry plus recent ADRs, suggests missing journeys, missing invariants, drift between ADR rationale and registry contents. Output is advisory; never blocks.
@@ -71,11 +70,11 @@ The development cycle for a v2 component (in any consumer project):
 
 ### `src/sdd/.agent/skills/`
 
-**Existing skills, extended for v2 dispatch:**
+**Existing skills, extended:**
 
-- `plan-feature/SKILL.md` — gains v2 ADR template branch (Invariant Delta block, glossary check, mechanism enforcement). Mode dispatched by per-component config.
-- `feature-change/SKILL.md` — for v2 components, replaces implementation-evaluator with verifier-suite check; for v1, unchanged.
-- `setup/SKILL.md` (claude-specific) — gains a question for which mode the new project starts in (defaults to v2).
+- `plan-feature/SKILL.md` — gains optional Invariant Delta block in the template. When the author indicates the ADR will introduce invariants, the skill prompts for the delta entries and runs glossary/mechanism checks before finalization. When the author indicates no invariants, the skill produces a standard ADR unchanged.
+- `feature-change/SKILL.md` — when the ADR includes an Invariant Delta block, the verifier suite is added as a success criterion alongside the existing implementation-evaluator. When the ADR has no delta block, behavior is unchanged.
+- `setup/SKILL.md` — unchanged. The methodology is additive; no mode setup is required.
 
 **New skills:**
 
@@ -108,7 +107,7 @@ The development cycle for a v2 component (in any consumer project):
 **Updated specs:**
 
 - `spec-agents.md` — extend with the new subagents.
-- `context.md` — extend with v2 dispatch rules and the per-component mode flag.
+- `context.md` — extend with the additive Invariant Delta block convention.
 
 ### Methodology's own registry
 
@@ -122,7 +121,6 @@ methodology.invariant.has_mechanism
 methodology.invariant.statement_atomic
 methodology.skills.context_isolation
 methodology.subagent.fresh_context
-methodology.dispatch.respects_mode
 methodology.audit.advisory_only
 ```
 
@@ -193,21 +191,6 @@ Each ADR that affects invariants includes a structured block with up to six delt
 ```
 
 The CI gate verifies that the running registry equals the sum of all ADR deltas (Added − Withdrawn, with Modified/Promoted/Deprecated/Superseded tracked through status fields and the reliance graph maintained from `Relies On` blocks).
-
-### Per-component mode flag
-
-`<project>/.sdd/components.yaml` (or equivalent — to be specified):
-
-```yaml
-components:
-  mclaude-control-plane:
-    mode: v2
-    registry: mclaude-control-plane/internal/spec/invariants.go
-  mclaude-relay:
-    mode: v1
-    spec: docs/mclaude-relay/spec-relay.md
-  ...
-```
 
 ## Self-Application: Methodology as Zeroth Invariant Set
 
@@ -376,7 +359,7 @@ Reaction artifacts are committed alongside the triggering ADR's PR; their existe
 
 - ADR may declare an explicit `Owner: <name or team>` in frontmatter.
 - Default = original ADR commit's git author.
-- Per-project fallback owner declared in `.sdd/components.yaml` for un-owned ADRs.
+- Per-project fallback owner declared in a project-level config (e.g. `.sdd/config.yaml`) for un-owned ADRs.
 
 **Reaction options (owner picks one per pending artifact):**
 
@@ -718,7 +701,6 @@ The alternatives are worse. *Verifier-only (no statement)*: no ADR traceability 
 - **Verifier compilation failure** (LLM produces invalid code): build break; human authors fix or re-runs compilation with corrected ADR.
 - **Differential regeneration produces incorrect implementations**: surfaces as a spec gap; failing invariants identify which decisions weren't constrained enough. Author follow-up ADR with sharpened invariants.
 - **Invariant registry drift** (entry has no live verifier; verifier pins unknown invariant): CI gate fails; must be resolved before merge.
-- **Coexistence dispatch error** (change request hits a component without a mode flag, or with an unknown mode): /plan-feature halts and asks operator to declare the mode explicitly.
 - **Glossary coverage failure** (term in invariant statement resolves to nothing): authoring blocked until term is typed or added to glossary.
 
 ## Security
@@ -755,7 +737,6 @@ In v1 of this ADR (i.e., spec-driven-dev v2.0):
 - Methodology declaration (artifacts, cycle, principles, taxonomy).
 - Methodology's own invariant registry (Day 1 contents listed).
 - Plugin source extensions (new skills, new subagent, extended existing skills).
-- Coexistence dispatch mechanism (per-component mode flag).
 - Bootstrap implementation in agent-plugins itself.
 - Documentation (4 new specs).
 
@@ -774,7 +755,6 @@ Explicitly deferred:
 - **ADR delta block structure**: dedicated section (current draft), embedded in Decisions table, or in Component Changes? Trade-off: visibility vs. duplication.
 - **Skill suite scope**: which become first-class `/`-commands? Candidates: `/compile-invariants`, `/audit-invariants`, `/check-glossary`, `/check-registry-coverage`. Trade-off: more skills = better context isolation; fewer = simpler mental model.
 - **Differential regeneration cadence + owner**: quarterly + manual trigger, nightly + scheduled, on-demand only? Who reads the diff and triages divergence-as-freedom vs divergence-as-gap?
-- **Per-component mode flag location**: `.sdd/components.yaml` at consumer project root, frontmatter in each component spec, or inferred from presence/absence of an invariant registry?
 - **Registry-coverage CI gate failure semantics**: block merge or warn? (Day 1 should probably be block; Day 0 advisory while machinery stabilizes.)
 - **LLM compilation step ergonomics**: `invariant-compiler` invoked inline during /plan-feature (immediate, but couples skills), as a dedicated /compile-invariants slash command (separable, but extra step), or as part of dev-harness (lazy, but obscures the spec→code translation)?
 - **Methodology spec doc partition**: one big `spec-invariant-driven-development.md`, or split into `spec-invariant-registry.md` + `spec-verifier-conventions.md` + `spec-glossary.md` + `spec-self-application.md`? (Current draft proposes the split, but a single dense doc may be easier to keep coherent during rapid iteration.)
@@ -787,7 +767,6 @@ Explicitly deferred:
 | Test case | What it verifies | Setup/teardown | Components exercised |
 |-----------|------------------|----------------|----------------------|
 | Day-1 bootstrap end-to-end | Register the 9 methodology invariants, generate verifiers via invariant-compiler, run CI gates, all pass | Manual: run /compile-invariants on the methodology's invariants.yaml; commit; run check-registry-coverage and check-glossary | invariant-compiler subagent, /check-registry-coverage, /check-glossary, registry, glossary |
-| v2 mode dispatch | A component with `mode: v2` correctly routes through the v2 ADR template; a `mode: v1` component routes through markdown-spec | Manual: trigger /plan-feature for one of each in a test consumer project | /plan-feature, components.yaml dispatch |
 | Differential regeneration on a small invariant set | Regenerate × 3 produces convergent code for sharply-stated invariants and divergent code for fuzzy ones | Manual: pick 3 methodology invariants, run /audit-invariants in dry-run mode | /audit-invariants, invariant-compiler |
 | Glossary failure mode | Adding an invariant with an unresolved term blocks /plan-feature finalization until term is typed or glossaried | Synthetic test invariant with `frob the widget` in the statement | /plan-feature, /check-glossary |
 | Registry-coverage failure mode | Adding a verifier file that pins a non-existent invariant ID fails CI; orphan registry entry without verifier fails CI | Synthetic bad pairs in a test consumer | /check-registry-coverage |
@@ -801,8 +780,8 @@ Explicitly deferred:
 | spec-invariant-registry.md | 200-400 lines | 30k | Format spec; depends on registry-format question |
 | spec-verifier-conventions.md | 400-800 lines | 50k | Per-mechanism translation conventions |
 | spec-glossary.md (methodology's own) | 100-200 lines | 20k | Small; ~15-20 terms initially |
-| /plan-feature extension (v2 dispatch + Invariant Delta block) | 200-400 lines | 80k | Touch existing skill; risk of regression on v1 mode |
-| /feature-change extension (verifier suite vs implementation-evaluator) | 100-200 lines | 60k | Touch existing skill |
+| /plan-feature extension (optional Invariant Delta block) | 150-300 lines | 60k | Additive: existing path unchanged; new path activates when ADR has invariants |
+| /feature-change extension (verifier suite as additional success criterion) | 80-150 lines | 50k | Additive |
 | /compile-invariants new skill | 200-400 lines + subagent prompt | 80k | New skill + subagent definition |
 | /audit-invariants new skill | 300-600 lines | 100k | Larger; orchestrates rm + regenerate × N + diff |
 | /check-glossary new skill (deterministic) | 100-200 lines Go or shell | 40k | Script, not LLM |
@@ -811,16 +790,14 @@ Explicitly deferred:
 | Day-1 bootstrap: register 9 methodology invariants + generate verifiers | ~500-1000 lines spec/test code | 100k | Bulk of the bootstrap; LLM-compiled, human-reviewed |
 | context.md extension (dispatch rules) | ~50 lines | 15k | |
 | spec-agents.md extension | ~50 lines | 15k | |
-| components.yaml schema + parser | ~100 lines | 30k | Per-project mode flag mechanism |
 
-**Total estimated tokens**: ~800k-1.1M
-**Estimated wall-clock**: 1-2 weeks for a working v2.0 with Day-1 bootstrap complete and the first consumer (mclaude) able to run /plan-feature in v2 mode against control-plane.
+**Total estimated tokens**: ~700k-950k
+**Estimated wall-clock**: 1-2 weeks for a working v2.0 with Day-1 bootstrap complete and the first consumer (mclaude) able to author ADRs with Invariant Delta blocks against control-plane.
 
 **Phasing**:
 1. **Phase 0 (this ADR commit)**: methodology spec docs authored; ADR-0075 accepted.
 2. **Phase 1 (1-2 days)**: skill extensions + new skills authored; subagent defined; deterministic scripts written. No invariants registered yet — machinery only.
 3. **Phase 2 (2-3 days)**: Day-1 bootstrap. Register the 9 methodology invariants. Verify CI gates green. The framework now verifies itself.
-4. **Phase 3 (1-2 days)**: Coexistence wiring. components.yaml dispatch in /plan-feature and /feature-change. v1 path verified to still work.
-5. **Phase 4 (concurrent with mclaude ADR-0100 finalization)**: First consumer pilot. mclaude-control-plane greenfield migration begins. Real-world stress-test of the methodology.
+4. **Phase 3 (concurrent with mclaude ADR-0100 finalization)**: First consumer pilot. mclaude-control-plane greenfield migration begins. Real-world stress-test of the methodology.
 
-After Phase 4, this ADR's status flips from `accepted` → `implemented`. Subsequent ADRs (76+) handle: TypeScript bindings, mutation-testing as CI, journey-author subagent, v1 retirement timing.
+After Phase 3, this ADR's status flips from `accepted` → `implemented`. Subsequent ADRs (76+) handle: TypeScript bindings, mutation-testing as CI, journey-author subagent.

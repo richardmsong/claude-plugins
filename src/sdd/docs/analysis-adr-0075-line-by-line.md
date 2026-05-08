@@ -161,38 +161,6 @@ Every invariant identified in the analysis is defined here exactly once. The Lin
 **Statement**: `scope` value is in {methodology, project-cross-cutting, component-local}.
 **Mechanism**: schema.
 
-## Mode dispatch
-
-### inv-methodology-dispatch-respects-mode
-**ID**: `methodology.dispatch.respects_mode`
-**Statement**: `/plan-feature` and `/feature-change` route to v1 or v2 logic based on the component's mode flag.
-**Mechanism**: integration test on each skill with v1/v2 fixture components.
-
-### inv-methodology-mode-flag-declared-per-component
-**ID**: `methodology.mode_flag.declared_per_component`
-**Statement**: Every component appearing in the project has a declared `mode` field in `.sdd/components.yaml`.
-**Mechanism**: schema check on components.yaml.
-
-### inv-methodology-mode-flag-value-in-enum
-**ID**: `methodology.mode_flag.value_in_enum`
-**Statement**: `mode` field's value is in {v1, v2}.
-**Mechanism**: schema.
-
-### inv-methodology-mode-flag-v2-references-registry
-**ID**: `methodology.mode_flag.v2_references_registry`
-**Statement**: v2 components have a `registry` field pointing to an existing registry file.
-**Mechanism**: schema cross-check.
-
-### inv-methodology-mode-flag-v1-references-spec
-**ID**: `methodology.mode_flag.v1_references_spec`
-**Statement**: v1 components have a `spec` field pointing to an existing markdown spec file.
-**Mechanism**: schema cross-check.
-
-### inv-methodology-dispatch-halt
-**ID**: `methodology.dispatch.halts_on_unknown_mode`
-**Statement**: `/plan-feature` halts and asks for clarification when a component has missing or unknown mode.
-**Mechanism**: integration test.
-
 ## Skills
 
 ### inv-methodology-adr-authoring-uses-plan-feature
@@ -200,10 +168,10 @@ Every invariant identified in the analysis is defined here exactly once. The Lin
 **Statement**: Any new or modified ADR that touches invariants is authored via `/plan-feature` (not by direct file write outside the skill).
 **Mechanism**: integration test + advisory.
 
-### inv-methodology-plan-feature-v2-template
-**ID**: `methodology.plan_feature.v2_template_for_v2_components`
-**Statement**: In v2 mode, `/plan-feature` produces ADRs that include the Invariant Delta block; in v1 mode, it does not.
-**Mechanism**: integration test with v1/v2 fixtures.
+### inv-methodology-plan-feature-includes-delta-when-present
+**ID**: `methodology.plan_feature.includes_invariant_delta_when_present`
+**Statement**: When the author indicates the ADR introduces invariants, `/plan-feature` includes the Invariant Delta block in the template; otherwise produces a standard ADR.
+**Mechanism**: integration test.
 
 ### inv-methodology-plan-feature-blocks-unmechanism
 **ID**: `methodology.plan_feature.blocks_unmechanism_invariants`
@@ -216,13 +184,8 @@ Every invariant identified in the analysis is defined here exactly once. The Lin
 **Mechanism**: integration test.
 
 ### inv-methodology-feature-change-uses-verifier-suite
-**ID**: `methodology.feature_change.uses_verifier_suite_for_v2`
-**Statement**: For v2 components, `/feature-change`'s success criterion is "the verifier suite passes," not "implementation-evaluator returns CLEAN."
-**Mechanism**: integration test on /feature-change v2 path.
-
-### inv-methodology-setup-asks-mode
-**ID**: `methodology.setup.asks_mode`
-**Statement**: `/setup` prompts the user for v1 or v2 mode and writes it to components.yaml.
+**ID**: `methodology.feature_change.uses_verifier_suite_when_invariants_present`
+**Statement**: When an ADR includes an Invariant Delta block, `/feature-change` adds the verifier suite as a success criterion alongside the existing implementation-evaluator.
 **Mechanism**: integration test.
 
 ### inv-methodology-glossary-check-deterministic
@@ -687,10 +650,10 @@ Atomic claims:
 > "V1 markdown-spec methodology coexists with v2... Consumer projects opt in per-component; both modes ship in the same plugin and share the existing skills which dispatch internally based on the per-component mode."
 
 Atomic claims:
-1. "V1 and v2 coexist" — DECISION.
-2. "Per-component opt-in" — INVARIANT [`methodology.mode_flag.declared_per_component`](#inv-methodology-mode-flag-declared-per-component).
-3. "Both modes in same plugin" — DECISION.
-4. "Skills dispatch by mode" — INVARIANT [`methodology.dispatch.respects_mode`](#inv-methodology-dispatch-respects-mode).
+1. "Methodology is additive, not parallel mode" — DECISION (post-simplification).
+2. "ADRs include Invariant Delta block when invariants are introduced" — SUBSUMED by [`methodology.adr.delta_block_required_for_invariant_changes`](#inv-methodology-adr-delta-block-required).
+3. "ADRs without delta blocks continue to work as-is" — RATIONALE (additive design).
+4. "Registry/CI/glossary machinery activates only when invariants present" — RATIONALE.
 
 ### Line 13
 > "The plugin's own development uses v2 from Day 1..."
@@ -749,13 +712,10 @@ Atomic claims:
 - "Per-mechanism tools documented" — INVARIANT [`methodology.mechanism.tool_documented`](#inv-methodology-mechanism-tool-documented).
 
 ### Line 41 (Plugin shape)
-- DECISION + SUBSUMED by [`methodology.dispatch.respects_mode`](#inv-methodology-dispatch-respects-mode).
+- DECISION (additive evolution; no dispatch).
 
 ### Line 42 (Bootstrap project)
 - DEFERRED / RATIONALE.
-
-### Line 43 (Coexistence dispatch)
-- SUBSUMED by [`methodology.mode_flag.declared_per_component`](#inv-methodology-mode-flag-declared-per-component) and [`methodology.dispatch.respects_mode`](#inv-methodology-dispatch-respects-mode).
 
 ### Line 44 (Stability tier)
 1. "Tier enum {draft, active}" — INVARIANT [`methodology.invariant.tier_in_enum`](#inv-methodology-invariant-tier-in-enum).
@@ -782,8 +742,8 @@ Atomic claims:
 ### Line 60 (Step 2: ADR authoring)
 1. "Master session authors ADRs" — DECISION.
 2. "ADR authoring goes through `/plan-feature`" — INVARIANT [`methodology.adr_authoring.uses_plan_feature`](#inv-methodology-adr-authoring-uses-plan-feature).
-3. "Skill detects v2 mode" — SUBSUMED by [`methodology.dispatch.respects_mode`](#inv-methodology-dispatch-respects-mode).
-4. "v2 ADR template used in v2 mode" — INVARIANT [`methodology.plan_feature.v2_template_for_v2_components`](#inv-methodology-plan-feature-v2-template).
+3. "Author indicates whether ADR introduces invariants" — RATIONALE (process discipline).
+4. "Template includes Invariant Delta block when invariants present" — INVARIANT [`methodology.plan_feature.includes_invariant_delta_when_present`](#inv-methodology-plan-feature-includes-delta-when-present).
 5. "Template includes Invariant Delta block" — SUBSUMED by [`methodology.adr.delta_block_required_for_invariant_changes`](#inv-methodology-adr-delta-block-required).
 6. "Block contains added/modified/removed entries" — INVARIANT [`methodology.adr.delta_block_kinds_in_enum`](#inv-methodology-adr-delta-block-kinds-in-enum).
 7. "Each entry has mechanism" — SUBSUMED by [`methodology.invariant.has_mechanism`](#inv-methodology-invariant-has-mechanism).
@@ -834,7 +794,7 @@ Atomic claims:
 
 ### Lines 72-78: extended skills
 - /plan-feature, /feature-change extensions — SUBSUMED by skill invariants above.
-- /setup extension — INVARIANT [`methodology.setup.asks_mode`](#inv-methodology-setup-asks-mode).
+- /setup unchanged — methodology is additive; no mode setup needed.
 
 ### Lines 80-85: new skills
 - compile-invariants — DECISION + SUBSUMED.
@@ -895,10 +855,7 @@ Atomic claims:
 ### Line 195: registry == sum of deltas — [`methodology.adr.delta_reconciles`](#inv-methodology-adr-delta-reconciles).
 
 ### Lines 197-210: components.yaml schema
-- [`methodology.mode_flag.declared_per_component`](#inv-methodology-mode-flag-declared-per-component).
-- [`methodology.mode_flag.value_in_enum`](#inv-methodology-mode-flag-value-in-enum).
-- [`methodology.mode_flag.v2_references_registry`](#inv-methodology-mode-flag-v2-references-registry).
-- [`methodology.mode_flag.v1_references_spec`](#inv-methodology-mode-flag-v1-references-spec).
+- (Mode flag invariants removed — methodology is additive, no per-component dispatch.)
 
 ## Lines 212-226: Self-Application
 
@@ -1081,7 +1038,6 @@ Atomic claims:
 - Verifier compilation failure — RATIONALE.
 - Differential regen incorrect — RATIONALE.
 - Registry drift — SUBSUMED by [`methodology.registry.no_orphans`](#inv-methodology-registry-no-orphans).
-- Coexistence dispatch error — INVARIANT [`methodology.dispatch.halts_on_unknown_mode`](#inv-methodology-dispatch-halt).
 - Glossary failure — SUBSUMED by [`methodology.plan_feature.blocks_unresolved_terms`](#inv-methodology-plan-feature-blocks-unresolved-terms).
 
 ## Lines 724-731: Security
@@ -1101,7 +1057,7 @@ Atomic claims:
 
 # Final tally
 
-**Total atomic invariants identified: ~115-120** after de-duplication and consolidation across all 826 lines of the ADR.
+**Total atomic invariants identified: ~108-113** after de-duplication and consolidation, and after dropping the mode-flag/coexistence-dispatch invariants per the additive-methodology simplification.
 
 The Master List above contains every invariant. Click any link in the walkthrough to jump to its definition.
 
@@ -1109,11 +1065,15 @@ The Master List above contains every invariant. Click any link in the walkthroug
 
 | Phase | Tools required | Cumulative invariants |
 |---|---|---|
-| Phase 1 | registry parser + glossary parser + ADR delta parser + components.yaml parser + 4 deterministic CI scripts | ~35 (all schema/lifecycle/mode-dispatch) |
-| Phase 2 | invariant-compiler subagent + extended /plan-feature + /feature-change + /setup | ~50 |
-| Phase 3 | /audit-invariants + /check-glossary + /check-registry-coverage + modification CI gates | ~65 |
-| Phase 4 | reaction artifact generator + merge gate + 7 reaction slash commands + triage assistant | ~95 |
-| Phase 5 | docs-mcp invariant index + 6 MCP tools + 8 dashboard read views + 8 dashboard write actions | ~118 |
-| Phase 6 | Hosted-mode dashboard + cleanup | ~120 |
+| Phase 1 | registry parser + glossary parser + ADR delta parser + 3 deterministic CI scripts | ~28 (schema/lifecycle/glossary) |
+| Phase 2 | invariant-compiler subagent + extended /plan-feature + /feature-change | ~42 |
+| Phase 3 | /audit-invariants + /check-glossary + /check-registry-coverage + modification CI gates | ~58 |
+| Phase 4 | reaction artifact generator + merge gate + 7 reaction slash commands + triage assistant | ~88 |
+| Phase 5 | docs-mcp invariant index + 6 MCP tools + 8 dashboard read views + 8 dashboard write actions | ~110 |
+| Phase 6 | Hosted-mode dashboard + cleanup | ~113 |
 
-The original "9 Day-1 invariants" framing in ADR-0075 was a bootstrap minimum, not the full registry. The realistic Phase-1 set is ~35 invariants (schema/lifecycle/dispatch — provable on Day 1 with only the registry/glossary parsers in place). The full methodology registry at completion is ~115-120.
+The original "9 Day-1 invariants" framing in ADR-0075 was a bootstrap minimum, not the full registry. The realistic Phase-1 set is ~28 invariants (schema/lifecycle/glossary — provable on Day 1 with only the registry/glossary parsers in place). The full methodology registry at completion is ~108-113.
+
+### What changed in this revision
+
+The mode-flag/coexistence-dispatch invariants were dropped (7 invariants) per the simplification: the methodology is additive, not a parallel mode. ADRs include Invariant Delta blocks when they have invariants to declare; ADRs without them just work as before. No per-component opt-in flag, no `components.yaml`, no dispatch logic. Two skill invariants were renamed to drop the "v2"-specific framing.
