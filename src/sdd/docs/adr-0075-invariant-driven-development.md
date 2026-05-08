@@ -42,7 +42,7 @@ V2 shifts the contract surface from prose to executable artifacts (test files + 
 | Bootstrap project | agent-plugins itself; methodology's own invariants register first (Day 1), consumer-project invariants follow (Day N) | Self-application is evidence of generality. Proving the framework on its own meta-level before consumers bet on it de-risks adoption. |
 | Coexistence dispatch | Per-component mode flag (v1 markdown-spec or v2 invariant-driven) read by `/plan-feature` and `/feature-change` from a project-level config | Component-by-component opt-in matches the gradual-migration use case. File-path-based or ADR-declared flags would work but are less explicit than a config block. |
 | Invariant stability tier | Two-tier system: `draft` / `active`. Default on introduction = `draft`. One promotion ADR per invariant (`draft → active`); evidence required (audit survival, utility, surrounding-code stability). | Four tiers (experimental/provisional/stable/core) imposed too many promotion ADRs (~12/month at scale). Two tiers cut throughput 2-3× while preserving the load-bearing distinction between "we're trying this" and "we're committed." Provisional collapses into draft (drafts can survive long); core converts to a computed attribute. |
-| Core attribute (computed) | `core: true` automatically set when an invariant is cited by ≥ 3 other ADRs as load-bearing; also manually settable for explicit declarations. Affects removal ceremony (core requires successor invariant or explicit redesign justification). | Core-ness is a *consequence* of architectural significance, not a separate governance state. Computing it from citation count makes the signal evidence-based and game-resistant; manual override exists for the rare case where authorial judgment precedes evidence. Reuses the lineage-dashboard concept already established for ADR↔spec relationships. |
+| Core attribute (computed) | `core: true` automatically set when ≥ 3 other ADRs rely on the invariant as load-bearing; also manually settable for explicit declarations. Affects removal ceremony (core requires successor invariant or explicit redesign justification). | Core-ness is a *consequence* of architectural significance, not a separate governance state. Computing it from the relied-on count makes the signal evidence-based and game-resistant; manual override exists for the rare case where authorial judgment precedes evidence. Reuses the lineage-dashboard concept already established for ADR↔spec relationships. |
 | Invariant lifecycle status | Orthogonal axis: `active` / `deprecated` / `superseded` / `withdrawn`. Withdrawal requires verifier file deletion in the same commit. | Separates "is this still enforced?" (status) from "how committed are we?" (tier). Allows graceful deprecation periods for active invariants and lightweight Day-2 revocation for drafts. |
 | Conflict resolution authority | Authority hierarchy: statement > verifier > code. Operational reality: verifier is what CI runs. When statement and verifier conflict at audit, the verifier is the bug (it should be a deterministic encoding of the statement). Statement is revised only when audit reveals the original statement was ambiguous. | Three artifacts encoding the same truth means drift is possible. An explicit hierarchy gives a deterministic resolution rule rather than living with silent drift. |
 | Invariant registry format | (decision pending: language-native const slice, YAML, separate file per invariant, comment-extracted from test files) | |
@@ -143,11 +143,11 @@ Each registered with its mechanism, verifier file pointer, glossary terms used. 
   introduced_by: adr-NNNN
   promoted_by: adr-MMMM            # set when tier flips draft → active
   superseded_by: <id of replacement, if status = superseded>
-  core: <computed: true if cited by ≥3 ADRs as load-bearing; can be manually overridden>
-  citations: [adr-NNNN, adr-MMMM, ...]   # populated by docs-mcp from ADR Cites blocks
+  core: <computed: true if ≥3 ADRs rely on this; can be manually overridden>
+  relied_on_by: [adr-NNNN, adr-MMMM, ...]   # populated by docs-mcp from ADR Relies On blocks
 ```
 
-`tier` governs *change process* (lightweight for draft, deprecation-period for active). `status` governs *whether the verifier runs and how the registry handles it*. `core` is a derived attribute computed from the citation graph; it elevates the removal ceremony but doesn't add a governance state. The three axes are orthogonal — see "Methodology Governance" section below.
+`tier` governs *change process* (lightweight for draft, deprecation-period for active). `status` governs *whether the verifier runs and how the registry handles it*. `core` is a derived attribute computed from the reliance graph; it elevates the removal ceremony but doesn't add a governance state. The three axes are orthogonal — see "Methodology Governance" section below.
 
 ### Glossary entry (format pending)
 
@@ -187,12 +187,12 @@ Each ADR that affects invariants includes a structured block with up to six delt
 - `<id>`: <reason — typically "experiment did not pan out" or "no longer required because ...">
   *(Verifier file MUST be deleted in the same commit. Registry entry retained with status=withdrawn for historical traceability only.)*
 
-### Cites
+### Relies On
 - `<id>`: <how this ADR depends on the invariant>
-  *(Reference without modification. Feeds the citation graph that computes `core` attribute. Required when an ADR's decisions rely on an existing invariant being true.)*
+  *(Reference without modification. Feeds the reliance graph that computes `core` attribute. Required when an ADR's decisions rely on an existing invariant being true.)*
 ```
 
-The CI gate verifies that the running registry equals the sum of all ADR deltas (Added − Withdrawn, with Modified/Promoted/Deprecated/Superseded tracked through status fields and the citation graph maintained from `Cites` blocks).
+The CI gate verifies that the running registry equals the sum of all ADR deltas (Added − Withdrawn, with Modified/Promoted/Deprecated/Superseded tracked through status fields and the reliance graph maintained from `Relies On` blocks).
 
 ### Per-component mode flag
 
@@ -242,11 +242,11 @@ Every invariant carries a `tier` that governs *change process*, not enforcement.
 
 #### Core attribute (computed, not a tier)
 
-`core: true` is set on an invariant when it has accumulated significant architectural weight — measured by citation count from other ADRs. It is *not* a separate governance state; it's an attribute that *amplifies* the removal ceremony of an `active` invariant.
+`core: true` is set on an invariant when it has accumulated significant architectural weight — measured by how many other ADRs rely on it. It is *not* a separate governance state; it's an attribute that *amplifies* the removal ceremony of an `active` invariant.
 
-**Computation rule (default):** `core = true` iff the invariant is cited as load-bearing by ≥ 3 other ADRs. The citation graph is computed by docs-mcp from structured `### Cites` blocks in ADR Invariant Delta sections (see Lineage section below).
+**Computation rule (default):** `core = true` iff ≥ 3 other ADRs rely on the invariant as load-bearing. The reliance graph is computed by docs-mcp from structured `### Relies On` blocks in ADR Invariant Delta sections (see Lineage section below).
 
-**Manual override:** an ADR may declare `core: true` explicitly when authorial judgment precedes citation evidence (e.g., a security boundary declared core on Day 1 because the architectural significance is obvious). This sets a sticky flag that survives recomputation.
+**Manual override:** an ADR may declare `core: true` explicitly when authorial judgment precedes reliance evidence (e.g., a security boundary declared core on Day 1 because the architectural significance is obvious). This sets a sticky flag that survives recomputation.
 
 **Effect of `core: true`:**
 
@@ -264,7 +264,7 @@ The single promotion `draft → active` is its own ADR (a pure tier-change delta
 2. **Stability of statement and verifier**: no audit advisory output proposed sharpening, modifying, or removing it in the survival window; verifier hasn't needed re-compilation due to drift; statement-↔-verifier roundtrip passed in the most recent audit.
 3. **Utility evidence**, at least one of:
    - The verifier has caught a real violation (i.e., a code change broke this verifier and was prevented from merging).
-   - This invariant ID is cited by ≥ 1 other ADR.
+   - ≥ 1 other ADR relies on this invariant.
    - A differential regeneration audit demonstrated convergence on the constrained behavior.
 4. **Surrounding-code stability**: the production code that satisfies this invariant hasn't been substantially refactored (>30% line churn in the verifier's target files) in the last 2 cycles. If surrounding code is churning, the invariant isn't stable — it's just lucky.
 
@@ -278,7 +278,7 @@ Any tier → `deprecated` (status, not tier) → `withdrawn`. The ceremony requi
 |---|---|
 | `draft` | Single ADR transitions `active` → `withdrawn` directly; deprecation period optional. Verifier file deleted in same commit. |
 | `active`, core=false | ADR with deprecation reasoning; required deprecation period (default 1 audit cycle) before withdrawal; deprecation documented in the ADR. |
-| `active`, core=true | ADR with redesign justification or successor invariant (Supersession); required deprecation period (default 2 cycles); citation-graph blast-radius surfaced from the dashboard. |
+| `active`, core=true | ADR with redesign justification or successor invariant (Supersession); required deprecation period (default 2 cycles); reliance-graph blast-radius surfaced from the dashboard. |
 
 #### Operational effect of tier
 
@@ -290,7 +290,7 @@ CI enforcement is identical across tiers — a verifier failure blocks merge reg
 | active, core=false | Reviewed for deprecation only | High — deprecation period required |
 | active, core=true | Reviewed for redesign or supersession | Very high — redesign event with blast-radius analysis |
 
-### Lineage and citation graph
+### Lineage and reliance graph
 
 The methodology builds a typed graph over its artifacts. This is a direct extension of the lineage dashboard already established in agent-plugins (ADR-0029-31, 0036, 0040, 0042, 0050) for ADR↔spec relationships — same docs-mcp, same dashboard, new node and edge types.
 
@@ -306,7 +306,7 @@ The methodology builds a typed graph over its artifacts. This is a direct extens
 
 | Edge | From → To | Source of truth | Maintained by |
 |---|---|---|---|
-| `cites` | ADR → Invariant | ADR `### Cites` block in Invariant Delta | docs-mcp parser |
+| `relies_on` | ADR → Invariant | ADR `### Relies On` block in Invariant Delta | docs-mcp parser |
 | `introduces` | ADR → Invariant | ADR `### Added` block | docs-mcp parser |
 | `modifies` | ADR → Invariant | ADR `### Modified` block | docs-mcp parser |
 | `promotes` | ADR → Invariant | ADR `### Promoted` block | docs-mcp parser |
@@ -317,37 +317,37 @@ The methodology builds a typed graph over its artifacts. This is a direct extens
 | `uses_term` | Invariant → Glossary term | Registry `glossary_terms` field | Registry |
 | `defines_term` | Type/Method → Glossary term | Glossary `resolves_to` field | Glossary |
 
-#### Citation detection: explicit Cites section, not inline
+#### Reliance detection: explicit Relies On section, not inline
 
-Citations are detected from a structured `### Cites` block in the ADR's Invariant Delta section. **Inline mentions of invariant IDs in ADR prose do not count.** This is the load-bearing anti-gaming rule:
+Reliances are detected from a structured `### Relies On` block in the ADR's Invariant Delta section. **Inline mentions of invariant IDs in ADR prose do not count.** This is the load-bearing anti-gaming rule:
 
 - Inline detection has too many failure modes — incidental mentions count alongside dependencies, renames silently break references, gameable by mention frequency, requires NLP heuristics that aren't deterministic.
-- Explicit declaration is unambiguous, deterministic to parse, deliberate by friction, mechanical to maintain across renames, and reviewers can challenge "you cited this but I don't see the dependency."
+- Explicit declaration is unambiguous, deterministic to parse, deliberate by friction, mechanical to maintain across renames, and reviewers can challenge "you said you rely on this but I don't see the dependency."
 
-Inline mentions get an *advisory* signal only: the audit advisory may flag "ADR mentions invariant X but doesn't list it in Cites — intentional?" Authors decide; not a CI gate.
+Inline mentions get an *advisory* signal only: the audit advisory may flag "ADR mentions invariant X but doesn't list it in Relies On — intentional?" Authors decide; not a CI gate.
 
-#### Citation graph computation
+#### Reliance graph computation
 
-`core` is computed from the citation graph with strict anti-gaming rules:
+`core` is computed from the reliance graph with strict anti-gaming rules:
 
 ```
-citations(invariant) = |{ adr | adr ∈ cites_block(invariant) }|
-                       where adr satisfies all of:
-                         1. adr is "live" (status ≠ withdrawn ∧ ≠ superseded-as-doc)
-                         2. adr has no meta-edge to invariant
-                            (no Added / Modified / Promoted / Deprecated /
-                             Withdrawn / Supersedes edge from this same ADR)
-                         3. invariant appears at most once in adr's Cites block
-                            (set cardinality, not line count)
+relied_on_count(invariant) = |{ adr | adr ∈ relies_on_block(invariant) }|
+                              where adr satisfies all of:
+                                1. adr is "live" (status ≠ withdrawn ∧ ≠ superseded-as-doc)
+                                2. adr has no meta-edge to invariant
+                                   (no Added / Modified / Promoted / Deprecated /
+                                    Withdrawn / Supersedes edge from this same ADR)
+                                3. invariant appears at most once in adr's Relies On block
+                                   (set cardinality, not line count)
 
-core(invariant) = (citations(invariant) ≥ 3) OR manually_set(invariant)
+core(invariant) = (relied_on_count(invariant) ≥ 3) OR manually_set(invariant)
 ```
 
 **Rationale for each anti-gaming rule:**
 
 1. **Live ADRs only.** Withdrawn or superseded ADRs don't vote. Otherwise old ADRs that everyone has moved past would still inflate counts indefinitely.
-2. **No double-counting via meta-edges.** If ADR-X already introduces, modifies, or withdraws an invariant, it doesn't *also* count as a citation — the meta-edge is a stronger relationship; conflating them lets every introducing ADR auto-count toward core-ness.
-3. **One ADR = one citation.** Even if the ADR's Cites block lists the same invariant ID three times for three different reasons, that's one citation. Counts go off the deduplicated set per ADR, not the raw line count.
+2. **No double-counting via meta-edges.** If ADR-X already introduces, modifies, or withdraws an invariant, it doesn't *also* count as a reliance — the meta-edge is a stronger relationship; conflating them lets every introducing ADR auto-count toward core-ness.
+3. **One ADR = one reliance.** Even if the ADR's Relies On block lists the same invariant ID three times for three different reasons, that's one reliance. Counts go off the deduplicated set per ADR, not the raw line count.
 
 The default threshold (3) is per-project configurable. Threshold-tuning is the right knob to turn if `core` ends up too restrictive or too permissive in practice — the underlying signal stays clean.
 
@@ -357,17 +357,17 @@ The default threshold (3) is per-project configurable. Threshold-tuning is the r
 |---|---|
 | `list_invariants` | All registered invariants with tier/status/core flag |
 | `search_invariants` | Full-text + structured search across statements, glossary terms, mechanisms |
-| `get_invariant` | Full registry entry + computed citation count + cited-by ADR list |
-| `get_invariant_lineage` | All ADRs in the invariant's history (introduces/modifies/promotes/deprecates/withdraws/cites) |
-| `get_adr_invariants` | All invariants an ADR introduces, modifies, or cites — extends existing ADR lineage view |
+| `get_invariant` | Full registry entry + computed relied-on count + relied-on-by ADR list |
+| `get_invariant_lineage` | All ADRs in the invariant's history (introduces/modifies/promotes/deprecates/withdraws/relies-on) |
+| `get_adr_invariants` | All invariants an ADR introduces, modifies, or relies on — extends existing ADR lineage view |
 | `get_verifier_invariants` | Reverse mapping: which invariants does this test/rule/schema pin? |
 
 #### Dashboard views (extension of existing docs-dashboard)
 
-- **Invariants tab** — sortable list with columns: ID, statement, tier, status, mechanism, citation count, last audit. Filter by component, tier, status, mechanism. Click → detail view.
-- **Invariant detail** — full registry entry, statement, glossary terms (linked), verifier file (linked, with last-modified diff), citation list (each ADR linked), supersession chain (if applicable), audit history, drift health indicators.
-- **Citation graph view** — force-directed graph rendering of ADR↔invariant↔verifier↔glossary edges. Hover for details, click to navigate.
-- **Core candidates panel** — invariants with citation count ≥ 2 (one citation away from auto-core); audit reviewers can promote manually via ADR or wait for the threshold.
+- **Invariants tab** — sortable list with columns: ID, statement, tier, status, mechanism, relied-on count, last audit. Filter by component, tier, status, mechanism. Click → detail view.
+- **Invariant detail** — full registry entry, statement, glossary terms (linked), verifier file (linked, with last-modified diff), relied-on-by list (each ADR linked), supersession chain (if applicable), audit history, drift health indicators.
+- **Reliance graph view** — force-directed graph rendering of ADR↔invariant↔verifier↔glossary edges. Hover for details, click to navigate.
+- **Core candidates panel** — invariants with relied-on count ≥ 2 (one reliance away from auto-core); audit reviewers can promote manually via ADR or wait for the threshold.
 - **Drift heatmap** — invariants overlaid with last-audit-status color (green = roundtrip OK, yellow = pending audit, red = drift detected).
 - **Tier distribution** — bar chart of invariant counts by tier × component, highlighting components heavy in drafts (potential consolidation targets) vs heavy in actives (mature surfaces).
 - **Promotion candidates** — drafts that have met all promotion criteria (survival, utility, surrounding-code stability) but haven't been promoted yet; one-click "draft promotion ADR" action.
