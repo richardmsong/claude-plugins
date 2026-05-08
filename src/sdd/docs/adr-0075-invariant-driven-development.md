@@ -480,6 +480,45 @@ Projects may tighten the policy (e.g., disable auto-ack entirely while building 
 
 LLMs at authoring time, not CI time. The triage assistant is between authoring and validation — it compresses human judgment effort by batching and pre-classifying, but every ack is still an explicit human decision recorded as data. The reaction merge-gate remains deterministic: it checks `human_decision`, not `llm_suggestion`.
 
+#### Where the reaction process literally runs
+
+The reaction process is a CI flow, but the same code runs locally for prep and small projects. There are four enforcement modes; consumer projects pick per-project via a config flag.
+
+**Full pipeline (multi-team / ≥10 invariant touch-points per quarter):**
+
+1. PR opens with a triggering ADR (Class B / Supersession / Withdrawal).
+2. CI hook parses the ADR's Invariant Delta block.
+3. CI queries reliance graph (via docs-mcp) → list of relying ADRs.
+4. CI generates reaction artifacts (one per relying ADR) under `docs/reactions/`.
+5. CI runs triage assistant per artifact; writes `llm_suggestion` block.
+6. CI commits artifacts back to the PR branch.
+7. CI status check `methodology.reaction.gate` fails until every artifact has `human_decision` filled in (or is expired with acceptable disposition).
+8. Owner acks via artifact edit / slash command / dashboard.
+9. On merge: artifacts persist in main's history; optionally archived to `docs/reactions/archived/` and summarized in the triggering ADR's "Reactions" section.
+
+The artifacts being in git (on the PR branch, then in main) is what makes the audit trail durable — no separate stateful service required.
+
+**Per-project enforcement modes:**
+
+| Mode | Reaction generation | Triage assistant | Merge gate | Suitable for |
+|---|---|---|---|---|
+| `full` | CI on PR open | CI runs LLM, commits suggestions | CI blocks until acked | Multi-team, high-touch projects |
+| `triage-assist` | Local slash command | Local LLM, commits suggestions | No CI gate; PR can merge anyway, artifacts in git for audit | Solo dev wanting prep without enforcement |
+| `manual` | Local slash command | None (or LLM by hand) | No CI gate; reliance scan output reviewed by eye | Solo dev, low-touch projects |
+| `off` | Skip | Skip | Skip | Pre-Day-1; projects without invariants |
+
+Mode is declared in `.sdd/components.yaml` (or equivalent — see open question on mode-flag location):
+
+```yaml
+reaction_enforcement: triage-assist   # full | triage-assist | manual | off
+```
+
+**Local-CI parity:**
+
+The same code runs in both venues. Slash commands (`/process-reactions`, `/triage-reaction <id>`) drive the local path; the CI hook drives the enforcement path. Idempotent: same triggering ADR + same reliance graph → same reaction artifacts → same triage suggestions. Authors can prep locally, CI re-runs to verify.
+
+**Default mode for new projects:** `manual` (lightest enforcement; promote to `triage-assist` or `full` as the project's invariant load grows). For agent-plugins's own bootstrap (Day 1), `manual` is the right default — the registry will be ~9 methodology invariants with no internal reliance edges yet, so the reaction process is trivial.
+
 ### Lineage and reliance graph
 
 The methodology builds a typed graph over its artifacts. This is a direct extension of the lineage dashboard already established in agent-plugins (ADR-0029-31, 0036, 0040, 0042, 0050) for ADR↔spec relationships — same docs-mcp, same dashboard, new node and edge types.
