@@ -595,6 +595,10 @@ The default threshold (3) is per-project configurable. Threshold-tuning is the r
 
 #### Dashboard views (extension of existing docs-dashboard)
 
+The dashboard is the *visualization, discovery, and async-monitoring* layer; CLI is the *workflow* layer. Both have full write parity — every action you can take in CLI you can take in the dashboard, and vice versa. They modify the same artifact files, so it doesn't matter which venue you use.
+
+**Read views:**
+
 - **Invariants tab** — sortable list with columns: ID, statement, tier, status, mechanism, relied-on count, last audit. Filter by component, tier, status, mechanism. Click → detail view.
 - **Invariant detail** — full registry entry, statement, glossary terms (linked), verifier file (linked, with last-modified diff), relied-on-by list (each ADR linked), supersession chain (if applicable), audit history, drift health indicators.
 - **Reliance graph view** — force-directed graph rendering of ADR↔invariant↔verifier↔glossary edges. Hover for details, click to navigate.
@@ -602,6 +606,62 @@ The default threshold (3) is per-project configurable. Threshold-tuning is the r
 - **Drift heatmap** — invariants overlaid with last-audit-status color (green = roundtrip OK, yellow = pending audit, red = drift detected).
 - **Tier distribution** — bar chart of invariant counts by tier × component, highlighting components heavy in drafts (potential consolidation targets) vs heavy in actives (mature surfaces).
 - **Promotion candidates** — drafts that have met all promotion criteria (survival, utility, surrounding-code stability) but haven't been promoted yet; one-click "draft promotion ADR" action.
+- **Reactions queue** — pending reactions across all open PRs, grouped by LLM-suggested ack class (clear re-pins, needs judgment); per-owner filter; deadlines visible.
+
+**Write actions (parity with CLI slash commands):**
+
+Every CLI action has a dashboard equivalent. The dashboard writes the same artifact YAML the CLI writes; CI validates the same way regardless of venue.
+
+| Action | CLI | Dashboard |
+|---|---|---|
+| List pending reactions | `/list-reactions` | Reactions queue panel |
+| View reaction detail | `/show-reaction <id>` | Click reaction in queue → detail pane |
+| Ack a reaction | `/ack-reaction <id> <ack> [rationale]` | Detail pane → "Approve / Update / Migrate / Object" buttons |
+| Bulk ack high-confidence | `/ack-batch --confidence high --action approve` | Queue panel → "Approve all clear cases" button |
+| Draft follow-up ADR | `/draft-followup <id>` | Detail pane → "Draft follow-up" button |
+| Object | `/object-reaction <id> <reason>` | Detail pane → "Object" button + reason textbox |
+| Migrate reliance | `/migrate-reaction <id>` | Detail pane → "Migrate to successor" button |
+| Promote draft → active | (slash command in /plan-feature) | Promotion candidates panel → "Generate promotion ADR" button |
+
+**How dashboard write actions actually commit:**
+
+The dashboard runs in two deployment modes; both produce identical artifact-file outputs.
+
+**Local mode** (single-user, dev workflow — current docs-dashboard architecture):
+
+- Dashboard process runs on developer's machine with access to the local git working tree.
+- Action button → backend modifies the artifact YAML in the working tree → runs `git add` + `git commit` with the developer's git identity → optionally `git push` if configured.
+- No authentication needed; the dashboard inherits the developer's local git context.
+- This is the Day-1 mode for agent-plugins and mclaude.
+
+**Hosted mode** (multi-user, team workflow — deferred to follow-up ADR):
+
+- Dashboard runs as a shared web service (e.g., on a team VM or hosted SaaS).
+- Authentication via GitHub OAuth; each user's actions attributed to their GitHub identity.
+- Action button → backend uses GitHub API (`PUT /repos/{owner}/{repo}/contents/{path}`) to update the artifact file on the PR branch with the user's identity as committer.
+- Commit attribution flows through correctly; merge-gate revalidates against the new state.
+- Same artifact format, same CI validation; only the commit mechanism differs.
+
+**Author attribution:**
+
+Whichever venue the action comes from, the artifact YAML records:
+
+```yaml
+human_decision:
+  ack: re-pin
+  rationale: "verifiability still holds"
+  acked_by: <git author or GitHub username>
+  acked_at: <ISO 8601 timestamp>
+  venue: cli | dashboard-local | dashboard-hosted
+```
+
+CI doesn't care about `venue`; it only validates that `human_decision.ack` is set. The `venue` field is for audit / observability only.
+
+**Failure modes:**
+
+- Dashboard down or unreachable → CLI continues to work; user falls back to slash commands. No CI dependency on dashboard availability.
+- CLI and dashboard race on the same artifact → standard git merge conflict; resolved by user. Last-writer-wins with explicit conflict resolution.
+- Dashboard local mode pushed an uncommitted file → dashboard either auto-stashes or refuses the action with a clear error message. (Implementation detail; resolved at codegen time.)
 
 #### Why this extension is natural
 
