@@ -78,15 +78,17 @@ Print the following (not interactive — just output):
 
 Every change starts with a decision record (ADR) that captures *why* the change
 is being made. Droid then updates the living spec to reflect the decision,
-and dev-harness subagents implement the code. A spec-evaluator verifies the
-implementation matches the spec. The result: documentation and code stay in sync
-because they're produced together, not after the fact.
+/compile-invariants authors per-invariant verifier stubs from the ADR's Invariant
+Delta block, and dev-harness subagents loop until the verify suite (`sdd verify`
+plus the project's `verify[]` runners) passes. The result: every contract is
+executable; code and contract evolve together because verifiers are the contract
+in code form.
 
 ## How the pipeline works
 
 You describe a change in natural language → Droid invokes /feature-change →
-writes an ADR (records the decision) → updates the spec (living documentation) →
-dev-harness implements the code → implementation-evaluator verifies code matches spec.
+writes an ADR with an Invariant Delta block (records the decision + the contracts it commits to) → updates the spec (living documentation) →
+/compile-invariants authors per-invariant verifier stubs → dev-harness implements the code → loops until the verify suite (`sdd verify && verify[]`) passes.
 
 ## Why source files are protected
 
@@ -99,9 +101,9 @@ traced back to an ADR.
 
 ---
 
-## Step 2 — Write spec-driven-config.json
+## Step 2 — Write or reseed spec-driven-config.json
 
-If `${TARGET}/spec-driven-config.json` does not exist, create it:
+The canonical config template:
 
 ```json
 {
@@ -117,14 +119,31 @@ If `${TARGET}/spec-driven-config.json` does not exist, create it:
       "message": "Bypasses the spec→dev-harness→evaluator loop. Use /feature-change.",
       "category": "ban"
     }
-  ]
+  ],
+  "spec": {
+    "registry": "spec/registry.yaml",
+    "glossary": "spec/glossary.yaml",
+    "adr_dir": "docs/",
+    "reactions_dir": "docs/reactions/"
+  },
+  "verify": [],
+  "dispatch": {}
 }
 ```
 
+Key purposes:
 - `source_dirs`: prevents the master session from editing source files directly — all code changes go through dev-harness agents. The user can add more patterns (e.g. `**/lib/**`).
 - `blocked_commands`: rules checked by the blocked-commands guard hook. Categories: `ban` (always denied), `guard` (denied unless `SDD_DEBUG=1`).
+- `spec.registry` / `spec.glossary` / `spec.adr_dir` / `spec.reactions_dir`: paths the methodology's structural checks (`sdd verify`) read. Defaults are conventional locations; consumers can relocate.
+- `verify[]`: shell commands `sdd verify` runs after structural checks pass. Empty by default — populate with the project's verifier runners (`go test ./...`, `pytest`, `semgrep --config .semgrep.yml`, `buf lint`, etc.).
+- `dispatch{}`: pattern → shell-command map for `sdd run <invariant-id>` (selective per-invariant execution). Empty by default.
 
-If the file already exists, print: `"spec-driven-config.json already exists — skipping (preserving customizations)"`
+**Behavior:**
+
+- **Config does not exist** → write the full template above. Print: `"spec-driven-config.json created"`.
+- **Config exists** → reseed missing top-level keys (idempotent merge): for each key in the template, if it is absent from the existing file, add it with the template's default value. Existing values are never overwritten — customizations are preserved. Print: `"spec-driven-config.json reseeded — added missing keys: <list>"` if any keys were added, or `"spec-driven-config.json already complete — no changes"` if nothing was missing.
+
+The reseed pass exists because the methodology evolves: ADRs introduce new top-level keys (`spec`, `verify`, `dispatch` were added by ADR-0078). Returning users running `/setup` should pick up the new keys automatically without losing customizations. A pure skip-if-exists would leave returning projects stuck on the bootstrap-era schema.
 
 ---
 
@@ -170,7 +189,7 @@ Read or create `${TARGET}/.factory/settings.json`. Merge the following `commandA
 }
 ```
 
-These entries allow dev-harness and implementation-evaluator subagents to run core git operations without interruption, which is required for the spec-commit and ADR-promotion steps to complete autonomously.
+These entries allow dev-harness subagents to run core git operations without interruption, which is required for the spec-commit and ADR-promotion steps to complete autonomously.
 
 If `.factory/settings.json` already exists with a `commandAllowlist` array, merge only entries that are not already present. Do not remove existing entries.
 
@@ -243,8 +262,8 @@ memorize them. But for reference:
 
 - /feature-change — any change: features, bug fixes, refactors, config
 - /plan-feature — new features that need design discussion first
+- /compile-invariants — author per-invariant verifier stubs from an ADR's Invariant Delta block
 - /dashboard — browse your ADRs, specs, and lineage graph
-- /implementation-evaluator — verify code matches specs
 - /design-audit — evaluate an ADR for ambiguities and gaps
 - /file-bug — report a bug with structured reproduction steps
 ```

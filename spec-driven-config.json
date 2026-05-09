@@ -18,5 +18,15 @@
       "message": "Bypasses the spec→dev-harness→evaluator loop. Use /feature-change.",
       "category": "ban"
     }
-  ]
+  ],
+  "spec": {
+    "registry": "src/sdd/spec/registry.yaml",
+    "glossary": "src/sdd/spec/glossary.yaml",
+    "adr_dir": "src/sdd/docs/",
+    "reactions_dir": "src/sdd/docs/reactions/"
+  },
+  "verify": [
+    "cd src/sdd && go test ./spec/..."
+  ],
+  "dispatch": {}
 }

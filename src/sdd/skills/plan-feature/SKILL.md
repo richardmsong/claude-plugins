@@ -1,9 +1,9 @@
 
 # Plan Feature
 
-Structured design session for a new feature. Produces an **ADR** at `docs/adr-NNNN-<slug>.md` — and updates any impacted specs (`docs/**/spec-*.md`) in the same commit — after resolving all ambiguities with the user.
+Structured design session for a new feature. Produces an **ADR** at `docs/adr-NNNN-<slug>.md` plus per-invariant verifier stubs (authored by `/compile-invariants` from the ADR's Invariant Delta block) — committed together — after resolving all ambiguities with the user.
 
-ADRs are dated, immutable records of individual decisions. Specs are living, present-tense descriptions of the current design. Git co-commits between an ADR and the specs it touches form the **lineage edge** that the `docs` MCP surfaces via `get_lineage`. This is load-bearing: without the co-commit, future agents cannot discover why a spec section looks the way it does.
+ADRs are dated, immutable records of individual decisions. Under invariant-driven development the contract surface is the ADR's Invariant Delta + the registry + the verifiers; pre-existing `docs/**/spec-*.md` files are legacy prose annotations, not maintained by this workflow.
 
 Every ADR carries a **status** (`draft | accepted | implemented | superseded | withdrawn`). This skill starts new ADRs in `draft` and promotes them to `accepted` at the spec-co-commit step. Drafts can be paused and resumed freely; they don't co-commit with specs.
 
@@ -55,16 +55,30 @@ Examples:
    this file.
 3. Ask questions (AskUserQuestion). Immediately after each batch of answers,
    edit the ADR file: remove answered questions, add their decisions to the
-   relevant sections, append any new ambiguities surfaced by the answers.
-   Repeat until "Open questions" is empty.
+   relevant sections, append any new ambiguities surfaced by the answers,
+   AND append a one-paragraph rationale note to ## Decision history capturing
+   *why* the decision went this way (the pushback, the tradeoff, the option
+   not chosen). The Decision history is written as decisions are made, not
+   reconstructed at the end.
+   Repeat until "Open questions" is empty AND the ## Invariant Delta block
+   has at least one entry under ### Added or ### Withdrawn.
    (The draft ADR file may be committed between rounds — convenience, so the
    work survives branch switches. No spec edits, no status promotion.)
-4. Finalize the ADR (remove any remaining stubs) and stage impacted spec
-   edits (still under `Status: draft`).
+3c. Invariant compilation: invoke /compile-invariants <adr-path> to author
+    per-invariant verifier stubs for every ### Added entry. The build must
+    pass; per-test reds are expected for impl-pending contracts.
+4. Finalize the ADR (remove any remaining stubs). No spec-*.md updates —
+   the contract surface is the ADR's Invariant Delta + the registry +
+   the verifiers, not prose specs.
+4c. Reaction generation: walk the requires DAG from each entry in this ADR's
+    delta block; for every downstream invariant Y where some new/withdrawn X
+    appears in Y.requires, emit one docs/reactions/<...>.yaml artifact with
+    introducer ADR + owner identification. Runs inline so blast radius
+    informs the design before audit.
 5. Design audit (/design-audit) until CLEAN
-5b. Spec-edit verification loop: run /spec-evaluator on the ADR until CLEAN
 6. Flip the ADR status from `draft` -> `accepted` (append a history line with
-   today's date). Commit ADR + spec edits together (single spec commit).
+   today's date). Commit ADR + verifier files + reaction artifacts
+   together (single commit).
 7. Hand off to /feature-change
 ```
 
@@ -164,11 +178,24 @@ Use `AskUserQuestion` to resolve ambiguities. Rules:
 - **State your recommendation but still ask** — never silently adopt a recommended option. Write "(Recommended)" in the option label, explain why, and ask. The loophole "I have a clear answer so I won't ask" is closed.
 - **Always include design ramifications in the question text** — explain the tradeoffs and consequences of each choice directly in the question, not just in the option descriptions. The user should be able to understand what each choice means for the system without having to ask "what are the ramifications?"
 
-**After each AskUserQuestion returns, the first thing you do is edit the ADR file** — do not queue up the next batch first. Write the user's decisions into the relevant sections, delete the now-resolved entry from `## Open questions`, and append any new ambiguities surfaced by the answers. Only then draft follow-up questions and ask again.
+**After each AskUserQuestion returns, the first thing you do is edit the ADR file** — do not queue up the next batch first. Write the user's decisions into the relevant sections, delete the now-resolved entry from `## Open questions`, append any new ambiguities surfaced by the answers, AND append a one-paragraph rationale note to `## Decision history (rationale notes)` capturing *why* the decision went this way (the pushback, the tradeoff, the option not chosen, any incident or constraint that drove it). Only then draft follow-up questions and ask again.
 
-**Keep going until there are zero unresolved ambiguities.** A design with open questions is not done.
+**Decision history is written as decisions are made, not reconstructed at the end.** Future maintainers reading this ADR shouldn't have to re-derive the *why* from the terse Decisions table. Each note is 1-3 sentences. If a decision was straightforward (only one defensible choice), no rationale note is needed — but if there was a real tradeoff, capture it now while the context is fresh.
 
-**After each round of answers, explicitly audit for remaining ambiguity.** Walk through the entire design end-to-end — every data flow, every error path, every integration point — and ask yourself: "Could I implement this right now without guessing?" If the answer is no anywhere, formulate the ambiguity as a question and ask it. Keep doing this until you can honestly say there are zero open questions. Do not ask the user "is there anything else?" — it's your job to find the gaps, not theirs.
+**Frame the Q&A around invariants, not just behavior.** The right question is "what contracts is this ADR introducing or withdrawing?" — not "are there any invariants?" Every ADR that touches runtime behavior introduces at least one contract: a new field, a new endpoint, a new constraint, a new flow guarantee. The `## Invariant Delta` block is mandatory — an ADR with zero entries in `### Added` or `### Withdrawn` is invalid (it's not making any commitment, so it shouldn't exist as an ADR; commit it as a regular code change instead).
+
+For every distinct contract the ADR commits to, add an entry under `### Added`:
+- `id` — dotted path, e.g., `<component>.<concept>.<facet>`
+- `definition` — one-line statement of the contract; no logical AND (split into separate invariants)
+- `verifier` — `path` or `path::FuncName` for the test that operationalizes the contract
+- `requires` — list of invariant ids this one logically depends on (becomes a DAG edge)
+- `supersedes` (optional) — predecessor invariant id, if this is a substantive change to an existing contract
+
+For every contract being retired, add an entry under `### Withdrawn` with `id` and `reason`.
+
+**Keep going until there are zero unresolved ambiguities AND the Invariant Delta block has at least one entry.** A design with open questions or zero contracts is not done.
+
+**After each round of answers, explicitly audit for remaining ambiguity.** Walk through the entire design end-to-end — every data flow, every error path, every integration point — and ask yourself: "Could I implement this right now without guessing?" If the answer is no anywhere, formulate the ambiguity as a question and ask it. Also ask: "What contract does this round of decisions commit to?" — every answered question typically corresponds to a new entry in the Invariant Delta. Keep doing this until you can honestly say there are zero open questions and the delta block reflects every commitment. Do not ask the user "is there anything else?" — it's your job to find the gaps, not theirs.
 
 ---
 
@@ -178,15 +205,29 @@ Before moving to Step 4, walk through every design decision embedded in the curr
 
 Any decision that was made autonomously and falls into a structural category (placement, naming, ownership, inclusion/exclusion, CI/build impact, integration with existing systems) must be surfaced as a question now if it hasn't been asked yet. Batch them into AskUserQuestion calls (up to 4 per call) following the same rules as Step 3.
 
-Only proceed to Step 4 once every structural decision has an explicit user answer on record — either from a prior Q&A round or from this inventory pass.
+Only proceed to Step 3c once every structural decision has an explicit user answer on record — either from a prior Q&A round or from this inventory pass.
 
-## Step 4 — Finalize the ADR + update impacted specs
+## Step 3c — Invariant compilation (verifier stubs)
+
+Once the `## Invariant Delta` block is filled in and stable, invoke `/compile-invariants` to author per-invariant verifier code:
+
+```
+/compile-invariants docs/adr-NNNN-<slug>.md
+```
+
+This spawns the `invariant-compiler` subagent (fresh context, sees only the ADR + codebase). For every `### Added` entry it creates or appends a compiling test function at the path given by `verifier`. For every `### Withdrawn` entry it removes the predecessor's verifier file or function.
+
+The build is the gate: `go build ./...` and `go vet ./...` must pass. Per-test PASS/FAIL is informational — reds are expected for impl-pending contracts (they'll go green when `/feature-change` lands the implementation).
+
+If the compiler can't produce a compiling test (e.g., the verifier path conflicts with another invariant, or references a nonexistent type that the ADR hasn't defined yet), it stops and reports. Treat the report as backpressure: edit the ADR to resolve the conflict, then re-invoke `/compile-invariants`.
+
+Only proceed to Step 4 once every `### Added` entry has a compiling verifier in the working tree.
+
+## Step 4 — Finalize the ADR
 
 The ADR file was written in Step 2 and amended through every Q&A round. By now `## Open questions` should be empty and every section should be filled in. This step is the last polish pass before audit — no TODOs, no stubs.
 
-**All output goes in a single working tree change** that will be committed together. The co-commit is the lineage edge.
-
-### 4a. Finalize the ADR
+The contract surface under invariant-driven development is the ADR's Invariant Delta block + the registry + the verifiers (authored by /compile-invariants in Step 3c). There are no `docs/**/spec-*.md` updates — prose specs are legacy under this methodology. Any pre-existing spec-*.md files remain in place as human-readable narrative but are not load-bearing and not maintained by this workflow.
 
 Re-read the ADR end-to-end. Remove the `## Open questions` section (or leave it empty with a comment). Confirm every section of the template below is present and concrete. If anything is still hand-wavy, go back to Step 3.
 
@@ -238,6 +279,41 @@ Which components implement the change.
 ## Scope
 What's in v1. What's explicitly deferred.
 
+## Invariant Delta
+
+Mandatory section. An ADR with no entries in either `### Added` or `### Withdrawn` is invalid — it's not committing to anything, so it shouldn't be an ADR. Commit the change as a regular code/spec change instead.
+
+### Added
+
+```yaml
+- id: <invariant_id>
+  definition: <one-line contract; no logical AND>
+  verifier: <path>[::<FuncName>]
+  requires: [<ids>]
+  supersedes: <predecessor_id>   # OPTIONAL; if set, predecessor flips to withdrawn
+  comments: |                    # OPTIONAL
+    <free-form annotations>
+```
+*(Verifier file MUST exist and compile in the same commit. If `supersedes` is set, the predecessor's verifier file must be deleted in the same commit.)*
+
+### Withdrawn
+
+```yaml
+- id: <invariant_id>
+  reason: <terminal removal, no successor>
+```
+*(Verifier file MUST be deleted in the same commit. Registry entry retained with `status: withdrawn` for historical traceability only.)*
+
+## Decision history (rationale notes)
+
+Mandatory section. Preserves the *why* behind decisions captured tersely in the Decisions table. Each note is 1-3 sentences on a design choice that emerged from pushback during authoring; future maintainers shouldn't have to re-derive these from the conversation transcript (which is gone).
+
+Written **as decisions are made**, not retroactively. After every Q&A round that resolves a non-trivial tradeoff, append a paragraph here.
+
+**Why <decision A>.** <The pushback, the option not chosen, the constraint that drove the choice.>
+
+**Why <decision B>.** ...
+
 ## Open questions
 
 (Present during Steps 2-3; deleted before Step 4 finalizes the ADR.)
@@ -287,35 +363,32 @@ baseline, then adjust:
 - First-time component setup: +50k tokens overhead
 ```
 
-### 4b. Update impacted specs
+---
 
-For every surface the feature touches, edit the matching spec file **in the same working tree**:
+## Step 4c — Reaction artifact generation
 
-Use `list_docs category=spec` to discover all specs. Match each change surface to the appropriate spec:
+Before the design audit, walk the requires DAG from this ADR's delta block and generate reaction artifacts for every downstream invariant whose contract may be affected. The artifacts let owners explicitly acknowledge the change before merge.
 
-| Change surface                                       | Spec to edit                                  |
-|------------------------------------------------------|-----------------------------------------------|
-| Cross-cutting spec (touches 2+ components)           | `docs/spec-<concern>.md` (root)               |
-| Component-local behavior (single component)          | `docs/<component>/spec-<topic>.md`            |
-| Feature-local detail with no cross-cutting impact    | None — ADR alone is enough                    |
+For each entry in the ADR's `### Added` (with `supersedes`) or `### Withdrawn` blocks:
+- Find every active invariant `Y` in the registry where the predecessor's id appears in `Y.requires`.
+- For each such `Y`, write `docs/reactions/<adr-slug>-<Y-id>.yaml` with:
 
-Component subfolders are created lazily — the first spec for a component introduces the folder.
-
-### Spec-gap detection
-
-For each component listed in the ADR's "Component Changes" section, check whether a component-local spec exists:
-
-```
-Glob("docs/<component>/spec-*.md")
+```yaml
+triggering_adr: docs/adr-NNNN-<slug>.md
+affected_invariant: <Y.id>
+introduced_by: <ADR that authored Y>
+owner: <owner of Y, from registry metadata>
+status: pending
+disposition: null   # ack | object — filled in by owner
 ```
 
-If no spec file exists for a component, **create one** following the project's spec conventions. Read the component's production code to populate the spec with current behavior in present tense. Include the new spec in the co-commit with the ADR and other spec edits.
+For pure `### Added` entries with no `supersedes`, no reactions are generated — nothing downstream is affected by adding a new contract.
 
-This check detects only the **absence of a spec file** — it does not verify that the new feature's behavior is described in the spec. Adding new behavior to an existing spec is handled by the table above. The two concerns are separate:
-- Spec-gap detection: "does this component have any spec at all?" -> create if missing.
-- Spec update: "does the spec describe this ADR's changes?" -> edit the existing spec.
+This step is **impact-only**: it generates the artifacts so blast radius informs the design before audit. The triage-assistant pass (which fills `llm_suggestion` blocks) is a separate, deferred concern.
 
-When editing a spec, follow the **doc editing rules** below.
+The merge gate that enforces ack before merge is also deferred — for now, the artifacts are advisory. But generating them surfaces the impact to the author *now*, which is the load-bearing reason to run this step before the design audit.
+
+If the registry doesn't yet exist in the project (e.g., the ADR is bootstrapping the methodology itself), this step is a no-op. Note that fact in the ADR's Decision history and proceed.
 
 ---
 
@@ -323,32 +396,13 @@ When editing a spec, follow the **doc editing rules** below.
 
 Run `/design-audit docs/adr-NNNN-<slug>.md` to verify the ADR is self-sufficient.
 
-This calls the `design-evaluator` agent in a loop. The evaluator has no conversation context — it reads only the ADR (and referenced specs) plus the codebase. Between rounds, `/design-audit` classifies gaps (factual vs design decision), fixes factual ones, asks the user about decisions, and re-runs until CLEAN. All findings, fixes, and decisions are logged to `docs/audits/`.
+This calls the `decision-invariant-evaluator` agent in a loop. The evaluator has no conversation context — it reads only the ADR plus the codebase. Between rounds, `/design-audit` classifies gaps (factual vs design decision), fixes factual ones, asks the user about decisions, and re-runs until CLEAN. All findings, fixes, and decisions are logged to `docs/audits/`.
 
 Do not commit or hand off until the audit passes.
 
 ---
 
-## Step 5b — Spec-edit verification loop
-
-After the design audit passes, verify that every ADR decision is reflected in the specs. Run `/spec-evaluator docs/adr-NNNN-<slug>.md` and loop until CLEAN:
-
-```
-Loop:
-  1. Run /spec-evaluator docs/adr-NNNN-<slug>.md
-  2. If gaps with direction SPEC→FIX: fix the spec, go to (1)
-  3. If gaps with direction ADR→FIX: fix the ADR (still draft — editable in place), go to (1)
-  4. If gaps with direction UNCLEAR: ask the user via AskUserQuestion, fix the appropriate side, go to (1)
-  5. If CLEAN: proceed to Step 6
-```
-
-The spec-evaluator agent has no conversation context — it reads only the ADR and the specs. This ensures that the spec edits genuinely capture everything the ADR decided, not just what the master session remembered to include.
-
-Do not promote to `accepted` or commit until the spec-evaluator returns CLEAN.
-
----
-
-## Step 6 — Promote to `accepted` and commit (single spec commit)
+## Step 6 — Promote to `accepted` and commit
 
 Before committing, edit the ADR's header to flip the status:
 
@@ -356,43 +410,43 @@ Before committing, edit the ADR's header to flip the status:
 **Status**: accepted
 **Status history**:
 - YYYY-MM-DD: draft
-- YYYY-MM-DD: accepted — paired with <list of spec-*.md files updated, if any>
+- YYYY-MM-DD: accepted
 ```
 
-Then stage the ADR together with any spec edits and commit once:
+Then stage the ADR together with the verifier files authored in Step 3c, and any reaction artifacts emitted in Step 4c, and commit once:
 
 ```bash
-git add docs/
+git add docs/ <project>/spec/  # spec/ holds the authored verifier files
 git commit -m "spec(<area>): <what changed and why>"
 ```
 
-**This is the lineage edge.** The `docs` MCP reads co-commits to compute `get_lineage`. If the ADR is committed separately from the specs it modifies, lineage does not link them and future agents will have to re-read all ADRs to understand why a spec section exists.
+The verifier files are co-committed because the `### Added` entries' contracts are only honored if their verifiers exist in the same commit (the methodology's `methodology.registry.verifier_resolves` invariant enforces this).
 
-Only `docs/` is staged in this commit. Code changes go through `/feature-change`'s dev-harness loop and commit separately.
+Code changes (the implementations that make red verifiers go green) go through `/feature-change`'s dev-harness loop and commit separately.
 
 ### Drafts may be committed too
 
-If the user wants to pause mid-planning, the draft ADR can be committed on its own (no spec edits, no status promotion):
+If the user wants to pause mid-planning, the draft ADR can be committed on its own (no status promotion):
 
 ```bash
 git add docs/adr-NNNN-<slug>.md
 git commit -m "draft(<area>): <what's being planned>"
 ```
 
-A draft-only commit does **not** form a lineage edge. It only preserves the work-in-progress so it survives branch switches. The next invocation of `/plan-feature --resume` picks up from there.
+The next invocation of `/plan-feature --resume` picks up from there.
 
 ---
 
 ## Step 7 — Hand off
 
-After the ADR + spec edits are committed:
+After the ADR + verifiers are committed:
 
 ```
-The design is complete at docs/adr-NNNN-<slug>.md
-(and updates spec-<concern>.md). Run /feature-change to implement.
+The design is complete at docs/adr-NNNN-<slug>.md.
+Run /feature-change to implement until the verify suite passes.
 ```
 
-Do NOT write code yourself. The ADR + spec edits are the output. `/feature-change` implements the code.
+Do NOT write code yourself. The ADR + verifier stubs are the output. `/feature-change` implements the code that makes the red verifiers go green.
 
 ---
 
@@ -400,41 +454,22 @@ Do NOT write code yourself. The ADR + spec edits are the output. `/feature-chang
 
 These rules apply whenever a doc is edited — during initial creation (step 4), during audit fixes (step 5), or during backpressure from dev-harness.
 
-### ADRs are immutable
+### ADRs are immutable once accepted
 
-- ADR content is historical. Do not rewrite past decisions. If a later decision supersedes an earlier one, author a **new** ADR dated today that describes the supersession, and add a one-line `> Superseded by adr-NNNN-<slug>.md` note near the affected section (or at the top of the old ADR).
-- Mechanical updates to an old ADR are allowed: fixing a broken cross-reference when a file is renamed, fixing a typo, restoring a broken link. These are not semantic changes.
-- Never edit an ADR to change *what it decided* — author a new one instead.
+- ADR content is historical. Do not rewrite past decisions in `accepted` or `implemented` ADRs. If a later decision supersedes an earlier one, author a **new** ADR dated today that describes the supersession (with a `supersedes:` entry in its Invariant Delta), and add a one-line `> Superseded by adr-NNNN-<slug>.md` note near the affected section.
+- Mechanical updates to an old ADR are allowed: fixing a broken cross-reference, fixing a typo, restoring a broken link. These are not semantic changes.
+- ADRs in `draft` status are editable in place — the same workstream can refine them.
 
-### Specs are living
+### Pre-existing spec-*.md files are legacy
 
-When editing a `docs/spec-*.md`:
-
-**Adding something:**
-- Add it to the right section with full payload/schema/wireframe
-- Describe inputs, outputs, error cases, failure modes
-- If it's a subject/event: include pattern, publisher, subscriber, payload
-- If it's a UI element: include wireframe and behavior bullets
-
-**Removing something:**
-- Delete it entirely — no stale text, no "deprecated" markers
-- Remove every reference to it across the spec
-
-**Changing something:**
-- Update in place — old text out, new text in
-- Update every place it appears in the spec
-
-**Never:**
-- Leave specs and implementation out of sync
-- Write implementation details (function names, file paths) in a spec
-- Describe future/intended behavior — only what is true now or will be true after this ADR lands
+Pre-existing `docs/**/spec-*.md` files retain value as human-readable prose annotations of past decisions. Under invariant-driven development they are **not load-bearing** — the contract surface is the registry, glossary, and ADR delta blocks. This skill does not author new spec-*.md files and does not update existing ones. If a stale spec causes confusion, address it as a docs-only commit outside this workflow; do not let it block the ADR.
 
 ### Commit rule
 
-ADR + impacted specs are always committed together in a single spec-only commit, separate from any code changes:
+ADR + verifier files are always committed together in a single commit, separate from any code changes:
 
 ```bash
-git add docs/
+git add docs/ <project>/spec/
 git commit -m "spec(<area>): <what changed and why>"
 ```
 
@@ -442,7 +477,7 @@ git commit -m "spec(<area>): <what changed and why>"
 
 ## Backpressure from dev-harness
 
-During implementation, `/feature-change` runs the dev-harness -> implementation-evaluator loop. Sometimes the dev-harness agent discovers that the ADR or a spec is ambiguous, incomplete, or wrong. This is **backpressure** — the implementation pushes back on the spec.
+During implementation, `/feature-change` runs the dev-harness → verify-suite loop. Sometimes a verifier failure (or the dev-harness agent's own analysis) reveals that the ADR, registry, or spec is ambiguous, incomplete, or wrong. This is **backpressure** — the implementation pushes back on the contract surface.
 
 When `/feature-change` encounters backpressure, the doc update follows these rules:
 
@@ -455,14 +490,14 @@ When `/feature-change` encounters backpressure, the doc update follows these rul
 | **Missing detail** requiring a design decision | Ask the user via AskUserQuestion. Batch related questions. |
 | **Contradiction** (doc says X in one place, Y in another) | Determine correct answer from context. If genuinely ambiguous, ask the user. |
 
-### 2. Decide which doc to edit
+### 2. Decide what to edit
 
 | What's wrong | Edit |
 |--------------|------|
-| Gap is in the ADR you just wrote | Edit the ADR (it hasn't been "historicized" by a later decision yet — still in the same workstream) |
-| Gap is in a spec the ADR references | Edit the spec |
-| Gap exposes a behavior that has no ADR (undocumented historical behavior) | Author a **new corrective ADR** dated today that describes the behavior and rationalizes it |
-| A previously-decided ADR needs to be overridden | Author a **new superseding ADR** dated today — do not rewrite the old one |
+| Gap is in the ADR you just wrote (still draft or in same workstream) | Edit the ADR. If a registered invariant changed, update the Invariant Delta block and re-run `/compile-invariants` to regenerate the verifier. |
+| Gap is a missing invariant for a real contract | Add an entry to the ADR's Invariant Delta block, run `/compile-invariants` to author the verifier. |
+| Gap exposes a behavior with no ADR (undocumented historical behavior) | Author a **new corrective ADR** dated today with a populated Invariant Delta. |
+| A previously-accepted ADR's contract needs to change | Author a **new superseding ADR** with `supersedes: <predecessor>` in its delta — do not rewrite the old one. |
 
 ### 3. Commit separately
 
@@ -473,7 +508,7 @@ git commit -m "spec(<area>): <what changed — backpressure from dev-harness>"
 
 ### 4. Return to `/feature-change`
 
-Which re-invokes dev-harness with the updated spec. The loop continues until implementation-evaluator returns CLEAN.
+Which re-invokes dev-harness with the updated spec. The loop continues until the verify suite (`sdd verify && verify[]`) passes.
 
 ---
 
@@ -481,12 +516,17 @@ Which re-invokes dev-harness with the updated spec. The loop continues until imp
 
 - **Don't assume answers** — if there are 2+ defensible choices, ask regardless of whether you have a preference
 - **Don't ask one question at a time** — batch them, the user's time is valuable
-- **Don't write code** — this skill produces an ADR and spec edits only (and edits docs during backpressure)
+- **Don't write code** — this skill produces an ADR + verifier stubs only. Production code is the dev-harness's job.
+- **Don't author new spec-*.md files** — under invariant-driven development, contracts go in the ADR delta + registry, not in prose specs. Pre-existing spec-*.md files stay as legacy.
 - **Don't skip research** — uninformed questions waste the user's time; the docs MCP makes research cheap
 - **Don't present false choices** — if there's only one reasonable option, state it as your recommendation and ask if they agree. But if there are two or more reasonable options, never silently pick one.
 - **Don't ask about implementation details** — ask about behavior, scope, and architecture. Implementation is for the dev-harness.
-- **Don't rewrite old ADRs** — supersede them with a new ADR instead
-- **Don't split the ADR commit from the spec commit** — the co-commit is the lineage edge
+- **Don't rewrite accepted ADRs** — supersede them with a new ADR instead
+- **Don't split the ADR commit from the verifier commit** — the verifier files are the executable form of the ADR's contract; they ship together.
+- **Don't author an ADR with an empty Invariant Delta** — if the change isn't worth a contract, it isn't worth an ADR. Commit the change directly.
+- **Don't reconstruct Decision history at the end** — write rationale notes as each decision is made, while the pushback is fresh. Retroactive notes always lose the *why*.
+- **Don't ship an `### Added` entry without its compiling verifier** — `/compile-invariants` runs after Q&A; the build must pass before finalize. The verifier is the contract's executable form.
+- **Don't combine multiple contracts into one invariant** — definitions match `\band\b` should be split. Two contracts in one entry conflate failures and lose per-contract signal.
 
 ---
 

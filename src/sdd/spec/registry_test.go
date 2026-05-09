@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -141,6 +142,24 @@ func TestRegistryRequiresDAGAcyclic(t *testing.T) {
 	for _, inv := range Registry {
 		if color[inv.ID] == white {
 			visit(inv.ID)
+		}
+	}
+}
+
+// TestRegistryNoAndInDefinition verifies methodology.registry.no_and_in_definition.
+//
+// No active registry entry's definition field may contain the word "and"
+// (case-insensitive, whole-word). A definition that uses "and" usually bundles
+// two contracts — each should be its own invariant.
+func TestRegistryNoAndInDefinition(t *testing.T) {
+	andRE := regexp.MustCompile(`(?i)\band\b`)
+	for _, inv := range Registry {
+		if inv.Status != StatusActive {
+			continue
+		}
+		if andRE.MatchString(inv.Definition) {
+			t.Errorf("%s: definition contains \\band\\b (each contract must be its own invariant): %q",
+				inv.ID, inv.Definition)
 		}
 	}
 }

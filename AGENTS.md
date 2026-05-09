@@ -10,7 +10,7 @@ When the user asks for **any change** — feature, bug fix, refactor, config, UI
 
 Heuristic: if the user says "fix", "change", "update", "refactor", "remove", "add X to Y", "make X do Y", or describes any modification to how the system behaves → that's `/feature-change`. Don't ask permission; invoke the skill immediately.
 
-The loop: `/feature-change` reads specs → classifies → authors ADR → updates spec → spec-evaluator verifies spec alignment → commits spec → calls dev-harness → implementation-evaluator verifies code → done.
+The loop: `/feature-change` reads ADRs → classifies → authors ADR with Invariant Delta block via /plan-feature → /compile-invariants authors verifier stubs → commits ADR + verifiers → calls dev-harness → loops until the verify suite (`sdd verify && verify[]`) passes → done. The verify suite IS the implementation gate; there is no separate evaluator. Pre-existing `docs/**/spec-*.md` files are legacy prose annotations — the contract surface is the registry, not the specs.
 
 ## New feature detected → invoke /plan-feature immediately
 

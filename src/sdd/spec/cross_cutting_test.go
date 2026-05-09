@@ -1,23 +1,22 @@
 package spec
 
 import (
+	"bufio"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-// TestNoOrphans verifies methodology.registry.no_orphans.
+// TestVerifierResolves verifies methodology.registry.verifier_resolves.
 //
-// Forward: every active or deprecated registry entry's verifier reference
-// resolves to an existing file (and existing test function for Go test refs).
-// Reverse: every declared verifier reference is named by at most one registry
-// entry.
-func TestNoOrphans(t *testing.T) {
-	seen := make(map[string]string) // verifier ref -> first invariant ID
-
+// Every active registry entry's verifier reference resolves to an existing
+// file, and for Go test refs, to an existing test function in that file.
+func TestVerifierResolves(t *testing.T) {
 	for _, inv := range Registry {
 		if inv.Status != StatusActive {
 			continue
@@ -27,11 +26,6 @@ func TestNoOrphans(t *testing.T) {
 			t.Errorf("%s: verifier ref empty", inv.ID)
 			continue
 		}
-		if existing, ok := seen[ref]; ok {
-			t.Errorf("%s: verifier %q is also referenced by %s (must be unique)", inv.ID, ref, existing)
-		}
-		seen[ref] = inv.ID
-
 		path, fn := splitVerifierRef(ref)
 		if _, err := os.Stat(path); err != nil {
 			t.Errorf("%s: verifier file %q does not exist", inv.ID, path)
@@ -51,6 +45,28 @@ func TestNoOrphans(t *testing.T) {
 		}
 		if !ok {
 			t.Errorf("%s: verifier %q does not contain function %s", inv.ID, path, fn)
+		}
+	}
+}
+
+// TestVerifierUnique verifies methodology.registry.verifier_unique.
+//
+// No verifier reference is named by more than one active registry entry.
+func TestVerifierUnique(t *testing.T) {
+	seen := make(map[string]string) // verifier ref -> first invariant ID
+
+	for _, inv := range Registry {
+		if inv.Status != StatusActive {
+			continue
+		}
+		ref := inv.Verifier
+		if ref == "" {
+			continue
+		}
+		if existing, ok := seen[ref]; ok {
+			t.Errorf("%s: verifier %q is also referenced by %s (must be unique)", inv.ID, ref, existing)
+		} else {
+			seen[ref] = inv.ID
 		}
 	}
 }
@@ -81,7 +97,7 @@ func goFunctionExists(path, name string) (bool, error) {
 // For the bootstrap experiment: parse the fixture ADR's delta block, then
 // the trivial reconciliation property: number of Added entries minus
 // Withdrawn entries is non-negative. (Full reconciliation against a real
-// ADR-0075 with delta block is a follow-up.)
+// ADR-0078 with delta block is a follow-up.)
 func TestDeltaReconciles(t *testing.T) {
 	block, err := ParseADRDeltaBlock(fixturePath)
 	if err != nil {
@@ -150,3 +166,200 @@ func TestGlossaryComplete(t *testing.T) {
 		}
 	}
 }
+
+// TestTestsBoundToRegistry verifies methodology.tests.bound_to_registry.
+//
+// Every exported Test* function in spec/*_test.go files must be named by at
+// least one active registry entry's verifier field. Prevents orphaned test
+// functions that verify nothing in the registry.
+func TestTestsBoundToRegistry(t *testing.T) {
+	// Build set of verifier function names from active registry entries.
+	verifierFuncs := make(map[string]bool)
+	for _, inv := range Registry {
+		if inv.Status != StatusActive {
+			continue
+		}
+		_, fn := splitVerifierRef(inv.Verifier)
+		if fn != "" {
+			verifierFuncs[fn] = true
+		}
+	}
+
+	// Walk all *_test.go files in the spec package directory.
+	specDir := "."
+	entries, err := os.ReadDir(specDir)
+	if err != nil {
+		t.Fatalf("read spec dir: %v", err)
+	}
+	fset := token.NewFileSet()
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		path := filepath.Join(specDir, entry.Name())
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			t.Errorf("parse %s: %v", path, err)
+			continue
+		}
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			name := fn.Name.Name
+			if !strings.HasPrefix(name, "Test") {
+				continue
+			}
+			if !verifierFuncs[name] {
+				t.Errorf("test function %s in %s is not named by any active registry entry's verifier",
+					name, entry.Name())
+			}
+		}
+	}
+}
+
+// adrDir returns the adr_dir path from spec-driven-config.json, resolved
+// relative to the repo root. The repo root is located by walking up from the
+// package's working directory until spec-driven-config.json is found.
+func adrDir(t *testing.T) string {
+	t.Helper()
+	root, cfg := loadSddConfig(t)
+	dir, ok := cfg["adr_dir"]
+	if !ok || dir == "" {
+		t.Skip("spec-driven-config.json does not declare spec.adr_dir — skipping ADR-level checks")
+	}
+	return filepath.Join(root, dir)
+}
+
+// loadSddConfig finds spec-driven-config.json by walking up from the working
+// directory and returns the repo root path and the contents of the `spec` sub-object.
+func loadSddConfig(t *testing.T) (repoRoot string, specMap map[string]string) {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	// Walk upward until we find spec-driven-config.json.
+	dir := wd
+	for {
+		candidate := filepath.Join(dir, "spec-driven-config.json")
+		if _, err := os.Stat(candidate); err == nil {
+			repoRoot = dir
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("spec-driven-config.json not found walking up from %s", wd)
+		}
+		dir = parent
+	}
+	data, err := os.ReadFile(filepath.Join(repoRoot, "spec-driven-config.json"))
+	if err != nil {
+		t.Fatalf("read spec-driven-config.json: %v", err)
+	}
+	// Parse the "spec" sub-object manually using encoding/json to avoid adding
+	// a dependency. We only need string fields from the spec sub-object.
+	specMap = parseSpecFields(data)
+	return repoRoot, specMap
+}
+
+// parseSpecFields extracts string values from the top-level "spec" JSON object.
+// It uses a simple line-oriented approach to avoid importing encoding/json
+// in the test binary (the package already depends on gopkg.in/yaml.v3 only).
+// For the narrow use case here (flat string fields only), this is sufficient.
+func parseSpecFields(data []byte) map[string]string {
+	result := make(map[string]string)
+	// Find the "spec" key and its object value.
+	specRE := regexp.MustCompile(`"spec"\s*:\s*\{`)
+	loc := specRE.FindIndex(data)
+	if loc == nil {
+		return result
+	}
+	// Extract the object body (everything between the braces).
+	body := data[loc[1]:]
+	depth := 1
+	end := 0
+	for i, b := range body {
+		switch b {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				end = i
+				break
+			}
+		}
+		if depth == 0 {
+			break
+		}
+	}
+	objText := string(body[:end])
+	// Extract key-value pairs of the form "key": "value".
+	kvRE := regexp.MustCompile(`"([^"]+)"\s*:\s*"([^"]*)"`)
+	for _, m := range kvRE.FindAllStringSubmatch(objText, -1) {
+		result[m[1]] = m[2]
+	}
+	return result
+}
+
+// TestADRRequiresDelta verifies methodology.adr.requires_delta.
+//
+// Every adr-*.md file under the configured spec.adr_dir must contain an
+// `## Invariant Delta` section with at least one entry in ### Added or
+// ### Withdrawn.
+func TestADRRequiresDelta(t *testing.T) {
+	dir := adrDir(t)
+	paths, err := filepath.Glob(filepath.Join(dir, "adr-*.md"))
+	if err != nil {
+		t.Fatalf("glob adr-*.md: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatalf("no adr-*.md files found under %s", dir)
+	}
+	for _, p := range paths {
+		block, err := ParseADRDeltaBlock(p)
+		if err != nil {
+			t.Errorf("%s: parse error: %v", filepath.Base(p), err)
+			continue
+		}
+		if block == nil {
+			t.Errorf("%s: missing ## Invariant Delta section", filepath.Base(p))
+			continue
+		}
+		if len(block.Added) == 0 && len(block.Withdrawn) == 0 {
+			t.Errorf("%s: ## Invariant Delta section has no Added or Withdrawn entries",
+				filepath.Base(p))
+		}
+	}
+}
+
+// TestADRRequiresDecisionHistory verifies methodology.adr.requires_decision_history.
+//
+// Every adr-*.md file under the configured spec.adr_dir must contain a
+// `## Decision history (rationale notes)` section.
+func TestADRRequiresDecisionHistory(t *testing.T) {
+	dir := adrDir(t)
+	paths, err := filepath.Glob(filepath.Join(dir, "adr-*.md"))
+	if err != nil {
+		t.Fatalf("glob adr-*.md: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatalf("no adr-*.md files found under %s", dir)
+	}
+	decisionHistoryRE := regexp.MustCompile(`(?m)^##\s+Decision history`)
+	for _, p := range paths {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			t.Errorf("%s: read error: %v", filepath.Base(p), err)
+			continue
+		}
+		if !decisionHistoryRE.Match(data) {
+			t.Errorf("%s: missing ## Decision history (rationale notes) section", filepath.Base(p))
+		}
+	}
+}
+
+// Ensure bufio is used (it's imported for potential future scanner use in helpers).
+var _ = bufio.NewScanner

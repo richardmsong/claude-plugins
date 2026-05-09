@@ -8,7 +8,7 @@ argument-hint: <path to design document>
 
 # Design Audit
 
-Runs `/design-evaluator` in a loop, fixing gaps between rounds until CLEAN. The evaluator is a fresh-context agent that sees only the document and codebase. This skill (the audit) classifies gaps, applies fixes, asks the user about design decisions, and re-runs.
+Runs `/decision-invariant-evaluator` in a loop, fixing gaps between rounds until CLEAN. The evaluator is a fresh-context agent that sees only the document and codebase. This skill (the audit) classifies gaps, applies fixes, asks the user about design decisions, and re-runs.
 
 ## Usage
 
@@ -27,7 +27,7 @@ Examples:
 ```
 1. Validate the file exists
 2. Initialize audit log
-3. Run /design-evaluator <path>
+3. Run /decision-invariant-evaluator <path>
 4. Record findings in log
 5. If gaps found: fix them, record fixes, re-run evaluator (loop until CLEAN)
 6. Write final CLEAN to log
@@ -63,15 +63,15 @@ Spawn the design evaluator as a subagent:
 
 ```
 Agent({
-  subagent_type: "design-evaluator",
+  subagent_type: "decision-invariant-evaluator",
   description: "Design evaluator: <doc-name>",
   prompt: "Evaluate the design document at <path>. Report all blocking gaps or CLEAN."
 })
 ```
 
-The evaluator is a **separate agent** (`subagent_type="design-evaluator"`) — it has no conversation context from this session. It reads only the design document and the codebase. It saves its results to `docs/audits/` and returns either CLEAN or a gap list.
+The evaluator is a **separate agent** (`subagent_type="decision-invariant-evaluator"`) — it has no conversation context from this session. It reads only the design document and the codebase. It saves its results to `docs/audits/` and returns either CLEAN or a gap list.
 
-The evaluator can also be spawned standalone (single-pass check without the fix loop) by any caller using `Agent(subagent_type="design-evaluator", ...)`.
+The evaluator can also be spawned standalone (single-pass check without the fix loop) by any caller using `Agent(subagent_type="decision-invariant-evaluator", ...)`.
 
 **Waiting:** Launch with `run_in_background: true`. You receive an automatic completion notification — **do not poll, grep, tail, or monitor the agent's output file**. Wait for the notification, then proceed to Step 4.
 
@@ -184,5 +184,5 @@ CLEAN — no blocking gaps found.
 
 Design documents are written in the context of a conversation — the author has full context from Q&A sessions and implicitly relies on decisions discussed but not written down. A context-free evaluator catches those gaps. This is the same principle as code review: fresh eyes find what the author can't see.
 
-The audit log preserves the history of what was found and how it was resolved. This serves the same purpose as the implementation-evaluator's `docs/audits/` logs: traceability of decisions and fixes across rounds.
+The audit log preserves the history of what was found and how it was resolved: traceability of decisions and fixes across rounds.
 

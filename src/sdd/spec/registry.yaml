@@ -1,7 +1,7 @@
 # Methodology's own invariant registry.
-# Day-1 contents per ADR-0075. Each entry's verifier exists in src/sdd/spec/.
+# Day-1 contents per ADR-0078. Each entry's verifier exists in src/sdd/spec/.
 #
-# Schema (per ADR-0075):
+# Schema (per ADR-0078):
 #   id            : stable dotted-path string
 #   definition    : one-line contract; no AND; substantive changes route through Supersession
 #   comments      : optional free-form annotations; advisory; freely editable
@@ -90,11 +90,21 @@
   glossary_terms: [ADR delta block]
   status: active
 
-# --- Cross-cutting (6) ---
+# --- Cross-cutting (7) ---
 
-- id: methodology.registry.no_orphans
-  definition: Every active registry entry's verifier reference resolves to an existing file (and existing test function for Go test refs); every declared verifier reference is named by at most one registry entry.
-  verifier: cross_cutting_test.go::TestNoOrphans
+- id: methodology.registry.verifier_resolves
+  definition: Every active registry entry's verifier reference resolves to an existing file or existing test function as appropriate for its mechanism.
+  verifier: cross_cutting_test.go::TestVerifierResolves
+  requires:
+    - methodology.registry.id_field
+    - methodology.registry.verifier_field
+    - methodology.registry.status_field
+  glossary_terms: [registry entry, verifier, status]
+  status: active
+
+- id: methodology.registry.verifier_unique
+  definition: No verifier reference is named by more than one active registry entry.
+  verifier: cross_cutting_test.go::TestVerifierUnique
   requires:
     - methodology.registry.id_field
     - methodology.registry.verifier_field
@@ -146,4 +156,119 @@
     - methodology.registry.id_field
     - methodology.registry.status_field
   glossary_terms: [registry entry, status]
+  status: active
+
+# --- Tests bound to registry (1) ---
+
+- id: methodology.tests.bound_to_registry
+  definition: Every test function under `<project>/spec/` matching the verifier path convention is named by at least one active registry entry's `verifier` field.
+  verifier: cross_cutting_test.go::TestTestsBoundToRegistry
+  requires:
+    - methodology.registry.verifier_field
+    - methodology.registry.status_field
+  glossary_terms: []
+  status: active
+
+# --- Config invariants (5) ---
+
+- id: methodology.config.spec_registry
+  definition: '`spec-driven-config.json` declares `spec.registry` as a non-empty string path.'
+  verifier: config_test.go::TestConfigSpecRegistry
+  requires: []
+  glossary_terms: []
+  status: active
+
+- id: methodology.config.spec_glossary
+  definition: '`spec-driven-config.json` declares `spec.glossary` as a non-empty string path.'
+  verifier: config_test.go::TestConfigSpecGlossary
+  requires: []
+  glossary_terms: []
+  status: active
+
+- id: methodology.config.spec_adr_dir
+  definition: '`spec-driven-config.json` declares `spec.adr_dir` as a non-empty string path.'
+  verifier: config_test.go::TestConfigSpecADRDir
+  requires: []
+  glossary_terms: []
+  status: active
+
+- id: methodology.config.spec_reactions_dir
+  definition: '`spec-driven-config.json` declares `spec.reactions_dir` as a non-empty string path.'
+  verifier: config_test.go::TestConfigSpecReactionsDir
+  requires: []
+  glossary_terms: []
+  status: active
+
+- id: methodology.config.verify_array_well_formed
+  definition: '`spec-driven-config.json`''s `verify` field is a list whose elements are non-empty shell command strings.'
+  verifier: config_test.go::TestConfigVerifyArray
+  requires: []
+  glossary_terms: []
+  status: active
+
+# --- CLI invariants (4) ---
+
+- id: methodology.cli.verify_runs_structural_checks
+  definition: '`sdd verify` invokes every active built-in structural check from the methodology''s registry on each run.'
+  verifier: cli_test.go::TestVerifyRunsAllStructuralChecks
+  requires:
+    - methodology.registry.id_field
+    - methodology.registry.status_field
+  glossary_terms: []
+  status: active
+
+- id: methodology.cli.verify_exit_codes
+  definition: '`sdd verify` exits non-zero whenever any structural check or shell-out command fails.'
+  verifier: cli_test.go::TestVerifyExitCodes
+  requires: []
+  glossary_terms: []
+  status: active
+
+- id: methodology.cli.verify_shells_to_config
+  definition: '`sdd verify` executes every shell command in `spec-driven-config.json`''s `verify[]` in declared order after structural checks pass.'
+  verifier: cli_test.go::TestVerifyShellsToConfig
+  requires:
+    - methodology.config.verify_array_well_formed
+  glossary_terms: []
+  status: active
+
+- id: methodology.cli.verify_walks_adr_dir
+  definition: '`sdd verify` parses `## Invariant Delta` blocks from every `adr-*.md` file under the configured `spec.adr_dir`.'
+  verifier: cli_test.go::TestVerifyWalksADRDir
+  requires:
+    - methodology.config.spec_adr_dir
+    - methodology.adr_delta.added_block
+    - methodology.adr_delta.withdrawn_block
+  glossary_terms: []
+  status: active
+
+# --- Registry quality invariants (1) ---
+
+- id: methodology.registry.no_and_in_definition
+  definition: No active registry entry's `definition` field matches the case-insensitive regex `\band\b`.
+  verifier: registry_test.go::TestRegistryNoAndInDefinition
+  requires:
+    - methodology.registry.definition_field
+    - methodology.registry.status_field
+  glossary_terms: []
+  status: active
+
+# --- ADR structural invariants (2) ---
+
+- id: methodology.adr.requires_delta
+  definition: Every `adr-*.md` file under `<spec.adr_dir>` contains a `## Invariant Delta` section with at least one entry in either `### Added` or `### Withdrawn`.
+  verifier: cross_cutting_test.go::TestADRRequiresDelta
+  requires:
+    - methodology.config.spec_adr_dir
+    - methodology.adr_delta.added_block
+    - methodology.adr_delta.withdrawn_block
+  glossary_terms: []
+  status: active
+
+- id: methodology.adr.requires_decision_history
+  definition: Every `adr-*.md` file under `<spec.adr_dir>` contains a `## Decision history (rationale notes)` section.
+  verifier: cross_cutting_test.go::TestADRRequiresDecisionHistory
+  requires:
+    - methodology.config.spec_adr_dir
+  glossary_terms: []
   status: active

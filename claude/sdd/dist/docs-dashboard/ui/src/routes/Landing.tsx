@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { fetchAdrs, fetchSpecs, fetchAudits, ListDoc } from "../api";
+import { fetchAdrs, fetchSpecs, ListDoc } from "../api";
 import StatusBadge from "../components/StatusBadge";
 import type { SSEEvent } from "../App";
 
@@ -53,39 +53,6 @@ function adrLabel(docPath: string, title: string | null | undefined): string {
   return num ? `ADR-${num}: ${displayTitle}` : displayTitle;
 }
 
-const AUDIT_PREFIXES: { prefix: string; label: string }[] = [
-  { prefix: "design-", label: "Design audit reports" },
-  { prefix: "spec-",   label: "Spec alignment reports" },
-  { prefix: "impl-",   label: "Implementation compliance reports" },
-  { prefix: "adr-",    label: "ADR-specific audit rounds" },
-];
-
-function groupAuditsByPrefix(audits: ListDoc[]): { prefix: string; label: string; items: ListDoc[] }[] {
-  const groups: { prefix: string; label: string; items: ListDoc[] }[] = [];
-  const remaining = [...audits];
-
-  for (const { prefix, label } of AUDIT_PREFIXES) {
-    const items = remaining.filter((a) => {
-      const base = a.doc_path.split("/").pop() ?? "";
-      return base.startsWith(prefix);
-    });
-    if (items.length > 0) {
-      groups.push({ prefix, label, items });
-      items.forEach((item) => {
-        const idx = remaining.indexOf(item);
-        if (idx !== -1) remaining.splice(idx, 1);
-      });
-    }
-  }
-
-  // Anything that didn't match a known prefix
-  if (remaining.length > 0) {
-    groups.push({ prefix: "other", label: "Other", items: remaining });
-  }
-
-  return groups;
-}
-
 function groupByDirectory(specs: ListDoc[]): Record<string, ListDoc[]> {
   const groups: Record<string, ListDoc[]> = {};
   for (const spec of specs) {
@@ -105,16 +72,14 @@ function groupByDirectory(specs: ListDoc[]): Record<string, ListDoc[]> {
 export default function Landing({ navigate, lastEvent }: LandingProps) {
   const [adrs, setAdrs] = useState<ListDoc[]>([]);
   const [specs, setSpecs] = useState<ListDoc[]>([]);
-  const [audits, setAudits] = useState<ListDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>(DEFAULT_EXPANDED);
 
   async function load() {
     try {
-      const [adrData, specData, auditData] = await Promise.all([fetchAdrs(), fetchSpecs(), fetchAudits()]);
+      const [adrData, specData] = await Promise.all([fetchAdrs(), fetchSpecs()]);
       setAdrs(adrData);
       setSpecs(specData);
-      setAudits(auditData);
     } catch (err) {
       console.error("Landing: load failed", err);
     } finally {
@@ -159,7 +124,6 @@ export default function Landing({ navigate, lastEvent }: LandingProps) {
   }
 
   const specGroups = groupByDirectory(specs);
-  const auditGroups = groupAuditsByPrefix(audits);
 
   if (loading) {
     return <div style={styles.loading}>Loading…</div>;
@@ -259,53 +223,6 @@ export default function Landing({ navigate, lastEvent }: LandingProps) {
           })}
       </section>
 
-      {/* Right: Audit reports by type prefix (ADR-0074) */}
-      <section style={styles.auditCol}>
-        <h2 style={styles.sectionTitle}>Audits</h2>
-        {auditGroups.length === 0 && (
-          <p style={styles.emptyNote}>No audit reports found.</p>
-        )}
-        {auditGroups.map(({ prefix, label, items }) => {
-          const isExpanded = expanded[`audits:${prefix}`] ?? true;
-          return (
-            <div key={prefix} style={styles.bucket}>
-              <button
-                style={styles.bucketHeader}
-                onClick={() =>
-                  setExpanded((prev) => ({
-                    ...prev,
-                    [`audits:${prefix}`]: !isExpanded,
-                  }))
-                }
-                aria-expanded={isExpanded}
-              >
-                <span style={styles.dirLabel}>{label}</span>
-                <span style={styles.bucketCount}>{items.length}</span>
-                <span style={styles.chevron}>{isExpanded ? "▾" : "▸"}</span>
-              </button>
-              {isExpanded && (
-                <ul style={styles.bucketList}>
-                  {items.map((audit) => (
-                    <li key={audit.doc_path} style={styles.bucketItem}>
-                      <button
-                        style={styles.docLink}
-                        onClick={() => navigate(`/audit/${audit.doc_path}`)}
-                      >
-                        <span style={styles.docTitle}>
-                          {audit.title ?? audit.doc_path.split("/").pop()}
-                        </span>
-                        <span style={styles.docMeta}>
-                          {audit.last_status_change ?? ""}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          );
-        })}
-      </section>
     </div>
   );
 }
@@ -313,18 +230,12 @@ export default function Landing({ navigate, lastEvent }: LandingProps) {
 const styles: Record<string, React.CSSProperties> = {
   layout: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
+    gridTemplateColumns: "1fr 1fr",
     gap: "2rem",
     alignItems: "start",
   },
   leftCol: {},
   rightCol: {},
-  auditCol: {},
-  emptyNote: {
-    color: "#718096",
-    fontSize: "0.85rem",
-    fontStyle: "italic",
-  },
   sectionTitle: {
     fontSize: "1.1rem",
     fontWeight: 700,

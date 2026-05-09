@@ -8,5 +8,8 @@
   ],
   "dependencies": {
     "@rollup/rollup-darwin-x64": "^4.60.2"
+  },
+  "devDependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.60.2"
   }
 }
