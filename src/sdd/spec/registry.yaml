@@ -23,31 +23,31 @@
   definition: Every registry entry has an `id` field that is a unique non-empty string matching the dotted-path regex.
   verifier: registry_test.go::TestRegistryIDField
   glossary_terms: [registry entry, id]
-  status: active
+  status: withdrawn
 
 - id: methodology.registry.definition_field
   definition: Every registry entry has a `definition` field that is a non-empty single-line string.
   verifier: registry_test.go::TestRegistryDefinitionField
   glossary_terms: [registry entry, definition]
-  status: active
+  status: withdrawn
 
 - id: methodology.registry.verifier_field
   definition: Every registry entry has a `verifier` field that is a non-empty string in the form `path` or `path::FuncName`.
   verifier: registry_test.go::TestRegistryVerifierField
   glossary_terms: [registry entry, verifier]
-  status: active
+  status: withdrawn
 
 - id: methodology.registry.status_field
   definition: Every registry entry has a `status` field whose value is in {active, withdrawn}.
   verifier: registry_test.go::TestRegistryStatusField
   glossary_terms: [registry entry, status]
-  status: active
+  status: withdrawn
 
 - id: methodology.registry.glossary_terms_field
   definition: Every registry entry has a `glossary_terms` field that is a (possibly empty) list of non-empty strings.
   verifier: registry_test.go::TestRegistryGlossaryTermsField
   glossary_terms: [registry entry]
-  status: active
+  status: withdrawn
 
 # --- Glossary entry field invariants (4) ---
 
@@ -55,26 +55,26 @@
   definition: Every glossary entry has a non-empty `term` field unique within its scope.
   verifier: glossary_test.go::TestGlossaryTermField
   glossary_terms: [glossary entry]
-  status: active
+  status: withdrawn
 
 - id: methodology.glossary.definition_field
   definition: Every glossary entry has a non-empty `definition` field.
   verifier: glossary_test.go::TestGlossaryDefinitionField
   glossary_terms: [glossary entry]
-  status: active
+  status: withdrawn
 
 - id: methodology.glossary.resolves_to_field
   definition: Every glossary entry has a `resolves_to` field that names a typed binding, an existing registry entry ID, or another glossary term.
   verifier: glossary_test.go::TestGlossaryResolvesToField
   requires: [methodology.glossary.term_field]
   glossary_terms: [glossary entry, typed binding]
-  status: active
+  status: withdrawn
 
 - id: methodology.glossary.scope_field
   definition: Every glossary entry has a `scope` field whose value is in {methodology, project-cross-cutting, component-local}.
   verifier: glossary_test.go::TestGlossaryScopeField
   glossary_terms: [glossary entry]
-  status: active
+  status: withdrawn
 
 # --- ADR delta sub-block invariants (2) ---
 
@@ -82,13 +82,13 @@
   definition: Every `### Added` entry parses to (id, definition, verifier, requires) with valid types; may include an optional `supersedes` sub-field naming a predecessor invariant.
   verifier: adr_delta_test.go::TestADRDeltaAddedBlock
   glossary_terms: [ADR delta block]
-  status: active
+  status: withdrawn
 
 - id: methodology.adr_delta.withdrawn_block
   definition: Every `### Withdrawn` entry parses to (id, reason); the named invariant's verifier file must be deleted in the same commit.
   verifier: adr_delta_test.go::TestADRDeltaWithdrawnBlock
   glossary_terms: [ADR delta block]
-  status: active
+  status: withdrawn
 
 # --- Cross-cutting (7) ---
 
@@ -100,7 +100,7 @@
     - methodology.registry.verifier_field
     - methodology.registry.status_field
   glossary_terms: [registry entry, verifier, status]
-  status: active
+  status: withdrawn
 
 - id: methodology.registry.verifier_unique
   definition: No verifier reference is named by more than one active registry entry.
@@ -110,7 +110,7 @@
     - methodology.registry.verifier_field
     - methodology.registry.status_field
   glossary_terms: [registry entry, verifier, status]
-  status: active
+  status: withdrawn
 
 - id: methodology.adr.delta_reconciles
   definition: The current registry contents equal the integral of (Added minus Withdrawn) deltas across all live ADRs; supersession is recorded as Added with a supersedes sub-field, marking the predecessor withdrawn.
@@ -121,7 +121,7 @@
     - methodology.adr_delta.added_block
     - methodology.adr_delta.withdrawn_block
   glossary_terms: [registry entry, ADR delta block]
-  status: active
+  status: withdrawn
 
 - id: methodology.glossary.complete
   definition: Every term listed in `glossary_terms` of any active registry entry resolves to a typed binding or a glossary entry.
@@ -131,14 +131,14 @@
     - methodology.registry.status_field
     - methodology.glossary.term_field
   glossary_terms: [registry entry, glossary entry, typed binding]
-  status: active
+  status: withdrawn
 
 - id: methodology.registry.requires_targets_exist
   definition: Every invariant ID listed in any registry entry's `requires` field references an invariant that exists in the registry.
   verifier: registry_test.go::TestRegistryRequiresTargetsExist
   requires: [methodology.registry.id_field]
   glossary_terms: [registry entry, id]
-  status: active
+  status: withdrawn
 
 - id: methodology.registry.requires_dag_acyclic
   definition: The directed graph formed by registry entries' `requires` edges is acyclic.
@@ -147,7 +147,7 @@
     - methodology.registry.id_field
     - methodology.registry.requires_targets_exist
   glossary_terms: [registry entry]
-  status: active
+  status: withdrawn
 
 - id: methodology.registry.supersedes_targets_exist
   definition: Every registry entry's `supersedes` field, when set, references an existing registry entry whose status is `withdrawn`.
@@ -156,7 +156,7 @@
     - methodology.registry.id_field
     - methodology.registry.status_field
   glossary_terms: [registry entry, status]
-  status: active
+  status: withdrawn
 
 # --- Tests bound to registry (1) ---
 
@@ -167,7 +167,7 @@
     - methodology.registry.verifier_field
     - methodology.registry.status_field
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 # --- Config invariants (5) ---
 
@@ -176,35 +176,35 @@
   verifier: config_test.go::TestConfigSpecRegistry
   requires: []
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 - id: methodology.config.spec_glossary
   definition: '`spec-driven-config.json` declares `spec.glossary` as a non-empty string path.'
   verifier: config_test.go::TestConfigSpecGlossary
   requires: []
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 - id: methodology.config.spec_adr_dir
   definition: '`spec-driven-config.json` declares `spec.adr_dir` as a non-empty string path.'
   verifier: config_test.go::TestConfigSpecADRDir
   requires: []
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 - id: methodology.config.spec_reactions_dir
   definition: '`spec-driven-config.json` declares `spec.reactions_dir` as a non-empty string path.'
   verifier: config_test.go::TestConfigSpecReactionsDir
   requires: []
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 - id: methodology.config.verify_array_well_formed
   definition: '`spec-driven-config.json`''s `verify` field is a list whose elements are non-empty shell command strings.'
   verifier: config_test.go::TestConfigVerifyArray
   requires: []
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 # --- CLI invariants (4) ---
 
@@ -215,14 +215,14 @@
     - methodology.registry.id_field
     - methodology.registry.status_field
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 - id: methodology.cli.verify_exit_codes
   definition: '`sdd verify` exits non-zero whenever any structural check or shell-out command fails.'
   verifier: cli_test.go::TestVerifyExitCodes
   requires: []
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 - id: methodology.cli.verify_shells_to_config
   definition: '`sdd verify` executes every shell command in `spec-driven-config.json`''s `verify[]` in declared order after structural checks pass.'
@@ -230,7 +230,7 @@
   requires:
     - methodology.config.verify_array_well_formed
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 - id: methodology.cli.verify_walks_adr_dir
   definition: '`sdd verify` parses `## Invariant Delta` blocks from every `adr-*.md` file under the configured `spec.adr_dir`.'
@@ -240,7 +240,7 @@
     - methodology.adr_delta.added_block
     - methodology.adr_delta.withdrawn_block
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 # --- Registry quality invariants (1) ---
 
@@ -251,7 +251,7 @@
     - methodology.registry.definition_field
     - methodology.registry.status_field
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 # --- ADR structural invariants (2) ---
 
@@ -263,12 +263,249 @@
     - methodology.adr_delta.added_block
     - methodology.adr_delta.withdrawn_block
   glossary_terms: []
-  status: active
+  status: withdrawn
 
 - id: methodology.adr.requires_decision_history
   definition: Every `adr-*.md` file under `<spec.adr_dir>` contains a `## Decision history (rationale notes)` section.
   verifier: cross_cutting_test.go::TestADRRequiresDecisionHistory
   requires:
     - methodology.config.spec_adr_dir
+  glossary_terms: []
+  status: withdrawn
+
+# --- ADR-0081 supersession entries (32) ---
+
+# 1. Registry schema (6 entries)
+- id: methodology.validator.registry_id_field
+  definition: The validator `CheckRegistryIDField` returns a `CheckError` for every registry entry whose `id` field does not match the regex `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, returns no error for entries whose `id` does match.
+  verifier: spec/checks_registry_test.go::TestCheckRegistryIDField
+  requires:
+    - methodology.registry.id_field
+  supersedes: methodology.registry.id_field
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.registry_definition_field
+  definition: The validator `CheckRegistryDefinitionField` returns a `CheckError` for every registry entry whose `definition` field is empty or contains newlines, returns no error for entries whose `definition` is a non-empty single-line string.
+  verifier: spec/checks_registry_test.go::TestCheckRegistryDefinitionField
+  supersedes: methodology.registry.definition_field
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.registry_verifier_field
+  definition: The validator `CheckRegistryVerifierField` returns a `CheckError` for every registry entry whose `verifier` field is empty, whose path segment is empty, or whose `::FuncName` suffix is empty; returns no error for entries with a valid verifier reference.
+  verifier: spec/checks_registry_test.go::TestCheckRegistryVerifierField
+  supersedes: methodology.registry.verifier_field
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.registry_status_field
+  definition: The validator `CheckRegistryStatusField` returns a `CheckError` for every registry entry whose `status` field is not one of `active` or `withdrawn`; returns no error for entries with a valid status.
+  verifier: spec/checks_registry_test.go::TestCheckRegistryStatusField
+  supersedes: methodology.registry.status_field
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.registry_glossary_terms_field
+  definition: The validator `CheckRegistryGlossaryTermsField` returns a `CheckError` for every registry entry whose `glossary_terms` field contains an empty or whitespace-only string element; returns no error for entries with a valid (possibly empty) string array.
+  verifier: spec/checks_registry_test.go::TestCheckRegistryGlossaryTermsField
+  supersedes: methodology.registry.glossary_terms_field
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.registry_no_and_in_definition
+  definition: The validator `CheckNoAndInDefinition` returns a `CheckError` for every active registry entry whose `definition` field matches the case-insensitive regex `\band\b`; returns no error for entries whose definitions do not contain a logical AND.
+  verifier: spec/checks_registry_test.go::TestCheckRegistryNoAndInDefinition
+  supersedes: methodology.registry.no_and_in_definition
+  glossary_terms: []
+  status: active
+
+# 2. Glossary schema (4 entries)
+- id: methodology.validator.glossary_term_field
+  definition: The validator `CheckGlossaryTermField` returns a `CheckError` for every glossary entry whose `term` field is empty or whitespace-only; returns no error for entries with a non-empty term.
+  verifier: spec/checks_glossary_test.go::TestCheckGlossaryTermField
+  supersedes: methodology.glossary.term_field
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.glossary_definition_field
+  definition: The validator `CheckGlossaryDefinitionField` returns a `CheckError` for every glossary entry whose `definition` field is empty or whitespace-only; returns no error otherwise.
+  verifier: spec/checks_glossary_test.go::TestCheckGlossaryDefinitionField
+  supersedes: methodology.glossary.definition_field
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.glossary_resolves_to_field
+  definition: The validator `CheckGlossaryResolvesToField` returns a `CheckError` for every glossary entry whose `resolves_to` field is empty or does not resolve to a qualified Go name, a string descriptor, another glossary term, or an invariant ID; returns no error for entries with a valid binding.
+  verifier: spec/checks_glossary_test.go::TestCheckGlossaryResolvesToField
+  supersedes: methodology.glossary.resolves_to_field
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.glossary_scope_field
+  definition: The validator `CheckGlossaryScopeField` returns a `CheckError` for every glossary entry whose `scope` field is not one of `methodology`, `project-cross-cutting`, or `component-local`; returns no error otherwise.
+  verifier: spec/checks_glossary_test.go::TestCheckGlossaryScopeField
+  supersedes: methodology.glossary.scope_field
+  glossary_terms: []
+  status: active
+
+# 3. ADR delta schema (2 entries)
+- id: methodology.validator.adr_delta_added_block
+  definition: The validator `CheckADRDeltaAddedBlock` returns a `CheckError` for every ADR whose `## Invariant Delta` section has an `### Added` block with entries missing required fields (`id`, `definition`, `verifier`, `status`); returns no error for well-formed blocks.
+  verifier: spec/checks_adr_test.go::TestCheckADRDeltaAddedBlock
+  supersedes: methodology.adr_delta.added_block
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.adr_delta_withdrawn_block
+  definition: The validator `CheckADRDeltaWithdrawnBlock` returns a `CheckError` for every ADR whose `### Withdrawn` block has entries missing required fields like `id` or reason; returns no error for well-formed blocks.
+  verifier: spec/checks_adr_test.go::TestCheckADRDeltaWithdrawnBlock
+  supersedes: methodology.adr_delta.withdrawn_block
+  glossary_terms: []
+  status: active
+
+# 4. Cross-cutting (8 entries)
+- id: methodology.validator.registry_verifier_resolves
+  definition: The validator `CheckVerifierResolves` returns a `CheckError` for every active registry entry whose `verifier` path does not resolve to an existing file; returns no error for entries whose verifier resolves.
+  verifier: spec/checks_cross_cutting_test.go::TestCheckVerifierResolves
+  supersedes: methodology.registry.verifier_resolves
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.registry_verifier_unique
+  definition: The validator `CheckVerifierUnique` returns a `CheckError` for every pair of active registry entries that share the same `verifier` path; returns no error if all active verifier paths are unique.
+  verifier: spec/checks_cross_cutting_test.go::TestCheckVerifierUnique
+  supersedes: methodology.registry.verifier_unique
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.adr_delta_reconciles
+  definition: The validator `CheckDeltaReconciles` returns a `CheckError` when the set of currently-active registry IDs differs from the sum of Added minus Withdrawn computed across every `## Invariant Delta` block in `<spec.adr_dir>`; returns no error when the sum reconciles.
+  verifier: spec/checks_cross_cutting_test.go::TestCheckDeltaReconciles
+  supersedes: methodology.adr.delta_reconciles
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.glossary_complete
+  definition: The validator `CheckGlossaryComplete` returns a `CheckError` for every term in an active registry entry's `glossary_terms` field that does not resolve to a glossary entry; returns no error when every cited term resolves.
+  verifier: spec/checks_cross_cutting_test.go::TestCheckGlossaryComplete
+  supersedes: methodology.glossary.complete
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.registry_requires_targets_exist
+  definition: The validator `CheckRequiresTargetsExist` returns a `CheckError` for every `requires:` reference in a registry entry that does not resolve to another existing registry entry; returns no error when all references resolve.
+  verifier: spec/checks_cross_cutting_test.go::TestCheckRequiresTargetsExist
+  supersedes: methodology.registry.requires_targets_exist
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.registry_requires_dag_acyclic
+  definition: The validator `CheckRequiresDAGAcyclic` returns a `CheckError` when the directed graph formed by registry entries' `requires:` edges contains a cycle; returns no error when the graph is acyclic.
+  verifier: spec/checks_cross_cutting_test.go::TestCheckRequiresDAGAcyclic
+  supersedes: methodology.registry.requires_dag_acyclic
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.registry_supersedes_targets_exist
+  definition: The validator `CheckSupersedesTargetsExist` returns a `CheckError` for every active registry entry whose `supersedes:` field references a non-existent entry or an entry whose status is not `withdrawn`; returns no error when all supersession links resolve correctly.
+  verifier: spec/checks_cross_cutting_test.go::TestCheckSupersedesTargetsExist
+  supersedes: methodology.registry.supersedes_targets_exist
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.tests_bound_to_registry
+  definition: The validator `CheckTestsBoundToRegistry` returns a `CheckError` for every test function in `spec/checks_*_test.go` files that does not correspond to an active registry entry's `verifier:` field; returns no error when every test is bound to a registered invariant.
+  verifier: spec/checks_cross_cutting_test.go::TestCheckTestsBoundToRegistry
+  supersedes: methodology.tests.bound_to_registry
+  glossary_terms: []
+  status: active
+
+# 5. ADR structural (2 entries)
+- id: methodology.validator.adr_requires_delta
+  definition: The validator `CheckADRRequiresDelta` returns a `CheckError` for every `adr-*.md` file under `<spec.adr_dir>` that lacks a `## Invariant Delta` section or whose section has no entries under `### Added` or `### Withdrawn`; returns no error for ADRs with a populated delta block.
+  verifier: spec/checks_adr_test.go::TestCheckADRRequiresDelta
+  supersedes: methodology.adr.requires_delta
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.adr_requires_decision_history
+  definition: The validator `CheckADRRequiresDecisionHistory` returns a `CheckError` for every `adr-*.md` file under `<spec.adr_dir>` that lacks a `## Decision history (rationale notes)` section; returns no error when the section is present.
+  verifier: spec/checks_adr_test.go::TestCheckADRRequiresDecisionHistory
+  supersedes: methodology.adr.requires_decision_history
+  glossary_terms: []
+  status: active
+
+# 6. Config schema (5 entries)
+- id: methodology.validator.config_spec_registry
+  definition: The validator `CheckConfigSpecRegistry` returns a `CheckError` when a loaded config's `spec.registry` field is empty or nil; returns no error when present.
+  verifier: spec/checks_config_test.go::TestCheckConfigSpecRegistry
+  supersedes: methodology.config.spec_registry
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.config_spec_glossary
+  definition: The validator `CheckConfigSpecGlossary` returns a `CheckError` when a loaded config's `spec.glossary` field is empty or nil; returns no error otherwise.
+  verifier: spec/checks_config_test.go::TestCheckConfigSpecGlossary
+  supersedes: methodology.config.spec_glossary
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.config_spec_adr_dir
+  definition: The validator `CheckConfigSpecADRDir` returns a `CheckError` when a loaded config's `spec.adr_dir` field is empty, nil, or does not point to an existing directory; returns no error otherwise.
+  verifier: spec/checks_config_test.go::TestCheckConfigSpecADRDir
+  supersedes: methodology.config.spec_adr_dir
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.config_spec_reactions_dir
+  definition: The validator `CheckConfigSpecReactionsDir` returns a `CheckError` when a loaded config's `spec.reactions_dir` field is empty or nil; returns no error otherwise.
+  verifier: spec/checks_config_test.go::TestCheckConfigSpecReactionsDir
+  supersedes: methodology.config.spec_reactions_dir
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.config_verify_array_well_formed
+  definition: The validator `CheckConfigVerifyArray` returns a `CheckError` when a loaded config's `verify` field is nil or contains empty or whitespace-only string elements; returns no error when absent or well-formed.
+  verifier: spec/checks_config_test.go::TestCheckConfigVerifyArray
+  supersedes: methodology.config.verify_array_well_formed
+  glossary_terms: []
+  status: active
+
+# 7. CLI behavior (4 entries — 2 unit, 2 integration)
+- id: methodology.validator.cli_runs_structural_checks
+  definition: The unit test `TestRunStructuralChecksDispatchesAll` asserts that the CLI's `runStructuralChecks` function dispatches every entry in `spec.AllChecks` exactly once when invoked.
+  verifier: cmd/sdd/verify_test.go::TestRunStructuralChecksDispatchesAll
+  supersedes: methodology.cli.verify_runs_structural_checks
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.cli_exit_codes
+  definition: The integration test `TestVerifyExitCodes` asserts that the `sdd verify` binary exits non-zero when any registered check returns a `CheckError`, exits zero when all checks pass.
+  verifier: spec/cli_test.go::TestVerifyExitCodes
+  supersedes: methodology.cli.verify_exit_codes
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.cli_shells_to_config
+  definition: The integration test `TestVerifyShellsToConfig` asserts that the `sdd verify` binary executes every command listed in `spec-driven-config.json`'s `verify[]` array, in order, with the canonical config path propagated via `SDD_VERIFY_RUNNING_CONFIG`.
+  verifier: spec/cli_test.go::TestVerifyShellsToConfig
+  supersedes: methodology.cli.verify_shells_to_config
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.cli_walks_adr_dir
+  definition: The unit test `TestRunWalkADRsParsesDeltas` asserts that the CLI's `runWalkADRs` function reads `<spec.adr_dir>`, globs `adr-*.md` at root only, parses each one's `## Invariant Delta` block, returns the parsed deltas.
+  verifier: cmd/sdd/verify_test.go::TestRunWalkADRsParsesDeltas
+  supersedes: methodology.cli.verify_walks_adr_dir
+  glossary_terms: []
+  status: active
+
+# 8. NEW: test-shape meta-check (1 entry — net-new invariant)
+- id: methodology.validator.test_shape_unit_only
+  definition: The validator `CheckTestShapeUnitOnly` returns a `CheckError` for every `*_test.go` file under `<project>/spec/` that contains an AST reference to `spec.Registry` or `spec.Glossary` (the methodology's embedded data); returns no error when no test file reads the embedded registry or glossary directly.
+  verifier: spec/checks_validator_test.go::TestCheckTestShapeUnitOnly
+  requires:
+    - methodology.validator.registry_id_field
   glossary_terms: []
   status: active
