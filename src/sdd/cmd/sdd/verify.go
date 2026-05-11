@@ -22,7 +22,7 @@ type sddConfig struct {
 		ReactionsDir string `json:"reactions_dir"`
 	} `json:"spec"`
 	Verify   []string               `json:"verify"`
-	Dispatch map[string]interface{} `json:"dispatch"`
+	Dispatch map[string]any `json:"dispatch"`
 }
 
 // checkResult records the outcome of a single structural check.
@@ -52,7 +52,7 @@ func runVerify(args []string) int {
 	anyFailed := false
 
 	// --- Step 1: Run built-in structural checks against the embedded registry. ---
-	structuralResults := runStructuralChecks(cfg, cfgDir)
+	structuralResults := runStructuralChecks()
 	for _, r := range structuralResults {
 		if r.Passed {
 			fmt.Printf("PASS  %s\n", r.Name)
@@ -130,7 +130,7 @@ func loadConfig(configPath string) (*sddConfig, string, error) {
 
 // runStructuralChecks runs every active built-in structural check from the
 // methodology's registry (using the embedded spec package).
-func runStructuralChecks(cfg *sddConfig, cfgDir string) []checkResult {
+func runStructuralChecks() []checkResult {
 	var results []checkResult
 
 	// Count active invariants — the count itself is reported.
