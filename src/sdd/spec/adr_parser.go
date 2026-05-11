@@ -74,6 +74,7 @@ func ParseADRDeltaBlock(adrPath string) (*DeltaBlock, error) {
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 
 	var inDelta bool
+	var inFence bool    // tracks code-fence nesting BEFORE entering the delta section
 	var currentSubblock string
 	var subblockLines []string
 	block := &DeltaBlock{ADRPath: adrPath}
@@ -91,6 +92,25 @@ func ParseADRDeltaBlock(adrPath string) (*DeltaBlock, error) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+
+		// Track code fences ONLY before we enter the real delta section.
+		// ADR-0078 embeds a ````markdown ... ```` block in its prose that contains
+		// a schema-example "## Invariant Delta" heading. Without fence tracking,
+		// ParseADRDeltaBlock would latch onto that example heading instead of the
+		// real one, causing placeholder entries like `- id: <invariant_id>` to be
+		// parsed as real withdrawn entries (Bug: entry "id" missing id or reason).
+		// Once inDelta is true, fence lines are collected verbatim as subblock content.
+		if !inDelta {
+			if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+				inFence = !inFence
+				continue
+			}
+			if inFence {
+				continue
+			}
+		}
+
 		switch {
 		case strings.HasPrefix(line, "## "):
 			if inDelta {

@@ -312,7 +312,7 @@
   status: active
 
 - id: methodology.validator.registry_no_and_in_definition
-  definition: The validator `CheckNoAndInDefinition` returns a `CheckError` for every active registry entry whose `definition` field matches the case-insensitive regex `\band\b`; returns no error for entries whose definitions do not contain a logical AND.
+  definition: The validator `CheckNoAndInDefinition` returns a `CheckError` for every active registry entry whose `definition` field matches the case-insensitive regex `\band\b`; returns no error for entries without the conjunction.
   verifier: spec/checks_registry_test.go::TestCheckRegistryNoAndInDefinition
   supersedes: methodology.registry.no_and_in_definition
   glossary_terms: []
@@ -501,7 +501,7 @@
 
 # 9. NEW: interface-satisfaction enforcement (1 entry — net-new invariant)
 - id: methodology.validator.concrete_satisfies_interface
-  definition: The concrete `validator` type and the `newValidator()` constructor return value both satisfy the `Validator` interface. Asserted at compile time by `var _ Validator = (*validator)(nil)` and `var _ Validator = newValidator()` in `spec/checks_validator_test.go::TestValidatorInterfaceSatisfaction`. Drift in either signature or method count fails `go build`.
+  definition: The concrete `validator` type satisfies the `Validator` interface; the `newValidator()` constructor return value also satisfies it. Asserted at compile time by `var _ Validator = (*validator)(nil)` plus `var _ Validator = newValidator()` in `TestValidatorInterfaceSatisfaction`. Drift in either signature or method count fails `go build`.
   verifier: spec/checks_validator_test.go::TestValidatorInterfaceSatisfaction
   requires: []
   glossary_terms: []

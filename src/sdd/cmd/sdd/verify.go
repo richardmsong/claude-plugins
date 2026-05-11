@@ -8,10 +8,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"sdd-build/spec"
 )
+
+// AllChecks aliases spec.AllChecks for test access from the main package.
+var AllChecks = spec.AllChecks
 
 // sddConfig is the parsed shape of spec-driven-config.json.
 type sddConfig struct {
@@ -21,8 +23,22 @@ type sddConfig struct {
 		ADRDir       string `json:"adr_dir"`
 		ReactionsDir string `json:"reactions_dir"`
 	} `json:"spec"`
-	Verify   []string               `json:"verify"`
+	Verify   []string       `json:"verify"`
 	Dispatch map[string]any `json:"dispatch"`
+}
+
+// toSpecConfig converts a *sddConfig into a *spec.Config for validator dispatch.
+func toSpecConfig(c *sddConfig) *spec.Config {
+	if c == nil {
+		return nil
+	}
+	var sc spec.Config
+	sc.Spec.Registry = c.Spec.Registry
+	sc.Spec.Glossary = c.Spec.Glossary
+	sc.Spec.ADRDir = c.Spec.ADRDir
+	sc.Spec.ReactionsDir = c.Spec.ReactionsDir
+	sc.Verify = c.Verify
+	return &sc
 }
 
 // checkResult records the outcome of a single structural check.
@@ -51,8 +67,17 @@ func runVerify(args []string) int {
 
 	anyFailed := false
 
-	// --- Step 1: Run built-in structural checks against the embedded registry. ---
-	structuralResults := runStructuralChecks()
+	// Resolve adrDir for structural checks.
+	adrDir := cfg.Spec.ADRDir
+	if adrDir == "" {
+		adrDir = "docs"
+	}
+	if !filepath.IsAbs(adrDir) {
+		adrDir = filepath.Join(cfgDir, adrDir)
+	}
+
+	// --- Step 1: Run built-in structural checks via spec.AllChecks dispatch. ---
+	structuralResults := runStructuralChecks(spec.Registry, spec.Glossary, toSpecConfig(cfg), adrDir)
 	for _, r := range structuralResults {
 		if r.Passed {
 			fmt.Printf("PASS  %s\n", r.Name)
@@ -65,7 +90,7 @@ func runVerify(args []string) int {
 	}
 
 	// --- Step 2: Walk adr_dir and parse ## Invariant Delta blocks. ---
-	adrResults := runADRWalk(cfg, cfgDir)
+	adrResults := runWalkADRs(adrDir)
 	for _, r := range adrResults {
 		if r.Passed {
 			fmt.Printf("PASS  %s\n", r.Name)
@@ -136,312 +161,28 @@ func loadConfig(configPath string) (*sddConfig, string, string, error) {
 	return &cfg, wd, canonical, nil
 }
 
-// runStructuralChecks runs every active built-in structural check from the
-// methodology's registry (using the embedded spec package).
-func runStructuralChecks() []checkResult {
+// runStructuralChecks dispatches every entry in spec.AllChecks with the
+// provided inputs and returns one checkResult per registered check.
+// The checkResult.Name matches the NamedCheck.Name so callers can compare them.
+func runStructuralChecks(reg []spec.Invariant, glos []spec.GlossaryEntry, cfg *spec.Config, adrDir string) []checkResult {
 	var results []checkResult
-
-	// Count active invariants — the count itself is reported.
-	activeCount := 0
-	for _, inv := range spec.Registry {
-		if inv.Status == spec.StatusActive {
-			activeCount++
+	for _, c := range spec.AllChecks {
+		errs := c.Method(reg, glos, cfg, adrDir)
+		r := checkResult{
+			Name:   c.Name,
+			Passed: len(errs) == 0,
 		}
+		for _, e := range errs {
+			r.Errors = append(r.Errors, e.Message)
+		}
+		results = append(results, r)
 	}
-	results = append(results, checkResult{
-		Name:   "structural.registry_loaded",
-		Passed: activeCount > 0,
-		Errors: func() []string {
-			if activeCount == 0 {
-				return []string{"registry has no active entries"}
-			}
-			return nil
-		}(),
-	})
-
-	// Check 1: registry.id_field — all IDs match dotted-path regex.
-	results = append(results, checkRegistryIDField())
-
-	// Check 2: registry.definition_field — all definitions non-empty, single-line.
-	results = append(results, checkRegistryDefinitionField())
-
-	// Check 3: registry.verifier_field — verifier field non-empty, valid format.
-	results = append(results, checkRegistryVerifierField())
-
-	// Check 4: registry.status_field — all statuses valid.
-	results = append(results, checkRegistryStatusField())
-
-	// Check 5: registry.glossary_terms_field — no empty terms.
-	results = append(results, checkRegistryGlossaryTermsField())
-
-	// Check 6: registry.requires_targets_exist — all requires IDs exist.
-	results = append(results, checkRegistryRequiresTargetsExist())
-
-	// Check 7: registry.requires_dag_acyclic — no cycles.
-	results = append(results, checkRegistryRequiresDagAcyclic())
-
-	// Check 8: registry.supersedes_targets_exist — supersedes points at withdrawn.
-	results = append(results, checkRegistrySupersedesTargetsExist())
-
-	// Check 9: registry.no_and_in_definition — no "and" in active definitions.
-	results = append(results, checkRegistryNoAndInDefinition())
-
-	// Check 10: glossary — term, definition, resolves_to, scope fields.
-	results = append(results, checkGlossaryFields()...)
-
 	return results
 }
 
-func checkRegistryIDField() checkResult {
-	r := checkResult{Name: "structural.registry.id_field", Passed: true}
-	seen := make(map[string]bool)
-	for i, inv := range spec.Registry {
-		if inv.ID == "" {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("Registry[%d]: id is empty", i))
-			continue
-		}
-		if !spec.IDPattern.MatchString(inv.ID) {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("Registry[%d] id=%q: doesn't match dotted-path regex", i, inv.ID))
-		}
-		if seen[inv.ID] {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("Registry[%d] id=%q: duplicate id", i, inv.ID))
-		}
-		seen[inv.ID] = true
-	}
-	return r
-}
-
-func checkRegistryDefinitionField() checkResult {
-	r := checkResult{Name: "structural.registry.definition_field", Passed: true}
-	for _, inv := range spec.Registry {
-		if inv.Definition == "" {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("%s: definition is empty", inv.ID))
-		}
-		if strings.Contains(inv.Definition, "\n") {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("%s: definition is multi-line", inv.ID))
-		}
-	}
-	return r
-}
-
-func checkRegistryVerifierField() checkResult {
-	r := checkResult{Name: "structural.registry.verifier_field", Passed: true}
-	for _, inv := range spec.Registry {
-		if inv.Verifier == "" {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("%s: verifier is empty", inv.ID))
-			continue
-		}
-		parts := strings.SplitN(inv.Verifier, "::", 2)
-		if parts[0] == "" {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("%s: verifier path is empty", inv.ID))
-		}
-		if len(parts) == 2 && parts[1] == "" {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("%s: verifier ::FuncName suffix is empty", inv.ID))
-		}
-	}
-	return r
-}
-
-func checkRegistryStatusField() checkResult {
-	r := checkResult{Name: "structural.registry.status_field", Passed: true}
-	for _, inv := range spec.Registry {
-		if !spec.ValidStatus(inv.Status) {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("%s: status %q not in {active, withdrawn}", inv.ID, inv.Status))
-		}
-	}
-	return r
-}
-
-func checkRegistryGlossaryTermsField() checkResult {
-	r := checkResult{Name: "structural.registry.glossary_terms_field", Passed: true}
-	for _, inv := range spec.Registry {
-		for j, term := range inv.GlossaryTerms {
-			if strings.TrimSpace(term) == "" {
-				r.Passed = false
-				r.Errors = append(r.Errors, fmt.Sprintf("%s: glossary_terms[%d] is empty/whitespace", inv.ID, j))
-			}
-		}
-	}
-	return r
-}
-
-func checkRegistryRequiresTargetsExist() checkResult {
-	r := checkResult{Name: "structural.registry.requires_targets_exist", Passed: true}
-	ids := make(map[string]bool, len(spec.Registry))
-	for _, inv := range spec.Registry {
-		ids[inv.ID] = true
-	}
-	for _, inv := range spec.Registry {
-		for _, req := range inv.Requires {
-			if !ids[req] {
-				r.Passed = false
-				r.Errors = append(r.Errors, fmt.Sprintf("%s: requires references non-existent invariant %q", inv.ID, req))
-			}
-		}
-	}
-	return r
-}
-
-func checkRegistryRequiresDagAcyclic() checkResult {
-	r := checkResult{Name: "structural.registry.requires_dag_acyclic", Passed: true}
-	const (
-		white = 0
-		gray  = 1
-		black = 2
-	)
-	color := make(map[string]int, len(spec.Registry))
-	requires := make(map[string][]string, len(spec.Registry))
-	for _, inv := range spec.Registry {
-		color[inv.ID] = white
-		requires[inv.ID] = inv.Requires
-	}
-	var stack []string
-	var visit func(id string) bool
-	visit = func(id string) bool {
-		if color[id] == gray {
-			cycleStart := 0
-			for i, s := range stack {
-				if s == id {
-					cycleStart = i
-					break
-				}
-			}
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("requires DAG has cycle: %s -> %s",
-				strings.Join(stack[cycleStart:], " -> "), id))
-			return false
-		}
-		if color[id] == black {
-			return true
-		}
-		color[id] = gray
-		stack = append(stack, id)
-		for _, dep := range requires[id] {
-			if !visit(dep) {
-				return false
-			}
-		}
-		stack = stack[:len(stack)-1]
-		color[id] = black
-		return true
-	}
-	for _, inv := range spec.Registry {
-		if color[inv.ID] == white {
-			visit(inv.ID)
-		}
-	}
-	return r
-}
-
-func checkRegistrySupersedesTargetsExist() checkResult {
-	r := checkResult{Name: "structural.registry.supersedes_targets_exist", Passed: true}
-	byID := make(map[string]spec.Invariant, len(spec.Registry))
-	for _, inv := range spec.Registry {
-		byID[inv.ID] = inv
-	}
-	for _, inv := range spec.Registry {
-		if inv.Supersedes == "" {
-			continue
-		}
-		predecessor, ok := byID[inv.Supersedes]
-		if !ok {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("%s: supersedes references non-existent invariant %q", inv.ID, inv.Supersedes))
-			continue
-		}
-		if predecessor.Status != spec.StatusWithdrawn {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("%s: supersedes %q whose status is %q (expected withdrawn)",
-				inv.ID, inv.Supersedes, predecessor.Status))
-		}
-	}
-	return r
-}
-
-func checkRegistryNoAndInDefinition() checkResult {
-	r := checkResult{Name: "structural.registry.no_and_in_definition", Passed: true}
-	for _, inv := range spec.Registry {
-		if inv.Status != spec.StatusActive {
-			continue
-		}
-		if strings.Contains(strings.ToLower(" "+inv.Definition+" "), " and ") {
-			r.Passed = false
-			r.Errors = append(r.Errors, fmt.Sprintf("%s: definition contains 'and': %q", inv.ID, inv.Definition))
-		}
-	}
-	return r
-}
-
-func checkGlossaryFields() []checkResult {
-	var results []checkResult
-
-	r1 := checkResult{Name: "structural.glossary.term_field", Passed: true}
-	seen := make(map[string]bool)
-	for i, g := range spec.Glossary {
-		if strings.TrimSpace(g.Term) == "" {
-			r1.Passed = false
-			r1.Errors = append(r1.Errors, fmt.Sprintf("Glossary[%d]: term is empty", i))
-			continue
-		}
-		if seen[g.Term] {
-			r1.Passed = false
-			r1.Errors = append(r1.Errors, fmt.Sprintf("Glossary[%d] term=%q: duplicate term", i, g.Term))
-		}
-		seen[g.Term] = true
-	}
-	results = append(results, r1)
-
-	r2 := checkResult{Name: "structural.glossary.definition_field", Passed: true}
-	for _, g := range spec.Glossary {
-		if strings.TrimSpace(g.Definition) == "" {
-			r2.Passed = false
-			r2.Errors = append(r2.Errors, fmt.Sprintf("%s: definition is empty", g.Term))
-		}
-	}
-	results = append(results, r2)
-
-	r3 := checkResult{Name: "structural.glossary.resolves_to_field", Passed: true}
-	for _, g := range spec.Glossary {
-		if strings.TrimSpace(g.ResolvesTo) == "" {
-			r3.Passed = false
-			r3.Errors = append(r3.Errors, fmt.Sprintf("%s: resolves_to is empty", g.Term))
-		}
-	}
-	results = append(results, r3)
-
-	r4 := checkResult{Name: "structural.glossary.scope_field", Passed: true}
-	for _, g := range spec.Glossary {
-		if !spec.ValidScope(g.Scope) {
-			r4.Passed = false
-			r4.Errors = append(r4.Errors, fmt.Sprintf("%s: scope %q not in {methodology, project-cross-cutting, component-local}", g.Term, g.Scope))
-		}
-	}
-	results = append(results, r4)
-
-	return results
-}
-
-// runADRWalk walks cfg.Spec.ADRDir for adr-*.md files and parses each one's
+// runWalkADRs walks adrDir for adr-*.md files and parses each one's
 // ## Invariant Delta section. Returns a checkResult per ADR file.
-func runADRWalk(cfg *sddConfig, cfgDir string) []checkResult {
-	adrDir := cfg.Spec.ADRDir
-	if adrDir == "" {
-		adrDir = "docs"
-	}
-	// Resolve relative to cfgDir.
-	if !filepath.IsAbs(adrDir) {
-		adrDir = filepath.Join(cfgDir, adrDir)
-	}
-
+func runWalkADRs(adrDir string) []checkResult {
 	paths, err := spec.FindAllADRs(adrDir)
 	if err != nil {
 		return []checkResult{{
@@ -542,3 +283,4 @@ func runShellCommand(command, dir string, canonicalCfgPath string) error {
 	cmd.Env = append(os.Environ(), sddVerifyEnvKey+"="+canonicalCfgPath)
 	return cmd.Run()
 }
+
