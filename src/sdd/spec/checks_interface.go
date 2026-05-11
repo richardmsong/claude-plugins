@@ -1,28 +1,5 @@
 package spec
 
-// CheckError represents a single contract violation detected by a validator.
-// Validators return []CheckError; empty slice means no violations.
-type CheckError struct {
-	EntryID string // offending registry/glossary/ADR id, if applicable
-	Field   string // e.g., "id", "definition", "verifier"
-	Path    string // optional file:line
-	Message string // human-readable prose
-}
-
-// Config is the parsed shape of spec-driven-config.json.
-// It mirrors the sddConfig type in cmd/sdd/verify.go; the spec package
-// exposes this type so validators can accept a *Config without importing cmd/sdd.
-type Config struct {
-	Spec struct {
-		Registry     string `json:"registry"`
-		Glossary     string `json:"glossary"`
-		ADRDir       string `json:"adr_dir"`
-		ReactionsDir string `json:"reactions_dir"`
-	} `json:"spec"`
-	Verify   []string          `json:"verify"`
-	Dispatch map[string]string `json:"dispatch"`
-}
-
 // Validator is the contract surface for methodology structural checks.
 // Implementations live in spec/checks.go (authored by dev-harness, not by
 // /compile-invariants). The compile-time assertion in checks.go ensures
