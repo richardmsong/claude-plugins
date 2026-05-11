@@ -63,12 +63,6 @@ Surfacing invariants to humans and LLMs at query time. Deferred:
 
 **Open questions for its ADR:** What are the canonical token names (`{path}`, `{fn}`, `{dir}`, others)? How does dispatch interact with non-Go mechanisms (semgrep, buf, etc.)?
 
-### Distributed context update
-
-- `agent-plugins/src/sdd/context.md` — adds a one-line mention of the `## Invariant Delta` block convention so consumer LLMs (which read the distributed `context.md`) know the convention exists. Small, non-breaking; bundled with whichever follow-up ADR ships first.
-
-**Open questions for its ADR:** None expected — this is a one-line documentation update, not a design.
-
 ## User Flow
 
 Not applicable for a roadmap ADR. Each deferred subsystem will have its own user flow when its dedicated ADR is authored.
@@ -119,7 +113,7 @@ When a subsystem is promoted out of this roadmap into its own ADR, the correspon
 
 **Why the empty Invariant Delta is acceptable here.** ADR-0078's rule says "ADR ⇒ at least one invariant delta" applies to ADRs that are promoted to `accepted` (the commitment surface). Drafts are explicitly allowed to be incomplete and committed (per ADR-0078's "Drafts may be committed too"). This ADR stays in `draft` indefinitely; if it ever needs to be promoted, the contents are first split into per-subsystem ADRs and this roadmap is withdrawn.
 
-**Why documentation specs are excluded entirely.** Pre-existing `docs/spec-*.md` files are legacy under ADR-0078's framing. New contracts ship as registry entries, not prose specs. See ADR-0078's Decision history note "Why pre-existing spec-*.md docs become legacy, not load-bearing." The one exception (`context.md`) is captured as its own deferred subsystem above because it's distributed with the plugin and consumed by downstream LLMs.
+**Why documentation specs are excluded entirely.** Pre-existing `docs/spec-*.md` files are legacy under ADR-0078's framing. New contracts ship as registry entries, not prose specs. See ADR-0078's Decision history note "Why pre-existing spec-*.md docs become legacy, not load-bearing." The one consumer-facing exception, `context.md`, is updated in-scope of ADR-0078 itself rather than parked here — it ships in the plugin payload and consumer LLMs need the convention surfaced immediately.
 
 ## Open questions
 

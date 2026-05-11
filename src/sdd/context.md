@@ -29,3 +29,13 @@ If tests fail, code is missing, or implementation is wrong — invoke dev-harnes
 When requests can be parallelized, use subagents extensively rather than handling them sequentially.
 
 Launch multiple agents in a single message when their work is independent. Don't serialize tasks that can overlap.
+
+## Invariant Delta convention (mandatory on every ADR)
+
+Every ADR carries a mandatory `## Invariant Delta` section with `### Added` and/or `### Withdrawn` sub-blocks. An ADR with an empty delta is invalid — if the change doesn't commit to a contract, commit it as a normal git commit, not an ADR.
+
+Each `### Added` entry is YAML with: `id` (dotted name, e.g. `<component>.<concept>.<facet>`), `definition` (one-line contract, no logical AND — split into separate invariants), `verifier` (`path` or `path::FuncName` for the test that operationalizes the contract), `requires` (list of invariant ids this one depends on, forms the DAG), optional `supersedes` (predecessor id, if substantive change to an existing contract), optional `comments` (free-form annotations).
+
+Each `### Withdrawn` entry has `id` and `reason`.
+
+The verifier file MUST exist and compile in the same commit as the ADR. `/plan-feature` Step 3c invokes `/compile-invariants` to author per-invariant verifier stubs; `/feature-change` then implements the production code until the verifier passes. The registry at `<project>/spec/registry.yaml` is the timeless source of truth — the running registry equals Σ(Added − Withdrawn) across all ADR deltas, verified by `methodology.adr.delta_reconciles`.

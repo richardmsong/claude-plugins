@@ -1,12 +1,13 @@
 # ADR: Invariant-Driven Development with Compiled Verification (spec-driven-dev v2)
 
-**Status**: draft
+**Status**: accepted
 **Status history**:
 - 2026-05-08: draft
+- 2026-05-11: accepted — design audit CLEAN; methodology bootstrap committed with 31 registered invariants and matching verifiers; consumer-facing context.md updated with the Invariant Delta convention
 
 ## Overview
 
-Evolve the `spec-driven-dev` plugin from markdown-spec methodology (v1) to **invariant-driven development with compiled verification** (v2). Named **invariants** — not markdown spec prose — become the canonical contract surface, and verification is performed by deterministic CPU-bound mechanisms (test files, lint rules, schemas, type-system checks) rather than LLM-as-judge spec-evaluators. LLMs appear only at *authoring* time (compiling invariants into verifier code) and *audit* time (quarterly differential regeneration to detect spec gaps and dead code), never in the recurring CI validation path.
+Evolve the `spec-driven-dev` plugin from markdown-spec methodology (v1) to **invariant-driven development with compiled verification** (v2). Named **invariants** — not markdown spec prose — become the canonical contract surface, and verification is performed by deterministic CPU-bound mechanisms (test files, lint rules, schemas, type-system checks) rather than LLM-as-judge spec-evaluators. LLMs appear only at *authoring* time (compiling invariants into verifier code) and *audit* time (on-demand `/audit-invariants` runs that walk the decision-↔-invariant-↔-verifier chain), never in the recurring CI validation path.
 
 The methodology is **additive**, not a parallel mode. ADRs that introduce invariants include an Invariant Delta block; ADRs that don't, don't. Existing markdown-spec ADRs continue to work as-is — the registry/CI/glossary machinery only activates when an ADR has invariants to register. No per-component mode flag, no dispatch logic, no formal cutover.
 
@@ -56,6 +57,7 @@ V2 shifts the contract surface from prose to executable artifacts (test files + 
 | Tooling architecture | `sdd verify` CLI does structural validation (registry/glossary/ADR-delta well-formed, DAG integrity, no orphans, delta reconciliation) using the methodology's own invariants as its built-in checks. The CLI also shells out to commands listed in `spec-driven-config.json`'s `verify[]` for per-mechanism runners. Per-invariant tests run via the project's native runner (`go test ./...`, `pytest`, etc.); selective per-invariant execution is a path-dispatch wrapper (`sdd run <id>`) reading `dispatch{}` from config. | Centralized adapter framework was over-engineering: all dispatch is shell commands; per-project config is the right place to specify them. The methodology owns structural validation (universal); projects own their tooling lineup (specific). |
 | ADR ⇒ at least one invariant delta | An ADR that introduces no `### Added` and retires no `### Withdrawn` entries is not an ADR. Cosmetic/docs-only changes don't earn an ADR; they're git commits. | Reverses the "is this an invariant?" Q&A framing. ADRs are the methodology's commitment surface; if a change isn't worth an invariant, it's not worth the ADR ceremony either. Forces the "what contract is changing?" question on every ADR. |
 | Differential regeneration cadence + owner | On-demand only Day-1; the master session that invokes `/audit-invariants` owns the triage of its output. No scheduled/queue infrastructure. | Audit chain is brand new; we don't yet know what divergence it surfaces. Commit to a cadence after observing real audit runs. Scheduling and queue surfaces are deferred to ADR-0079. |
+| Mandatory `## Decision history (rationale notes)` section | Every `adr-*.md` contains a `## Decision history (rationale notes)` section; `/plan-feature` writes paragraphs as decisions are made, not retroactively. Enforced by `methodology.adr.requires_decision_history`. | Rationale captured at finalization is reconstructed memory, not a record. Writing decisions as they're made keeps context-compaction recoverable mid-draft, and forces the why-not-just-what discipline. Empty Decision history at finalization is a positive declaration that nothing surprising came up, not an oversight. |
 | Language-binding scope (Day-1) | Go-only. Methodology's own Day-1 implementation (`gopkg.in/yaml.v3`, `go test`, `go vet`) is the final scope of this ADR. TS/Py/Rust bindings ship as separate ADRs when a non-Go consumer surfaces. | Multi-language Day-1 would force speculative per-mechanism tool choices (vitest? jest? pytest? semgrep?) with no real consumer to validate against. Keeping scope tight lets the methodology stabilize on its bootstrap language before generalizing. |
 
 ## User Flow
@@ -63,15 +65,14 @@ V2 shifts the contract surface from prose to executable artifacts (test files + 
 The development cycle for a v2 component (in any consumer project):
 
 1. **Change request enters.** User asks for a feature, fix, refactor, etc.
-2. **Master session authors an ADR draft** via `/plan-feature`. If the ADR will introduce or withdraw invariants, the author includes the structured **Invariant Delta** block (`### Added` and/or `### Withdrawn`). If not, the ADR proceeds as a standard markdown ADR.
-3. **Invariant decomposition + verifier authoring (single step).** Each new invariant is named and stated in one line, AND its verifier is authored in the same commit. The skill blocks ADR finalization until every Added entry has a verifier file that compiles and runs. Authoring the verifier is the precision-forcing function — invariants that can't be operationalized into a deterministic check are inadmissible.
-4. **Glossary check.** A deterministic script (`/check-glossary` or run inline) verifies every term in invariant statements resolves to a typed binding or a glossary entry. New terms either get typed or get glossary entries before the ADR finalizes.
-5. **LLM compiles invariants → verifier code.** The `invariant-compiler` subagent reads the new/modified invariants from the ADR delta and generates the corresponding test files, lint rules, schemas. Output is staged alongside the ADR.
+2. **Master session authors an ADR draft** via `/plan-feature`. The ADR includes a mandatory **Invariant Delta** block (`### Added` and/or `### Withdrawn`). An ADR with an empty delta is invalid — if no contract is changing, commit the change as a normal git commit, not an ADR.
+3. **Invariant decomposition + verifier authoring (single step).** Each new invariant is named and stated in one line, AND its verifier is authored in the same commit. `/plan-feature` blocks ADR finalization until every `### Added` entry has a verifier file that compiles. Authoring the verifier is the precision-forcing function — invariants that can't be operationalized into a deterministic check are inadmissible.
+4. **Glossary completeness.** Enforced structurally by `methodology.glossary.complete` (verifier: `cross_cutting_test.go::TestGlossaryComplete`): every term in active invariants' definitions resolves to a glossary entry or a typed binding. Fails `go test` if violated; no separate skill needed.
+5. **LLM compiles invariants → verifier code.** `/compile-invariants` invokes the `invariant-compiler` subagent (fresh context per invocation). For each `### Added` entry, it authors a compiling test function at the path in `verifier:`. For each `### Withdrawn`, it removes the predecessor's verifier. Build gate (`go build` + `go vet`) must pass.
 6. **Human reviews compiled verifiers.** Same review bar as hand-written code. The LLM's output is not blessed because an LLM wrote it; it's blessed because a human read it and understood what each verifier proves.
-7. **Implementation follows.** `/feature-change` invokes dev-harness. If the ADR introduced invariants, the verifier suite (`<lang> test` + lint + schema runs) is the success criterion. If not, the existing implementation-evaluator path is used. The two are complementary, not exclusive.
+7. **Implementation follows.** `/feature-change` invokes dev-harness. The verifier suite (`sdd verify && <project verify[]>`) is the success criterion. Per-invariant verifier failures are the structured feedback the harness operates on.
 8. **CI runs the verifier suite on every commit.** Pure CPU, sub-minute, no model dependency. Failures localize to specific invariants by ID.
-9. **Periodic differential regeneration audit** (`/audit-invariants`). Quarterly or per major refactor checkpoint: `rm` production code, regenerate from invariants × N, diff results. Convergence-with-correctness validates spec precision. Divergence-with-correctness reveals appropriate underconstraint. Divergence-with-incorrectness localizes spec gaps to specific decisions. Output is a triaged Markdown file reviewed by a human; spec changes are authored as new ADRs.
-10. **Periodic LLM audit run (advisory).** Reads the invariant registry plus recent ADRs, suggests missing journeys, missing invariants, drift between ADR rationale and registry contents. Output is advisory; never blocks.
+9. **On-demand audit chain** (`/audit-invariants`). The session author invokes it when wanted (no scheduled cadence Day-1; see Decision history). Runs three layers: Layer 1 (decision-↔-invariant roundtrip via `decision-invariant-evaluator`), Layer 2 (invariant-↔-verifier roundtrip via `invariant-testing-evaluator`), Layer 3 (mutation testing; deferred to ADR-0079). Output is a triaged Markdown file in `docs/audits/`; spec changes are authored as new ADRs.
 
 ## Component Changes
 
@@ -624,26 +625,40 @@ The methodology itself does not introduce new security boundaries, but enables c
 - Encode JWT format, NATS subject permissions, and credential flows as schemas (proto+buf) with breaking-change detection.
 - Encode architectural invariants ("no `net/http` server outside JWT issuer") as enforceable lint rules.
 
-The `invariant-compiler` subagent runs in a fresh context per invocation (per `methodology.subagent.fresh_context`); no cross-invocation prompt injection surface.
+The `invariant-compiler` subagent runs in a fresh context per invocation by design (see the agent's frontmatter and `/compile-invariants` skill text); no cross-invocation prompt injection surface. Registering this discipline as a contract is deferred to ADR-0080's eval-as-verifier mechanism — fresh-context behavior is an LLM-behavior claim that needs an eval, not a structural check.
 
 ## Impact
 
-Specs updated in this commit (in agent-plugins):
-- `src/sdd/docs/spec-invariant-driven-development.md` — **new**, canonical methodology reference.
-- `src/sdd/docs/spec-invariant-registry.md` — **new**, registry format (pending decision resolution).
-- `src/sdd/docs/spec-verifier-conventions.md` — **new**, per-mechanism translation conventions.
-- `src/sdd/docs/spec-glossary.md` — **new**, methodology's own glossary.
-- `src/sdd/docs/spec-agents.md` — extended with new subagents.
-- `src/sdd/docs/context.md` — extended with v2 dispatch rules.
+This ADR does **not** author new `spec-*.md` files — under the methodology it defines, the contract surface is the registry + glossary + this ADR's Invariant Delta, not prose specs. Pre-existing `src/sdd/docs/spec-*.md` files remain in place as legacy prose annotations (see Decision history).
 
-Plugin source changes:
-- `src/sdd/.agent/skills/plan-feature/`, `feature-change/`, `setup/` — extended for v2 dispatch.
-- `src/sdd/.agent/skills/compile-invariants/`, `audit-invariants/`, `check-glossary/`, `check-registry-coverage/` — new.
-- `src/sdd/.agent/agents/invariant-compiler.md` — new.
-- `src/sdd/spec/registry.yaml` — methodology's own registry (Day-1 bootstrap; see `## Invariant Delta` section).
-- `src/sdd/spec/glossary.yaml` — methodology's own glossary.
-- `src/sdd/spec/*_test.go` — verifiers, one per invariant.
-- `src/sdd/spec/glossary.md` (or chosen format) — methodology's own glossary.
+Artifacts shipped in this commit (in agent-plugins):
+
+**Methodology's own registry + glossary + verifiers:**
+- `src/sdd/spec/registry.yaml` — 31 active entries; the methodology's contract surface.
+- `src/sdd/spec/glossary.yaml` — methodology's terminology.
+- `src/sdd/spec/registry_test.go`, `cross_cutting_test.go`, `config_test.go`, `cli_test.go`, `adr_delta_test.go`, `glossary_test.go` — verifiers.
+- `src/sdd/spec/loader.go`, `types.go`, `adr_parser.go` — registry/glossary loader + ADR delta parser used by the verifiers.
+
+**Skills (in `src/sdd/skills/`):**
+- `/plan-feature/SKILL.md` — extended for Invariant Delta + Decision history + /compile-invariants invocation + reaction generation.
+- `/feature-change/SKILL.md` — extended for dev-harness → verify-suite loop.
+- `/setup/SKILL.md` — idempotent reseed of `spec-driven-config.json` with `spec`, `verify`, `dispatch` keys.
+- `/compile-invariants/SKILL.md` — new; orchestrates invariant-compiler + build gate + roundtrip gate.
+- `/audit-invariants/SKILL.md` — new; orchestrates the three audit layers (Layer 1: decision-invariant-evaluator; Layer 2: invariant-testing-evaluator; Layer 3: mutation-tester, deferred).
+
+**Agents (in `src/sdd/agents/`):**
+- `decision-invariant-evaluator.md` — renamed from `design-evaluator`; layer-1 audit (decision-↔-invariant roundtrip).
+- `invariant-compiler.md` — new; authors per-invariant verifier code from ADR Invariant Delta blocks.
+- `invariant-testing-evaluator.md` — new; layer-2 audit (invariant-↔-verifier roundtrip).
+- `design-evaluator.md`, `spec-evaluator.md`, `implementation-evaluator.md` — **deleted** (retired by this ADR; see Decision history).
+
+**Documentation (consumer-facing, distributed in plugin payload):**
+- `src/sdd/context.md` — extended with `spec/`, `verify[]`, `dispatch{}` config keys and the invariant-driven authoring loop.
+
+**Deferred to follow-up ADRs:**
+- `sdd verify` CLI implementation (cli_test.go verifiers authored but the binary is pending; first /feature-change run after this ADR lands).
+- ADR-0079 parking lot (reaction process, /audit-invariants advanced layers, discovery/MCP/dashboard, per-mechanism dispatch, distributed context update).
+- ADR-0080 eval-as-verifier mechanism (skill-behavior contracts; first user-flow-walkthrough invariant).
 
 Consumer projects: each authors its own *adoption* ADR in its own repo, citing this ADR as the methodology source. mclaude's ADR-0100 is the first such adoption ADR; others follow per project.
 
@@ -651,10 +666,11 @@ Consumer projects: each authors its own *adoption* ADR in its own repo, citing t
 
 In v1 of this ADR (i.e., spec-driven-dev v2.0):
 - Methodology declaration (artifacts, cycle, principles, taxonomy).
-- Methodology's own invariant registry (Day 1 contents listed).
-- Plugin source extensions (new skills, new subagent, extended existing skills).
-- Bootstrap implementation in agent-plugins itself.
-- Documentation (4 new specs).
+- Methodology's own invariant registry (31 active entries shipped in this commit).
+- Plugin source extensions (new skills `/compile-invariants`, `/audit-invariants`; new agents `invariant-compiler`, `decision-invariant-evaluator`, `invariant-testing-evaluator`; extended existing skills `/plan-feature`, `/feature-change`, `/setup`).
+- Bootstrap implementation in agent-plugins itself (registry + glossary + verifier files committed alongside this ADR).
+- Distributed `context.md` update: one paragraph explaining the `## Invariant Delta` convention so consumer LLMs (which read the plugin payload's `context.md`) discover the methodology without needing to read this ADR.
+- Retirement of `spec-evaluator`, `implementation-evaluator`, and `design-evaluator` skills + agents.
 
 Explicitly deferred:
 - Consumer project adoption — each consumer authors its own adoption ADR (e.g. mclaude ADR-0100). This methodology ADR doesn't author them.
@@ -691,7 +707,7 @@ Resolved (during this ADR's authoring, batch 3):
 
 Resolved (during this ADR's authoring, batch 4):
 
-- ~~Does the /plan-feature user-flow-walkthrough discipline get registered as an invariant + verifier?~~ — **Deferred to ADR-0080.** A grep-style verifier on skill text is a thin contract (proves text presence, not LLM-behavior). The real contract is *behavioral* — does the skill actually walk user flows during Q&A — which is the territory of LLM evals (Langfuse, Inspect-AI, Promptfoo). Registering the skill invariant with a grep verifier now would commit to a weak contract shape; registering it with an eval verifier requires the methodology to first declare `eval` as a verifier mechanism. ADR-0080 owns that decision: adding eval as an audit-time-only verifier mechanism, and registering the first skill invariants against it.
+- ~~Does the /plan-feature user-flow-walkthrough discipline get registered as an invariant + verifier?~~ — **Deferred to ADR-0080.** A grep-style verifier on skill text is a thin contract (proves text presence, not LLM-behavior). The real contract is *behavioral* — does the skill actually walk user flows when invoked in the harness — which is the territory of LLM evals. Registering the skill invariant with a grep verifier now would commit to a weak contract shape. ADR-0080 owns that decision: adding `eval` as the 11th verifier mechanism, with a custom Go runner (`sdd eval`) that shells out to the harness, scores with mixed programmatic + LLM-judge scorers, and caches by composite SHA so unchanged skills incur zero CI cost. Inspect-AI was researched in depth and rejected as a dependency (research preserved in ADR-0080 Appendix A).
 
 (No items still open.)
 
@@ -699,32 +715,45 @@ Resolved (during this ADR's authoring, batch 4):
 
 | Test case | What it verifies | Setup/teardown | Components exercised |
 |-----------|------------------|----------------|----------------------|
-| Day-1 bootstrap end-to-end | Register the methodology invariants, generate verifiers via invariant-compiler, run CI gates, all pass | Manual: author registry.yaml + glossary.yaml + verifier files; commit; run `go test ./spec/...` plus check-registry-coverage and check-glossary | invariant-compiler subagent, /check-registry-coverage, /check-glossary, registry, glossary |
+| Day-1 bootstrap end-to-end | Register the methodology's 31 invariants, author verifiers, run the suite, all structural checks pass | Manual: registry.yaml + glossary.yaml + verifier files are committed in this commit; run `go test ./src/sdd/spec/` | registry, glossary, verifier files, invariant-compiler subagent |
 | Differential regeneration on a small invariant set | Regenerate × 3 produces convergent code for sharply-stated invariants and divergent code for fuzzy ones | Manual: pick 3 methodology invariants, run /audit-invariants in dry-run mode | /audit-invariants, invariant-compiler |
-| Glossary failure mode | Adding an invariant with an unresolved term blocks /plan-feature finalization until term is typed or glossaried | Synthetic test invariant with `frob the widget` in the statement | /plan-feature, /check-glossary |
-| Registry-coverage failure mode | Adding a verifier file that pins a non-existent invariant ID fails CI; orphan registry entry without verifier fails CI | Synthetic bad pairs in a test consumer | /check-registry-coverage |
-| ADR delta reconciliation | Sum of (Added − Removed) across all ADR deltas equals current registry state; mismatch fails CI | Synthetic test with intentional mismatch | CI gate script |
+| Glossary failure mode | Adding an invariant with an unresolved term fails `go test` via `TestGlossaryComplete` | Synthetic test invariant with an unmapped term | /plan-feature, registry, glossary, `cross_cutting_test.go::TestGlossaryComplete` |
+| Registry-coverage failure mode | Adding a registry entry whose `verifier:` path doesn't resolve to a real test function fails CI via `TestVerifierResolves` | Synthetic registry entry pointing at a non-existent function | registry, `cross_cutting_test.go::TestVerifierResolves` |
+| ADR delta reconciliation | Sum of (Added − Withdrawn) across all ADR `## Invariant Delta` blocks equals current registry state; mismatch fails `TestDeltaReconciles` | Synthetic ADR with intentional mismatch in `### Added` | registry, `cross_cutting_test.go::TestDeltaReconciles` |
+| `sdd verify` runs structural checks (pending) | `sdd verify` invokes every active built-in structural check from the registry on each run; non-zero exit on any failure | Run `sdd verify` against a known-good working tree and a known-bad one | `sdd verify` binary (pending build), `cli_test.go` |
+| `/compile-invariants` build gate | Authoring a new `### Added` entry whose verifier doesn't compile blocks ADR finalization | Synthetic invariant referencing a nonexistent type | /compile-invariants, invariant-compiler, `go build` |
 
 ## Implementation Plan
 
-| Component | New/changed lines (est.) | Dev-harness tokens (est.) | Notes |
-|-----------|--------------------------|---------------------------|-------|
-| spec-invariant-driven-development.md | 800-1500 lines | 60k | Cross-cutting canonical reference; new file |
-| spec-invariant-registry.md | 200-400 lines | 30k | Format spec; depends on registry-format question |
-| spec-verifier-conventions.md | 400-800 lines | 50k | Per-mechanism translation conventions |
-| spec-glossary.md (methodology's own) | 100-200 lines | 20k | Small; ~15-20 terms initially |
-| /plan-feature extension (optional Invariant Delta block) | 150-300 lines | 60k | Additive: existing path unchanged; new path activates when ADR has invariants |
-| /feature-change extension (verifier suite as additional success criterion) | 80-150 lines | 50k | Additive |
-| /compile-invariants new skill | 200-400 lines + subagent prompt | 80k | New skill + subagent definition |
-| /audit-invariants new skill | 300-600 lines | 100k | Larger; orchestrates rm + regenerate × N + diff |
-| /check-glossary new skill (deterministic) | 100-200 lines Go or shell | 40k | Script, not LLM |
-| /check-registry-coverage new skill (deterministic) | 100-200 lines | 40k | Script |
-| invariant-compiler subagent | 200-400 lines (prompt + per-mechanism conventions) | 80k | New agent definition |
-| Day-1 bootstrap: register methodology invariants + verifiers | ~500-1000 lines spec/test code (delivered) | 100k (delivered) | Bulk of the bootstrap; complete in this commit. |
-| context.md extension (dispatch rules) | ~50 lines | 15k | |
-| spec-agents.md extension | ~50 lines | 15k | |
+Most of the implementation is already in this commit. The remaining work is `sdd verify` CLI implementation, which the next `/feature-change` run picks up.
 
-**Total estimated tokens**: ~700k-950k
-**Estimated wall-clock**: 1-2 weeks for a working v2.0 with Day-1 bootstrap complete and the first consumer (mclaude) able to author ADRs with Invariant Delta blocks against control-plane.
+**Delivered in this commit:**
 
-Day-1 bootstrap (registry + glossary + verifiers) is complete in this commit. Subsequent ADRs handle: TypeScript bindings, mutation-testing as CI, journey-author subagent.
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Registry + glossary + 31 verifiers | DONE | `src/sdd/spec/registry.yaml`, `glossary.yaml`, `*_test.go`. `go test ./spec/` runs all verifiers; 25 pass, 4 await CLI binary, 2 fail against the legacy ADR corpus (see below). |
+| `/plan-feature` extension | DONE | Invariant Delta + Decision history sections mandatory; `/compile-invariants` invoked in Step 3c; reactions in Step 4c. |
+| `/feature-change` extension | DONE | Dev-harness → verify-suite loop; backpressure via Invariant Delta updates. |
+| `/setup` idempotent reseed | DONE | `spec`, `verify`, `dispatch` keys added without overwriting customizations. |
+| `/compile-invariants` skill | DONE | Layered loop: invariant-compiler → build gate → invariant-testing-evaluator. |
+| `/audit-invariants` skill (Layer 1 + 2) | DONE | Orchestrates decision-invariant-evaluator + invariant-testing-evaluator. Layer 3 (mutation) deferred. |
+| `invariant-compiler` agent | DONE | Fresh-context subagent authoring verifier code from Invariant Delta blocks. |
+| `decision-invariant-evaluator` agent | DONE | Renamed from `design-evaluator`. |
+| `invariant-testing-evaluator` agent | DONE | New Layer-2 agent. |
+| Retired skills/agents | DONE | `spec-evaluator`, `implementation-evaluator`, `design-evaluator` removed (skills + agents + dist). |
+| `context.md` extension | DONE | Distributed payload reflects v2 dispatch rules. |
+
+**Pending (covered by next `/feature-change`):**
+
+| Component | Lines (est.) | Tokens (est.) | Notes |
+|-----------|--------------|---------------|-------|
+| `sdd verify` CLI binary | 400-700 | 100k | Reads registry.yaml + glossary.yaml; walks ADRs for `## Invariant Delta`; runs structural checks; shells out to `verify[]` entries. Contracts already authored in `cli_test.go`; binary makes 4 currently-failing tests pass. |
+| Default config template | ~80 | 20k | Used by `/setup` step 2; ships `spec`/`verify`/`dispatch` defaults. |
+| Legacy-ADR backfill policy | n/a | n/a | `TestADRRequiresDelta` + `TestADRRequiresDecisionHistory` fail against 60+ pre-existing ADRs that predate this methodology. Need a scope decision: grandfather, retrofit, or apply only to ADRs ≥ 0078. Not a code task; an ADR-level scope decision flagged for a follow-up ADR. |
+
+**Total estimated tokens for pending**: ~120k
+**Estimated wall-clock**: 1-2 days of dev-harness work for `sdd verify`; the legacy-ADR policy is a scope conversation, not a build task.
+
+**Deferred to ADR-0079** (parking lot, captured separately): reaction process gates+CLI, /audit-invariants advanced layers, discovery/MCP/dashboard, per-mechanism dispatch (`sdd run <id>`), distributed context update, mutation-testing as Layer 3, journey-author subagent, TypeScript/Python/Rust language bindings.
+
+**Deferred to ADR-0080** (separate branch `feat/eval-verifier-mechanism`): eval as a verifier mechanism for skill-behavior contracts; first eval-verified invariant `methodology.plan_feature.user_flow_walkthrough`.
