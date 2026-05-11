@@ -515,3 +515,29 @@
     - methodology.validator.registry_id_field
   glossary_terms: []
   status: active
+
+# 11. NEW: static role-boundary checks (3 entries — net-new invariants)
+- id: methodology.validator.interface_file_purity
+  definition: The validator `CheckInterfaceFilePurity` returns a `CheckError` for every file matching `*_interface.go` (under `<project>/spec/` or `<project>/cmd/sdd/`) that contains a `type X struct { ... }` declaration; returns no error when interface files contain only interface declarations and type aliases.
+  verifier: spec/checks_validator_test.go::TestCheckInterfaceFilePurity
+  requires:
+    - methodology.validator.test_shape_unit_only
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.no_test_scaffolding_types
+  definition: The validator `CheckNoTestScaffoldingTypes` returns a `CheckError` for every struct type declared in a `*_test.go` file (under `<project>/spec/` or `<project>/cmd/sdd/`) whose method set in the same file is a superset of any interface declared in a `*_interface.go` file in the same module; returns no error when no test file defines a concrete methodology-interface-satisfying type. Detects `noopValidator`, `stubValidator`, `fakeValidator`, and any naming variant by structural method-set matching. Generic test mocks of unrelated interfaces (e.g. external libraries, HTTP clients) remain allowed because those interfaces aren't declared in `*_interface.go` files.
+  verifier: spec/checks_validator_test.go::TestCheckNoTestScaffoldingTypes
+  requires:
+    - methodology.validator.test_shape_unit_only
+    - methodology.validator.interface_file_purity
+  glossary_terms: []
+  status: active
+
+- id: methodology.validator.no_production_satisfaction_assertions
+  definition: The validator `CheckNoProductionSatisfactionAssertions` returns a `CheckError` for every package-level `var _ <Identifier> = <expr>` declaration in a non-`_test.go` `.go` file (under `<project>/spec/` or `<project>/cmd/sdd/`) where the identifier resolves to an interface type in the package; returns no error when all interface-satisfaction assertions live in test code only.
+  verifier: spec/checks_validator_test.go::TestCheckNoProductionSatisfactionAssertions
+  requires:
+    - methodology.validator.test_shape_unit_only
+  glossary_terms: []
+  status: active

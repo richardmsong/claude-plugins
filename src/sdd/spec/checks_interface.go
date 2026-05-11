@@ -51,4 +51,23 @@ type Validator interface {
 	// Returns a CheckError for every *_test.go file that directly references
 	// spec.Registry or spec.Glossary (the methodology's embedded data).
 	CheckTestShapeUnitOnly(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
+
+	// Meta-checks (static role-boundary; net-new in ADR-0082):
+
+	// CheckInterfaceFilePurity returns a CheckError for every *_interface.go file
+	// that contains a struct type declaration (only interface declarations and type
+	// aliases are permitted in interface files per ADR-0082).
+	CheckInterfaceFilePurity(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
+
+	// CheckNoTestScaffoldingTypes returns a CheckError for every struct declared
+	// in a *_test.go file whose method set is a superset of any interface declared
+	// in a *_interface.go file — catching noopValidator/stubValidator patterns
+	// regardless of name, per ADR-0082.
+	CheckNoTestScaffoldingTypes(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
+
+	// CheckNoProductionSatisfactionAssertions returns a CheckError for every
+	// package-level `var _ <Interface> = <expr>` declaration in a non-_test.go file
+	// where the identifier resolves to an interface type — assertions must live only
+	// in _test.go files, per ADR-0082.
+	CheckNoProductionSatisfactionAssertions(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
 }
