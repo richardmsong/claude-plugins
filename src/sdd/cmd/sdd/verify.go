@@ -43,7 +43,7 @@ func runVerify(args []string) int {
 	}
 
 	// Load config.
-	cfg, cfgDir, err := loadConfig(*configPath)
+	cfg, cfgDir, canonicalCfgPath, err := loadConfig(*configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "sdd verify: load config: %v\n", err)
 		return 1
@@ -78,7 +78,7 @@ func runVerify(args []string) int {
 	}
 
 	// --- Step 3: Shell out to verify[] commands (always, even if checks above failed). ---
-	shellFailed := runShellVerifiers(cfg, cfgDir)
+	shellFailed := runShellVerifiers(cfg, cfgDir, canonicalCfgPath)
 	if shellFailed {
 		anyFailed = true
 	}
@@ -95,37 +95,45 @@ func runVerify(args []string) int {
 // If configPath is empty, spec-driven-config.json is looked up in cwd only —
 // if absent, a zero-value config is returned (no verify[] commands, no adr_dir
 // override) so that structural checks still run and the binary exits 0 or 1.
-// Returns the parsed config and the directory to resolve relative paths against.
-func loadConfig(configPath string) (*sddConfig, string, error) {
+// Returns the parsed config, the directory to resolve relative paths against,
+// and the canonical absolute path of the config file (empty string if none was found).
+func loadConfig(configPath string) (*sddConfig, string, string, error) {
 	if configPath != "" {
 		// Explicit --config: a missing file is an error.
 		data, err := os.ReadFile(configPath)
 		if err != nil {
-			return nil, "", fmt.Errorf("read %s: %w", configPath, err)
+			return nil, "", "", fmt.Errorf("read %s: %w", configPath, err)
 		}
 		var cfg sddConfig
 		if err := json.Unmarshal(data, &cfg); err != nil {
-			return nil, "", fmt.Errorf("parse %s: %w", configPath, err)
+			return nil, "", "", fmt.Errorf("parse %s: %w", configPath, err)
 		}
-		return &cfg, filepath.Dir(configPath), nil
+		canonical, err := filepath.Abs(configPath)
+		if err != nil {
+			return nil, "", "", fmt.Errorf("abs %s: %w", configPath, err)
+		}
+		canonical = filepath.Clean(canonical)
+		return &cfg, filepath.Dir(canonical), canonical, nil
 	}
 
 	// No --config flag: look in cwd only.
 	wd, err := os.Getwd()
 	if err != nil {
-		return nil, "", fmt.Errorf("getwd: %w", err)
+		return nil, "", "", fmt.Errorf("getwd: %w", err)
 	}
 	candidate := filepath.Join(wd, "spec-driven-config.json")
 	data, err := os.ReadFile(candidate)
 	if err != nil {
 		// Config absent: return zero value. Structural checks still run.
-		return &sddConfig{}, wd, nil
+		// canonicalCfgPath is "" to indicate no config file was loaded.
+		return &sddConfig{}, wd, "", nil
 	}
 	var cfg sddConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, "", fmt.Errorf("parse %s: %w", candidate, err)
+		return nil, "", "", fmt.Errorf("parse %s: %w", candidate, err)
 	}
-	return &cfg, wd, nil
+	canonical := filepath.Clean(candidate)
+	return &cfg, wd, canonical, nil
 }
 
 // runStructuralChecks runs every active built-in structural check from the
@@ -469,18 +477,32 @@ func runADRWalk(cfg *sddConfig, cfgDir string) []checkResult {
 }
 
 // sddVerifyEnvKey is an environment variable set by sdd verify before running
-// shell-out commands. If already set when sdd verify starts, the verify[]
-// array is skipped to prevent recursive invocations from hanging.
-const sddVerifyEnvKey = "SDD_VERIFY_RUNNING"
+// shell-out commands. Its value is the canonical absolute path of the config
+// file the outer invocation is verifying (empty string if no config file was
+// found). A nested sdd verify invocation compares its own config path against
+// this value: equal paths mean true recursion (same config looping), so it
+// skips verify[] to break the loop. Different paths mean a legitimate nested
+// validation (e.g. a test injecting a synthetic temp config) and verify[] runs
+// normally.
+const sddVerifyEnvKey = "SDD_VERIFY_RUNNING_CONFIG"
 
 // runShellVerifiers executes each command in cfg.Verify in order.
 // Returns true if any command fails.
-// Skips execution entirely if SDD_VERIFY_RUNNING is set in the environment
-// (prevents infinite recursion when verify[] contains a command that itself
-// invokes go test ./spec/... which would re-invoke sdd verify).
-func runShellVerifiers(cfg *sddConfig, cfgDir string) bool {
-	if os.Getenv(sddVerifyEnvKey) != "" {
-		// Already inside a sdd verify shell-out — skip to avoid recursion.
+// Skips execution entirely when the outer sdd verify invocation is already
+// verifying the same config (detected via SDD_VERIFY_RUNNING_CONFIG), to
+// prevent infinite recursion when verify[] contains a command that itself
+// invokes sdd verify against the same config.
+func runShellVerifiers(cfg *sddConfig, cfgDir string, canonicalCfgPath string) bool {
+	outerCfgPath := os.Getenv(sddVerifyEnvKey)
+	// The env var is present (outer set it) and both sides agree on the same
+	// config path → this is a true recursive invocation of the same config.
+	// Skip verify[] to break the loop.
+	//
+	// Edge case: if both outer and inner have no config file, canonicalCfgPath
+	// and outerCfgPath are both "" — comparison fires and verify[] is skipped.
+	// That is safe because an empty config has no verify[] entries anyway.
+	_, envPresent := os.LookupEnv(sddVerifyEnvKey)
+	if envPresent && outerCfgPath == canonicalCfgPath {
 		return false
 	}
 	anyFailed := false
@@ -490,7 +512,7 @@ func runShellVerifiers(cfg *sddConfig, cfgDir string) bool {
 			continue
 		}
 		fmt.Printf("RUN   verify[%d]: %s\n", i, command)
-		if err := runShellCommand(command, cfgDir); err != nil {
+		if err := runShellCommand(command, cfgDir, canonicalCfgPath); err != nil {
 			fmt.Fprintf(os.Stderr, "FAIL  verify[%d]: %s: %v\n", i, command, err)
 			anyFailed = true
 		} else {
@@ -501,9 +523,10 @@ func runShellVerifiers(cfg *sddConfig, cfgDir string) bool {
 }
 
 // runShellCommand executes a shell command string via the system shell.
-// It sets SDD_VERIFY_RUNNING=1 in the child's environment so that any
-// nested sdd verify invocation knows not to recurse into verify[].
-func runShellCommand(command, dir string) error {
+// It sets SDD_VERIFY_RUNNING_CONFIG=<canonicalCfgPath> in the child's
+// environment so that any nested sdd verify invocation can detect same-config
+// recursion and skip verify[] only in that case.
+func runShellCommand(command, dir string, canonicalCfgPath string) error {
 	var shell, flag string
 	if runtime.GOOS == "windows" {
 		shell = "cmd"
@@ -516,6 +539,6 @@ func runShellCommand(command, dir string) error {
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(), sddVerifyEnvKey+"=1")
+	cmd.Env = append(os.Environ(), sddVerifyEnvKey+"="+canonicalCfgPath)
 	return cmd.Run()
 }
