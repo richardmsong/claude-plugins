@@ -1,9 +1,10 @@
 # ADR: Validators as Single Source of Truth (Tests Become Their Complement)
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-05-11: draft
-- 2026-05-11: accepted — design audit CLEAN after 3 rounds; compile-invariants stage committed (interface + 32 unit tests; build red by design per foundational-ADR loosening of ADR-0078's compile-gate); registry.yaml carries 31 supersessions + 1 net-new entry; dev-harness writes the concrete validator in a follow-up /feature-change
+- 2026-05-11: accepted — design audit CLEAN after 3 rounds; compile-invariants stage committed (interface + 33 unit tests; build red by design per foundational-ADR loosening of ADR-0078's compile-gate); registry.yaml carries 31 supersessions + 2 net-new entries (concrete_satisfies_interface, test_shape_unit_only)
+- 2026-05-11: implemented — all 33 in-scope verifiers green via `./bin/sdd verify` (91 PASS); 123 remaining failures are entirely the out-of-scope legacy-ADR corpus running against `methodology.validator.adr_requires_delta` and `methodology.validator.adr_requires_decision_history` (separate ADR pending to narrow those rules — see ADR-0078 Impact > Pending)
 
 ## Overview
 
