@@ -38,7 +38,7 @@ The testing surface is **the skill as Claude Code runs it**, not the SKILL.md te
 | Cache invalidation | Cache key changes invalidate; otherwise sticky. Explicit cache bust via `sdd eval --no-cache <invariant-id>` or `sdd eval --bust-cache <invariant-id>`. | Cache is a load-bearing optimization, not a correctness layer. Bust must be cheap and obvious. |
 | Audit chain Layer 2 (statement-↔-verifier) extension | Now also audits **eval rubrics**: invariant-testing-evaluator reads the eval YAML and reconstructs the invariant statement from the scorers' assertions; diffs against the registered `definition`. Catches drift where the eval no longer tests what its invariant claims. | Without this audit, eval rubrics drift quietly — a "valid" eval that scores everything pass-by-default would still gate green. Layer 2 already does this for static verifier code; extending it to eval YAML is a natural fit. |
 | Audit chain Layer 3 (mutation tester) extension | Mutation tester now also mutates **skill text**: a deliberate edit to SKILL.md that removes the user-flow-walkthrough instruction MUST cause the corresponding eval to fail. Eval that doesn't catch its skill mutation = eval doesn't actually bite. | Mutation testing was previously about verifier code; under invariant-driven dev with eval verifiers, the "code" being mutation-tested is the skill (the SUT). Audit-only; never a CI gate. |
-| First consumers | Skill behavior contracts: `methodology.plan_feature.user_flow_walkthrough`, registered with an eval YAML at `<project>/spec/evals/plan-feature/user-flow-walkthrough.eval.yaml`. Other skill disciplines deferred to follow-up ADRs as they emerge. | One eval Day-1 is proof of life. Registering all of /plan-feature's discipline at once invites speculative contracts; one concrete eval validates the mechanism. |
+| First consumers | (1) Skill behavior contract: `methodology.plan_feature.user_flow_walkthrough`. (2) Four agent-behavior role-boundary contracts surfaced by ADR-0081: `methodology.compile_invariants.{file_scope, no_test_scaffolding, references_undefined_symbols}` and `methodology.dev_harness.test_files_not_edited`. All registered with eval YAMLs at `<project>/spec/evals/<area>/<name>.eval.yaml`. | Five evals Day-1 is enough to validate the mechanism across two consumer surfaces (skills + subagents) and exercise both same-author and adversarial scoring shapes. Adding the role-boundary contracts catches the exact failure modes ADR-0081's authoring revealed (two stopped invariant-compiler runs because of prompt-level discipline leakage). Other skill disciplines deferred to follow-up ADRs as they emerge. |
 
 ## User Flow
 
@@ -190,14 +190,13 @@ Same shape as result, written to `<project>/spec/eval-cache/<eval-id>-<composite
 **In v1:**
 - `eval` as a registered verifier mechanism with `*.eval.yaml` dispatch.
 - `sdd eval` Go binary with cache, epoch/reducer support, programmatic + LLM-judge scorers.
-- One first eval (`methodology.plan_feature.user_flow_walkthrough`).
+- Five first evals: one skill-behavior contract (`methodology.plan_feature.user_flow_walkthrough`) + four agent-behavior role-boundary contracts (`methodology.compile_invariants.{file_scope, no_test_scaffolding, references_undefined_symbols}`, `methodology.dev_harness.test_files_not_edited`).
 - `/compile-invariants` authoring eval YAML stubs.
 - `/audit-invariants` Layer 2 + 3 extensions for evals.
 
 **Deferred:**
 - Multiple eval frameworks (Inspect-AI, Promptfoo, Langfuse) as alternative runners.
-- Agent-behavior evals (agents are invoked by skills; first-class agent evals can wait until skill evals reveal what's not covered).
-- Process evals (e.g. /feature-change end-to-end behavior).
+- Process evals beyond the four role-boundary ones (e.g. /feature-change end-to-end behavior, /plan-feature end-to-end coherence).
 - Dashboard surfacing of eval-run history.
 - Per-eval token budget enforcement (today: implicit via epochs cap).
 - Selective `sdd eval <invariant-id>` invocation parallel to `sdd run <id>`.
@@ -250,6 +249,46 @@ Same shape as result, written to `<project>/spec/eval-cache/<eval-id>-<composite
     - methodology.eval.yaml_well_formed
   glossary_terms: []
   status: active
+
+# Role-boundary contracts: agent-behavior invariants on invariant-compiler and
+# dev-harness. Surfaced during ADR-0081 authoring (validator-single-source);
+# they're behavioral claims about the agents, not data-shape claims, so they
+# need eval verifiers (not static AST scans). Registered here because ADR-0080
+# is the eval-as-verifier-mechanism ADR.
+
+- id: methodology.compile_invariants.file_scope
+  definition: The invariant-compiler subagent, when given an ADR with an Invariant Delta block, produces a commit whose diff touches only `*_test.go`, `*_interface.go`, and `*.yaml` files (no `.go` files outside test/interface, no edits to existing production code).
+  verifier: src/sdd/spec/evals/compile-invariants/file-scope.eval.yaml
+  requires:
+    - methodology.cli.sdd_eval_subcommand
+    - methodology.eval.yaml_well_formed
+  glossary_terms: []
+  status: active
+
+- id: methodology.compile_invariants.no_test_scaffolding
+  definition: The invariant-compiler subagent does not define ad-hoc Validator implementations (noopValidator, stubValidator, fake concrete types) in `_test.go` files. Tests reference dev-harness-owned constructors (e.g. `newValidator()`) directly; those references stay undefined until dev-harness lands.
+  verifier: src/sdd/spec/evals/compile-invariants/no-test-scaffolding.eval.yaml
+  requires:
+    - methodology.compile_invariants.file_scope
+  glossary_terms: []
+  status: active
+
+- id: methodology.compile_invariants.references_undefined_symbols
+  definition: The invariant-compiler subagent's output, for foundational ADRs that introduce new types, leaves the build red — test files reference at least one symbol (constructor, type, function) that dev-harness will create. The red build is the dispatch mechanism to dev-harness.
+  verifier: src/sdd/spec/evals/compile-invariants/references-undefined-symbols.eval.yaml
+  requires:
+    - methodology.compile_invariants.file_scope
+  glossary_terms: []
+  status: active
+
+- id: methodology.dev_harness.test_files_not_edited
+  definition: The dev-harness subagent, when given a failing build and a list of failing verifiers, produces a commit whose diff does not modify any `_test.go` or `_interface.go` file. Tests are immutable to dev-harness; if a test needs to change, the fix routes through /plan-feature → /compile-invariants.
+  verifier: src/sdd/spec/evals/dev-harness/test-files-not-edited.eval.yaml
+  requires:
+    - methodology.cli.sdd_eval_subcommand
+    - methodology.eval.yaml_well_formed
+  glossary_terms: []
+  status: active
 ```
 
 ### Withdrawn
@@ -273,6 +312,10 @@ Same shape as result, written to `<project>/spec/eval-cache/<eval-id>-<composite
 **Why cache files in git, eval-runs gitignored.** Cache files are small JSON (≤2KB each), share across CI and local dev, and represent durable verifier state — same justification as committed lockfiles. Eval-runs are large (raw model outputs), per-run, and incidental — gitignoring keeps the repo small. The cache is the contract's executable state; eval-runs are the audit trail.
 
 **Why mutation-tester extension into skill text, not just verifier code.** Under invariant-driven dev with eval verifiers, the "code" being checked is the SUT — for skill invariants, that's SKILL.md. Mutating verifier code (`go-mutesting` on `*_test.go`) was Layer 3's original job. Mutating SKILL.md is the natural extension when the verifier is an eval: a deliberate removal of "walk user flows during Q&A" from SKILL.md must cause the corresponding eval to fail. If it doesn't, the eval doesn't actually bite — same diagnostic as a static verifier that doesn't catch a mutation.
+
+**Why role-boundary contracts on invariant-compiler and dev-harness belong in this ADR (not ADR-0081 or ADR-0078).** During ADR-0081's authoring, four role-boundary rules emerged: invariant-compiler authors only `_test.go` and `_interface.go` files; doesn't define test scaffolding; leaves the build red for foundational ADRs; dev-harness never edits test or interface files. These are *behavioral* claims about agents — "the subagent, given canned input X, produces output Y" — not static claims about data or files. Static verifiers can't enforce them: agents are LLMs, output varies per invocation, deterministic check on a single commit doesn't capture the policy. Only an eval verifier — run the agent against canned inputs and score the output's conformance — can register these as real contracts. So they wait for this ADR's eval mechanism to land. Without that mechanism they're prompt-level discipline (which failed twice during ADR-0081's authoring: I gave invariant-compiler the wrong rules in two consecutive dispatches, and only the user catching it kept the contract honest). Registering them as eval-verified invariants mechanically enforces what discipline alone misses.
+
+**Why register four separate invariants rather than one umbrella "agents follow their role boundaries."** Each rule's failure mode is distinct: file-scope violations look like a `.go` file edit in an invariant-compiler commit; scaffolding violations look like a `noopValidator` type definition in `_test.go`; undefined-symbol violations look like a commit that adds production-side stubs to make build pass; dev-harness test-edit violations look like a `*_test.go` change in a dev-harness commit. Per ADR-0078's independence rule, each is a separate claim because each can fail independently (and each has its own eval rubric). Lumping them into "agents follow boundaries" would conflate the signal — when the umbrella eval fails, you can't tell which boundary leaked.
 
 ## Open questions
 
@@ -310,13 +353,17 @@ Same shape as result, written to `<project>/spec/eval-cache/<eval-id>-<composite
 | `/compile-invariants` eval-YAML stub authoring | ~200-300 | 60k | invariant-compiler subagent extension |
 | `/audit-invariants` Layer 2 extension (rubric audit) | ~150 | 50k | invariant-testing-evaluator prompt extension |
 | `/audit-invariants` Layer 3 extension (skill mutation) | ~250 | 70k | mutation-tester prompt extension + SKILL.md mutator |
-| `methodology.plan_feature.user_flow_walkthrough` eval YAML | ~80 | 30k | First eval; canned input + rubric |
+| `methodology.plan_feature.user_flow_walkthrough` eval YAML | ~80 | 30k | First skill eval; canned input + rubric |
+| `methodology.compile_invariants.file_scope` eval YAML | ~100 | 35k | Agent-behavior eval: harness runs invariant-compiler on a canned ADR, scorer checks the resulting commit's diff against allowed file patterns (regex match on file paths). |
+| `methodology.compile_invariants.no_test_scaffolding` eval YAML | ~90 | 30k | Agent-behavior eval: scorer scans authored `_test.go` files for `type *Validator struct{}` patterns and ad-hoc method definitions. |
+| `methodology.compile_invariants.references_undefined_symbols` eval YAML | ~80 | 30k | Agent-behavior eval: scorer runs `go build` on the post-commit state; PASS iff build fails with "undefined" errors (foundational ADR signal). |
+| `methodology.dev_harness.test_files_not_edited` eval YAML | ~90 | 30k | Agent-behavior eval: harness runs dev-harness against a fixture with failing tests, scorer asserts no `_test.go` or `_interface.go` files appear in the resulting diff. |
 | `/plan-feature` user-flow-walkthrough mandate text | ~30 | 20k | Skill text update |
-| New invariants in registry (5 entries) + verifiers | ~300 | 70k | dispatch + yaml_well_formed + cache_keys + sdd_eval_subcommand + skill |
+| New invariants in registry (9 entries) + verifiers | ~450 | 90k | dispatch + yaml_well_formed + cache_keys + sdd_eval_subcommand + plan_feature.user_flow_walkthrough + 4 role-boundary entries |
 | Documentation in `context.md` | ~50 | 15k | Distributed plugin payload |
 
-**Total estimated tokens**: ~570k
-**Estimated wall-clock**: ~5-7 days of dev-harness work, paced by the harness-shell-out pattern (first non-trivial Go subcommand that invokes another CLI).
+**Total estimated tokens**: ~720k
+**Estimated wall-clock**: ~6-8 days of dev-harness work, paced by the harness-shell-out pattern (first non-trivial Go subcommand that invokes another CLI) and the four agent-behavior eval YAMLs (canned ADR fixtures + scorer authoring).
 
 ---
 
