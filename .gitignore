@@ -1,6 +1,7 @@
 node_modules/
 bun.lock
 src/sdd/bin/
+bin/
 *.db
 *.db-shm
 *.db-wal
