@@ -279,8 +279,6 @@
 - id: methodology.validator.registry_id_field
   definition: The validator `CheckRegistryIDField` returns a `CheckError` for every registry entry whose `id` field does not match the regex `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, returns no error for entries whose `id` does match.
   verifier: spec/checks_registry_test.go::TestCheckRegistryIDField
-  requires:
-    - methodology.registry.id_field
   supersedes: methodology.registry.id_field
   glossary_terms: []
   status: active
@@ -503,7 +501,7 @@
 
 # 8. NEW: test-shape meta-check (1 entry — net-new invariant)
 - id: methodology.validator.test_shape_unit_only
-  definition: The validator `CheckTestShapeUnitOnly` returns a `CheckError` for every `*_test.go` file under `<project>/spec/` that contains an AST reference to `spec.Registry` or `spec.Glossary` (the methodology's embedded data); returns no error when no test file reads the embedded registry or glossary directly.
+  definition: The validator `CheckTestShapeUnitOnly` returns a `CheckError` for every `*_test.go` file under `<project>/spec/` or `<project>/cmd/sdd/` that contains an AST reference to `spec.Registry` or `spec.Glossary` (the methodology's embedded data); returns no error when no test file reads the embedded registry or glossary directly.
   verifier: spec/checks_validator_test.go::TestCheckTestShapeUnitOnly
   requires:
     - methodology.validator.registry_id_field
