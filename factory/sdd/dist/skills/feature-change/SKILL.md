@@ -8,7 +8,7 @@ argument-hint: <description of the change>
 
 # Feature Change
 
-The entry point for **any change to any part of the project**. Features, bug fixes, refactors, config changes, UI tweaks, backend changes — everything goes through this loop.
+The entry point for **any change to any part of the project**. Features, bug fixes, refactors, config changes, UI tweaks, backend changes — everything starts here. Under invariant-driven development (see ADR-0078), `/feature-change` reads the registry + accepted ADRs, classifies the change, delegates ADR authoring to `/plan-feature` when a contract changes, and runs the dev-harness → verify-suite loop until `sdd verify && <project verify[]>` passes.
 
 ## Usage
 
@@ -26,285 +26,250 @@ Examples:
 
 ---
 
-## ADRs and Specs
+## The contract surface
 
-Two kinds of docs live in `docs/`:
+Two kinds of artifacts live under `docs/`:
 
-- **ADRs** (`docs/adr-NNNN-<slug>.md`): immutable records of individual decisions, numbered via a monotonic global counter. Root only — ADRs never nest. One per feature request / change. This is where the *why* is recorded.
-- **Specs** (`docs/**/spec-*.md`): living, present-tense references that describe the current design. Layout:
-  - **Cross-cutting** at root: `docs/spec-<concern>.md` — any spec that touches 2+ components.
-  - **Component-local** under `docs/<component>/`: behavior specific to one component. Folders are created lazily.
+- **ADRs** (`docs/adr-NNNN-<slug>.md`): immutable records of individual decisions, numbered via a monotonic global counter. Root only — ADRs never nest. Each carries a mandatory `## Invariant Delta` block (`### Added` and/or `### Withdrawn` — empty deltas are invalid). The Decision history section records *why* each non-trivial decision was made.
+- **Audits** (`docs/audits/`): reports from the audit chain (`decision-invariant-evaluator`, `invariant-testing-evaluator`, `mutation-tester`). Generated, not authored.
 
-Every change goes through this skill, which **always authors a new ADR** and — when the change has cross-cutting impact — updates the relevant spec(s) **in the same commit**. The co-commit is what the `docs` MCP reads as the lineage edge between an ADR and the spec sections it shaped.
+The contract surface is the **registry at `<project>/spec/registry.yaml` + glossary at `<project>/spec/glossary.yaml` + verifier files** the registry points at. ADR Invariant Delta blocks are the audit trail for changes to the registry.
 
-| What's changing                                         | Read these specs + ADRs                                                 |
-|---------------------------------------------------------|-------------------------------------------------------------------------|
-| Cross-cutting concern (touches 2+ components)           | `docs/spec-<concern>.md` (root) + related ADRs                          |
-| Component-local behavior (single component)             | `docs/<component>/spec-<topic>.md` + related ADRs                       |
-| Feature-specific subsystem                              | the relevant `docs/adr-NNNN-<feature>.md`                               |
+Pre-existing `docs/**/spec-*.md` files are legacy prose annotations under ADR-0078. They are not authored or updated by this workflow. The contract surface is the registry, not the specs.
 
-Use `search_docs` / `get_lineage` from the `docs` MCP to discover which ADRs previously shaped a spec section before touching it. Avoid re-reading every ADR — let lineage surface the relevant history.
-
-Use `list_docs` to discover all available specs and ADRs in the project.
+Use `list_docs` / `search_docs` / `get_lineage` from the `docs` MCP to discover relevant ADRs and prior decisions before changing anything.
 
 ---
 
 ## The Loop
 
 ```
-1. Read the relevant specs + related ADRs (via docs MCP)
-   — only ADRs in `accepted` or `implemented` status. Drafts, superseded,
-     withdrawn ADRs are skipped.
-2. Classify the change (A/B/C/D)
-3. Author a new ADR: docs/adr-NNNN-<slug>.md (status: accepted from the start)
-4. Update impacted specs (if any) — same working tree
-4b. Spec-edit verification loop: run /spec-evaluator on the ADR until CLEAN
-5. Commit ADR + spec edits together (single spec commit)
-6. dev-harness -> implementation-evaluator loop per component (until CLEAN)
-7. Flip ADR status from `accepted` -> `implemented` (append history line).
-   Commit the status-only update.
-8. Validate (SPA changes only)
+1. Read related ADRs (accepted/implemented status only) + the current
+   registry/glossary to understand what contracts already exist.
+2. Classify the change (A/B/C/D).
+3. If B or C: delegate to /plan-feature to author the ADR + verifier files.
+   If A or D: no ADR; go straight to dev-harness.
+4. dev-harness -> verify-suite loop per component (until `sdd verify &&
+   verify[]` passes).
+5. If an ADR was authored in Step 3: flip its status accepted -> implemented
+   and commit the status-only update.
+6. Validate (SPA changes only — Playwright MCP smoke test).
 ```
 
-**Every request produces at minimum an ADR.** This is load-bearing — without a per-request ADR, the docs MCP cannot build the lineage edges that let future agents discover *why* a spec section looks the way it does.
-
-If Step 5's co-commit is skipped (ADR committed separately from specs), the lineage edge does not form. Always co-commit.
-
-**Why `accepted` not `draft`:** `/feature-change` ADRs are authored *because a decision has already been made* — the user is asking for the change to happen. There's no pause point before implementation. If you need a drafting pause, the user should use `/plan-feature` instead (which starts in `draft`).
+**Not every change earns an ADR.** Under ADR-0078, the rule is "ADR ⇒ at least one invariant delta entry." Bug fixes against an existing invariant (Class A) and pure refactors (Class D) typically don't introduce or retire contracts — they're committed directly with a good message. New features and behavior changes (Class B/C) introduce or modify contracts and earn an ADR through `/plan-feature`.
 
 ---
 
-## Step 1 — Read the relevant specs + related ADRs
+## Step 1 — Read related ADRs + current registry
 
-Use the `docs` MCP rather than grepping the whole `docs/` tree:
+Use the `docs` MCP for ADR discovery:
 
 - `search_docs` for keywords related to the change.
-- `get_lineage` on the spec section you expect to touch — returns the ADRs that previously modified it. Read those first to understand prior decisions.
-- `list_docs category=spec` to see all living specs.
-- `get_section` for targeted reads of sections you've identified.
+- `list_docs category=adr` to see all ADRs.
+- `get_lineage` on an invariant ID — returns the ADRs that introduced and modified it. Read those first to understand prior decisions.
+- `get_section` for targeted reads.
 
-Context matters — don't skim a keyword match. Read the full spec section and the full body of any prior ADR that shaped it.
+Only ADRs in `accepted` or `implemented` status are load-bearing — drafts, superseded, and withdrawn ADRs are skipped.
+
+Also read the registry:
+
+```bash
+# Active invariants in the relevant component namespace
+grep -A4 '^- id: <component>\.' <project>/spec/registry.yaml
+```
+
+Cross-reference: which existing invariants might this change introduce a `supersedes:` edge to? Which `requires:` edges might it need? Knowing this before Step 2 makes the classification cleaner.
 
 ---
 
 ## Step 2 — Classify the change
 
-| Class | Meaning | ADR needed? | Spec update? |
-|-------|---------|-------------|--------------|
-| A — bug | Spec correct, code wrong | Yes — via `/plan-feature` dialogue | No |
-| B — new feature | No spec/ADR covers it | Yes — via `/plan-feature` dialogue | Yes, if cross-cutting |
-| C — behavior change / spec gap | Spec describes old behavior OR is silent | Yes — via `/plan-feature` dialogue | Yes |
-| D — refactor | Behavior unchanged | Yes — via `/plan-feature` dialogue | Usually no |
+| Class | Meaning | ADR needed? | New verifier? |
+|-------|---------|-------------|---------------|
+| A — bug | Existing invariant is right, code violates it | No — commit fix directly | No (verifier already exists; goes from red to green) |
+| B — new feature | No invariant covers the desired behavior | Yes — via `/plan-feature` | Yes — authored by `/compile-invariants` |
+| C — behavior change | Existing invariant's contract changes (supersession) | Yes — via `/plan-feature` | Yes — new verifier supersedes the old |
+| D — refactor | No invariant changes; behavior preserved | No — commit fix directly | No |
 
-**A — Bug:** The spec describes the desired behavior in enough detail that someone reading only the spec could implement the fix. The code simply diverges. Example: spec says a field is omitted when empty, code returns an internal URL.
+**A — Bug:** An existing registered invariant accurately describes the desired behavior, and the code doesn't satisfy its verifier. The fix is straightforward: make the verifier go green. No new ADR; commit message references the invariant ID. Example: `methodology.registry.no_and_in_definition` exists, but a registry entry slips through with "and" in its definition. Fix the entry.
 
-**Litmus test for A:** Can you point to a specific sentence in the spec that the fix restores compliance with? If yes -> A. If the fix requires adding behavior, configuration, setup steps, or environmental prerequisites that the spec doesn't mention -> C.
+**Litmus test for A:** Is there a registered invariant whose verifier is currently failing (or would fail) on the bug? If yes, Class A. If the fix requires adding a contract, configuration knob, or environmental setup the registry doesn't enumerate, escalate to Class C.
 
-**B — New feature:** No existing ADR or spec covers this behavior. The ADR will be authored through the `/plan-feature` dialogue in Step 3.
+**B — New feature:** No existing invariant captures the desired contract surface. `/plan-feature` runs the Q&A loop to surface invariants, authors the ADR with an Invariant Delta block, and invokes `/compile-invariants` to produce verifier stubs. The verifiers start red; `/feature-change` resumes at Step 4 to drive them green.
 
-**C — Behavior change or spec gap:** Either the spec describes old behavior you're changing, OR the spec is silent on something that should be specified. The ADR will be authored through `/plan-feature` and impacted spec sections updated in the same commit.
+**C — Behavior change:** An existing invariant's contract is changing in a substantive way. The new ADR has an `### Added` entry with `supersedes: <old_id>`; `/compile-invariants` authors a fresh verifier and removes the predecessor's. Class A/D modifications to an existing invariant's *definition* (typo fix, comments tweak) are direct registry edits without an ADR — git log is the audit.
 
-**D — Refactor:** Behavior unchanged. The ADR records the motivation (debt, readability, test coverage, etc.) via `/plan-feature` dialogue so the next person sees why the refactor happened. Usually no spec update.
+**D — Refactor:** Internal restructure with no contract change. No new ADR. The verifier suite (`sdd verify && verify[]`) must remain green through the refactor; if any verifier fails along the way, the refactor has broken a contract and it's no longer Class D.
 
-**Default to C when in doubt.** An undocumented behavior is cumulative cost; an extra ADR is near-zero cost. If the spec doesn't say what should happen, classify C and fill in the spec.
+**Default to B/C when in doubt.** Under invariant-driven dev, "is this a new contract?" is a sharper question than "does this need an ADR?" If the change introduces behavior whose correctness can't be derived from existing invariants, register a new invariant.
 
 ---
 
-## Step 3 — Author the ADR via /plan-feature dialogue
+## Step 3 — Delegate to /plan-feature (B/C only)
 
-**For all classes (A/B/C/D), invoke `/plan-feature` to author the ADR.** Do not author the ADR directly. `/plan-feature` runs the conversational Q&A loop, writes the draft to disk, resolves all ambiguities with the user, runs the design audit, and commits the accepted ADR together with any spec edits.
+For Class B or Class C, invoke `/plan-feature` to author the ADR + verifier files:
 
-Pass context from Step 1–2 when invoking:
 ```
-/plan-feature <description> [— class <A/B/C/D>, relevant specs: <list>, prior ADRs: <list>]
+/plan-feature <description> [— class <B/C>, related invariants: <list>, prior ADRs: <list>]
 ```
 
-`/plan-feature` will:
-- Write the initial draft ADR to disk (durable from the first turn)
-- Run the conversational Q&A loop (1–2 questions per round)
-- Finalize the ADR and update impacted specs
-- Run `/design-audit` and `/spec-evaluator` until CLEAN
-- Commit ADR + spec edits together (the lineage edge)
-- Hand back an accepted ADR at `docs/adr-NNNN-<slug>.md`
+Pass context from Step 1–2. `/plan-feature` will:
 
-When `/plan-feature` returns, **skip Steps 4 and 5** — they are already done. Continue at Step 6 (dev-harness loop) using the ADR that `/plan-feature` produced.
+- Write the draft ADR to disk on the first turn (durable through compaction).
+- Run the conversational Q&A loop (1–2 questions per round), walking user flows to surface candidate invariants.
+- Populate the mandatory `## Invariant Delta` and `## Decision history (rationale notes)` sections as decisions are made.
+- Invoke `/compile-invariants` to author per-invariant verifier stubs (build gate: `go build` + `go vet` must pass; per-test reds are expected for impl-pending contracts).
+- Generate impact-only reaction artifacts before the design audit.
+- Run `/design-audit` (decision-invariant-evaluator) until CLEAN.
+- Commit ADR + verifier files + reaction artifacts in a single commit.
+- Promote the ADR's status to `accepted` at commit time.
+- Hand back the path to the accepted ADR.
 
-**Every ADR that touches runtime behavior must include at least one integration test case** — this is the smoke test gate that prevents regressions like missing JWT permissions from shipping undetected.
+When `/plan-feature` returns, continue at Step 4. The verifier stubs are red until dev-harness lands the implementation.
 
----
-
-## Step 4 — Update impacted specs
-
-If the change is cross-cutting, edit the relevant spec file **in the same working tree**, to be committed together with the ADR. Use `list_docs category=spec` to discover all specs and match each change surface:
-
-| Change surface                                       | Spec to edit                                  |
-|------------------------------------------------------|-----------------------------------------------|
-| Cross-cutting spec (touches 2+ components)           | `docs/spec-<concern>.md` (root)               |
-| Component-local behavior (single component)          | `docs/<component>/spec-<topic>.md`            |
-| Feature-local detail with no cross-cutting impact    | None — ADR alone is enough                    |
-
-Follow the spec editing rules in `/plan-feature` (add with full payload/schema, remove entirely, change in place — no stale text).
-
-If only one spec is impacted, update it. If several are, update all in the same commit.
-
-**Cross-spec grep (mandatory for shared concepts):** After editing the primary specs, grep ALL spec files (`docs/**/spec-*.md`) for every shared identifier the ADR changes — bucket names, subject patterns, KV key formats, field names, enum values. If any other spec references the old value, update it in the same commit. This prevents the most dangerous class of bug: two specs describing the same interface differently, causing components to be implemented against incompatible contracts.
-
-Example: if the ADR renames `mclaude-sessions` to `mclaude-sessions-{uslug}`, grep all specs for `mclaude-sessions` and update every hit — not just spec-state-schema.md but also spec-web.md, spec-nats-payload-schema.md, etc.
-
-**Skip this step if no spec is impacted** — e.g., class A bugs, class D refactors. The ADR alone is the commit.
+For Class A or Class D, skip Step 3. Go directly to Step 4.
 
 ---
 
-## Step 4b — Spec-edit verification loop
+## Step 4 — dev-harness → verify-suite loop (exhaustive)
 
-After editing specs, verify that every ADR decision is reflected in the specs before committing. Run `/spec-evaluator docs/adr-NNNN-<slug>.md` and loop until CLEAN:
+For each affected component, invoke the `dev-harness` agent and re-invoke until the verify suite passes:
 
 ```
 Loop:
-  1. Run /spec-evaluator docs/adr-NNNN-<slug>.md
-  2. If gaps with direction SPEC→FIX: fix the spec, go to (1)
-  3. If gaps with direction ADR→FIX: fix the ADR (still in current workstream — editable per backpressure rules), go to (1)
-  4. If gaps with direction UNCLEAR: ask the user via AskUserQuestion, fix the appropriate side, go to (1)
-  5. If CLEAN: proceed to Step 5
+  1. Agent(subagent_type="dev-harness",
+           prompt="<component> — make the verify suite pass.
+                   Target verifiers: <invariant IDs from ADR's ### Added,
+                   or the failing verifier(s) for Class A/D>.
+                   Read `<project>/spec/registry.yaml` for context.
+                   Any invariant ambiguity = STOP and backpressure.")
+  2. When the agent returns, run: sdd verify && <project verify[] commands>
+  3. If failures remain:
+     a. Verifier still red, contract is clear (CODE->FIX):
+        -> Re-invoke dev-harness with the remaining failures listed.
+        -> Go to step 2.
+     b. Verifier red because the contract is ambiguous (SPEC->FIX or UNCLEAR):
+        -> Handle backpressure (see below).
+        -> Go to step 1.
+  4. If the verify suite passes (and `sdd verify` exit code is 0):
+     -> Proceed to Step 5.
 ```
 
-The spec-evaluator agent has no conversation context — it reads only the ADR and the specs. This ensures unbiased verification that the spec edits capture everything the ADR decided.
+The verifier suite IS the success criterion. There is no separate evaluator — failing verifiers ARE the structured feedback. Per-invariant failures localize to specific contracts by ID with specific test names and messages.
 
-**Skip this step if the ADR's Impact says no specs are touched** — the spec-evaluator will still verify the claim, but if the ADR is class A (bug fix) or class D (refactor) with genuinely no spec impact, expect a fast CLEAN.
+**Launching agents:** Always spawn subagents in the background. On Claude Code, use `run_in_background: true`. When components are independent, launch their dev-harness agents in parallel. You will receive completion notifications — **do not poll, tail, or grep output files**. If you have independent work, do that while waiting. Otherwise tell the user what's running and stop until notified.
 
----
-
-## Step 5 — Commit (single spec commit)
-
-Stage both the new ADR and any spec edits, then commit once:
-
-```bash
-git add docs/
-git commit -m "spec(<area>): <what changed and why>"
-```
-
-The co-commit is the lineage edge. If you commit the ADR separately from spec edits (two commits), `get_lineage` will not link them.
-
-Only `docs/` is staged in this commit. Code changes go through the dev-harness in Step 6 and commit separately.
-
----
-
-## Step 6 — dev-harness -> implementation-evaluator loop (exhaustive)
-
-For each affected component, invoke the dev-harness agent **and keep re-invoking until all gaps are closed**:
-
-```
-Loop:
-  1. Agent(subagent_type="dev-harness", prompt="<component> — audit the entire component against every accepted/implemented ADR and every docs/**/spec-*.md that references it. Close every drift. Any spec ambiguity = STOP and backpressure, never a guess.")
-  2. When the agent returns, run /implementation-evaluator <component>
-  3. If gaps remain:
-     a. CODE gap, direction CODE->FIX (spec is correct, code doesn't implement it):
-        -> Agent(subagent_type="dev-harness", prompt="<component> — continue full-component audit. Close these remaining gaps: <list>. Any spec ambiguity = STOP and backpressure.")
-        -> go to step 2
-     b. SPEC gap, direction SPEC->FIX or UNCLEAR (ADR/spec is ambiguous, incomplete, imprecise, or wrong):
-        -> Handle backpressure (see below) — master session updates the spec/ADR
-        -> go to step 1
-  4. If CLEAN: proceed to Step 7
-```
-
-The invocation prompt gives the harness no priority hints — the harness always audits the full component comprehensively. Evaluator agents must be adversarial and unbiased (ADR-0075).
-
-The dev-harness agent has `maxTurns=500` and is instructed to keep going until all gaps are closed. If it hits context limits and returns with gaps remaining, **re-invoke it immediately** with the remaining gap list. Each re-invocation picks up from the last commit and continues.
-
-**Launching agents:** Always spawn subagents in the background so the main session is not blocked. On Claude Code, use `run_in_background: true`. On Droid/Factory, launch multiple independent `Task` calls in a single message so they run in parallel. When components are independent, launch all their dev-harness agents simultaneously rather than sequentially. You will receive completion notifications — **do not poll or monitor progress**. No `grep`-ing output files, no `tail`-ing transcripts, no counting messages. If you have independent work (e.g. a second component to evaluate), do that while waiting. Otherwise, tell the user what's running and stop until notified.
+The dev-harness agent has `maxTurns=500` and is instructed to keep going until verifiers pass. If it hits context limits and returns with failures remaining, re-invoke it immediately with the remaining failure list. Each re-invocation picks up from the last commit.
 
 ### Handling backpressure
 
-When dev-harness or implementation-evaluator reports a gap that is actually a spec or ADR problem (ambiguity, missing detail, contradiction), follow the rules from `/plan-feature`:
+When dev-harness reports that a contract is ambiguous, contradictory, or missing — that is, the code can't be written because the invariant's definition doesn't say enough:
 
-1. **Classify**: factual error -> fix directly. Missing detail with obvious answer -> fill in. Design decision needed -> ask the user via `AskUserQuestion`.
-2. **Edit** the relevant doc(s):
-   - If the gap is in the ADR you just wrote -> edit the ADR.
-   - If the gap is in a spec the ADR references -> edit the spec.
-   - If the gap exposes a missing prior ADR (the current behavior is undocumented historically) -> author a new corrective ADR dated today.
-3. **Commit** the doc update(s) separately from code.
-4. **Re-invoke** dev-harness with the updated spec.
+1. **Classify** the gap:
+   - Factual error in the ADR → fix directly.
+   - Missing detail with an obvious answer → fill in.
+   - Design decision needed → ask the user via `AskUserQuestion`.
+   - Contradiction with another invariant → identify which is correct; if genuinely ambiguous, ask.
+
+2. **Decide what to edit:**
+   - If the gap is in the ADR you just wrote (still in the current workstream) → edit the ADR's Invariant Delta block; re-run `/compile-invariants` to regenerate the affected verifier.
+   - If the gap is a missing invariant for a real contract → add an entry to the ADR's Invariant Delta; run `/compile-invariants`.
+   - If the gap exposes a previously-accepted invariant whose contract needs to change → author a new superseding ADR via `/plan-feature` (don't rewrite the old one).
+   - If the gap is in the methodology itself (e.g. a structural rule doesn't fit your case) → that's an ADR against ADR-0078 or follow-ups; surface it explicitly.
+
+3. **Commit** the doc/registry/verifier update(s) separately from code.
+
+4. **Re-invoke** dev-harness against the corrected contract surface.
 
 ### Rules
 
-- **Never report a task complete until the implementation-evaluator returns CLEAN**
-- One failing evaluator gap = one more dev-harness pass (or one spec/ADR update)
-- Evaluator runs after EVERY dev-harness pass, not just the first
-- **Never deprioritize any gap** — every gap gets handled immediately
-- If a gap cannot be implemented due to environment constraints, update the ADR/spec to reflect reality, then re-evaluate
-- Running the dev-harness agent once and summarizing results is NOT acceptable — the loop must close
+- **Never report a task complete until `sdd verify && <verify[]>` exits 0.**
+- One failing verifier = one more dev-harness pass (or one ADR/registry update).
+- The verify suite runs after EVERY dev-harness pass, not just the first.
+- **Never deprioritize a failing verifier** — every failure gets handled immediately.
+- If a verifier can't be made green due to environment constraints, the contract is wrong; update the registry/ADR to reflect reality, then re-run.
+- Running dev-harness once and summarizing results is NOT acceptable — the loop must close.
 
 ---
 
-## Step 7 — Promote ADR to `implemented`
+## Step 5 — Promote ADR to `implemented` (B/C only)
 
-Once every affected component's implementation-evaluator returns CLEAN for the scope of this ADR:
+If Step 3 authored an ADR, once every affected component's verify suite is green for the ADR's scope:
 
-1. Edit the ADR's header:
-   - Change `**Status**: accepted` -> `**Status**: implemented`.
-   - Append a new line to `**Status history**` with today's date: `- YYYY-MM-DD: implemented — all scope CLEAN`.
-2. Commit **only** the ADR (status header change). No spec edits, no code changes. This is the signal that the decision has landed in code.
+1. Edit the ADR header:
+   - Change `**Status**: accepted` → `**Status**: implemented`.
+   - Append a new line to `**Status history**` with today's date: `- YYYY-MM-DD: implemented — all verifiers green`.
+
+2. Commit **only** the ADR (status header change). No registry edits, no code changes:
 
 ```bash
-git add docs/adr-NNNN-<slug>.md
+git add <project>/docs/adr-NNNN-<slug>.md
 git commit -m "spec(<slug>): promote ADR to implemented"
 ```
 
-The status flip is intentionally a separate commit so lineage lookup distinguishes "shape the spec" (the `draft -> accepted` co-commit) from "lands in code" (the `accepted -> implemented` ADR-only commit).
+The status flip is intentionally a separate commit so lineage lookup distinguishes "shape the contract" (the `draft → accepted` co-commit with ADR + verifiers) from "lands in code" (the `accepted → implemented` ADR-only commit).
 
-For meta-process ADRs (skill rewrites, workflow changes) where there is no runtime code to evaluate via implementation-evaluator, promote to `implemented` once the described behavior is in place (e.g. the skill file is updated, the workflow is codified). Every ADR should eventually reach `implemented`.
+For Class A bug fixes and Class D refactors with no ADR, skip Step 5 — the code commits themselves are the audit trail.
+
+For meta-process ADRs (skill rewrites, workflow changes) where there's no runtime verifier to drive green, promote to `implemented` once the described behavior is in place (the skill file updated, the workflow codified). Every ADR should eventually reach `implemented`.
 
 ---
 
-## Step 8 — Validate (SPA changes only)
+## Step 6 — Validate (SPA changes only)
 
 After CI deploys the preview, use the **Playwright MCP** to validate the golden path directly in the browser. Do not stop at "build passes" — drive the browser through the actual user flow.
 
 ```
-Validation checklist for spa changes:
-1. Navigate to the preview URL
-2. Log in (use project-specific credentials)
-3. Assert the changed screen/behavior matches the spec
-4. Assert the previous state (before the fix/feature) is gone
-5. Test the specific acceptance criteria stated in the original request
+Validation checklist for SPA changes:
+1. Navigate to the preview URL.
+2. Log in (use project-specific credentials).
+3. Assert the changed screen/behavior matches the ADR's User Flow section.
+4. Assert the previous state (before the fix/feature) is gone.
+5. Test the specific acceptance criteria stated in the original request.
 ```
 
-**Tools**: `mcp__playwright__browser_navigate`, `mcp__playwright__browser_snapshot`,
-`mcp__playwright__browser_fill_form`, `mcp__playwright__browser_click`,
-`mcp__playwright__browser_wait_for`, `mcp__playwright__browser_evaluate`,
-`mcp__playwright__browser_console_messages`
+**Tools**: `mcp__playwright__browser_navigate`, `mcp__playwright__browser_snapshot`, `mcp__playwright__browser_fill_form`, `mcp__playwright__browser_click`, `mcp__playwright__browser_wait_for`, `mcp__playwright__browser_evaluate`, `mcp__playwright__browser_console_messages`.
 
 **Diagnostic tips** when something looks wrong:
-- `browser_console_messages` — check for JS errors
-- `browser_evaluate` — inspect live state
-- Check pod logs or service logs to confirm the backend received the request
+- `browser_console_messages` — check for JS errors.
+- `browser_evaluate` — inspect live state.
+- Check pod logs or service logs to confirm the backend received the request.
 
 Do not report the task complete until Playwright confirms the acceptance criteria are met in the running preview.
+
+For non-SPA changes (CLI, backend, library, methodology), Step 6 is a no-op — the verify suite is sufficient.
 
 ---
 
 ## Master session write restrictions
 
-Read `.agent/master-config.json` to determine which directories are agent-only. If the config file exists and has a `source_dirs` field, the master session must **never** directly edit files matching those patterns — use dev-harness instead.
+Read `.agent/master-config.json` to determine which directories are agent-only. If the config exists and has a `source_dirs` field, the master session must **never** directly edit files matching those patterns — use dev-harness instead.
 
-If `.agent/master-config.json` does not exist, skip write restrictions (no master/agent separation configured for this project).
+If `.agent/master-config.json` doesn't exist, skip restrictions (no master/agent separation configured).
 
 The master session may always write to:
-- **ADRs** (`docs/adr-*.md`, root only) — authored in Step 3
-- **Specs** (`docs/**/spec-*.md`) — edited in Step 4
-- **Skill files** (`.agent/skills/`) — process improvements
-- **Agent files** (`.agent/agents/`) — agent instructions
-- **Memory files** — feedback, project context
 
-All implementation changes go through dev-harness subagents. The master session classifies, authors ADRs, updates specs, orchestrates agents, and evaluates results — it does not write code, templates, or config.
+- **ADRs** (`docs/adr-*.md`, root only) — authored via `/plan-feature` in Step 3.
+- **Registry + verifier files** (`<project>/spec/registry.yaml`, `<project>/spec/*_test.go`, etc.) — authored by `/compile-invariants` inside `/plan-feature`; the master session orchestrates but the invariant-compiler subagent writes.
+- **Glossary** (`<project>/spec/glossary.yaml`) — same as registry.
+- **Skill files** (`.agent/skills/` / `src/sdd/skills/` in this project) — process improvements.
+- **Agent files** (`.agent/agents/` / `src/sdd/agents/`) — agent instructions.
+- **`context.md`** — consumer-facing prose distributed with the plugin payload.
+- **Memory files** — feedback, project context.
+
+All implementation changes (production code, tests beyond verifier stubs, configuration, templates) go through dev-harness subagents. The master session classifies, authors ADRs via /plan-feature, orchestrates agents, and reads verifier output — it does not write code.
 
 ---
 
 ## Reference
 
-- `docs/spec-*.md` (root) — cross-cutting specs
-- `docs/<component>/spec-*.md` — component-local specs (lazy, created when first spec is added)
-- `docs/adr-*.md` — one per past decision; use `docs` MCP to search. ADRs live at root only.
+- `<project>/spec/registry.yaml` — active invariants (the contract surface).
+- `<project>/spec/glossary.yaml` — terminology.
+- `<project>/spec/*_test.go` (or per-mechanism equivalents) — verifier files.
+- `docs/adr-*.md` — one per decision; use `docs` MCP to search. ADRs live at root only.
+- `docs/audits/` — generated audit reports.
 
-Use `list_docs` and `search_docs` from the docs MCP to discover all available specs and ADRs. Use `get_lineage` to trace which ADRs shaped a spec section.
+Pre-existing `docs/**/spec-*.md` files are legacy under ADR-0078. They remain in place as human-readable prose annotations but are not maintained by this workflow and are not load-bearing. The contract surface is the registry, not the specs.
+
+Use `list_docs` and `search_docs` from the docs MCP. Use `get_lineage` to trace which ADRs introduced or modified an invariant.
 
