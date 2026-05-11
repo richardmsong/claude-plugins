@@ -129,3 +129,17 @@ func TestLocalVar(t *testing.T) {
 		})
 	}
 }
+
+// TestValidatorInterfaceSatisfaction verifies methodology.validator.concrete_satisfies_interface.
+//
+// Two compile-time assertions:
+//   - (*validator)(nil) satisfies Validator: catches concrete-type drift.
+//   - newValidator() returns a Validator-satisfying value: catches constructor-return-type drift.
+//
+// Both fail at compile time if dev-harness's implementation drifts from the
+// Validator interface. The test never runs at runtime — it exists purely to
+// register the satisfaction contract as a verifier path.
+func TestValidatorInterfaceSatisfaction(t *testing.T) {
+	var _ Validator = (*validator)(nil)
+	var _ Validator = newValidator()
+}
