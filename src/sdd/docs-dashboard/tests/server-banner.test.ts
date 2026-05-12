@@ -3,7 +3,7 @@ import { buildStartupBanner } from "../src/server";
 
 describe("buildStartupBanner", () => {
   it("always prints the loopback line first", () => {
-    const banner = buildStartupBanner(4567, {});
+    const banner = buildStartupBanner(4567, "/docs", {});
     const lines = banner.split("\n");
     expect(lines[0]).toBe("Dashboard ready:");
     expect(lines[1]).toBe("  http://127.0.0.1:4567/");
@@ -22,7 +22,7 @@ describe("buildStartupBanner", () => {
         },
       ],
     };
-    const banner = buildStartupBanner(4567, mockIfaces);
+    const banner = buildStartupBanner(4567, "/docs", mockIfaces);
     expect(banner).toContain("  http://100.64.0.2:4567/");
   });
 
@@ -48,7 +48,7 @@ describe("buildStartupBanner", () => {
         },
       ],
     };
-    const banner = buildStartupBanner(4567, mockIfaces);
+    const banner = buildStartupBanner(4567, "/docs", mockIfaces);
     expect(banner).not.toContain("fe80::1");
     expect(banner).toContain("  http://192.168.1.100:4567/");
   });
@@ -76,7 +76,7 @@ describe("buildStartupBanner", () => {
         },
       ],
     };
-    const banner = buildStartupBanner(4567, mockIfaces);
+    const banner = buildStartupBanner(4567, "/docs", mockIfaces);
     // The loopback line is always the manually added one from the function — only once
     const loopbackCount = (banner.match(/127\.0\.0\.1/g) ?? []).length;
     expect(loopbackCount).toBe(1);
@@ -96,11 +96,12 @@ describe("buildStartupBanner", () => {
         },
       ],
     };
-    const banner = buildStartupBanner(4567, mockIfaces);
+    const banner = buildStartupBanner(4567, "/tmp/docs", mockIfaces);
     const lines = banner.split("\n");
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(3);
     expect(lines[0]).toBe("Dashboard ready:");
     expect(lines[1]).toBe("  http://127.0.0.1:4567/");
+    expect(lines[2]).toBe("Docs dir: /tmp/docs");
   });
 
   it("prints multiple non-loopback addresses in interface order", () => {
@@ -126,13 +127,14 @@ describe("buildStartupBanner", () => {
         },
       ],
     };
-    const banner = buildStartupBanner(4567, mockIfaces);
+    const banner = buildStartupBanner(4567, "/tmp/docs", mockIfaces);
     const lines = banner.split("\n");
-    expect(lines).toHaveLength(4);
+    expect(lines).toHaveLength(5);
     expect(lines[0]).toBe("Dashboard ready:");
     expect(lines[1]).toBe("  http://127.0.0.1:4567/");
     expect(lines[2]).toBe("  http://192.168.1.10:4567/");
     expect(lines[3]).toBe("  http://100.64.1.5:4567/");
+    expect(lines[4]).toBe("Docs dir: /tmp/docs");
   });
 
   it("respects the port parameter in all lines", () => {
@@ -148,19 +150,13 @@ describe("buildStartupBanner", () => {
         },
       ],
     };
-    const banner = buildStartupBanner(9999, mockIfaces);
+    const banner = buildStartupBanner(9999, "/docs", mockIfaces);
     expect(banner).toContain("  http://127.0.0.1:9999/");
     expect(banner).toContain("  http://10.1.2.3:9999/");
   });
 
   // Contract: methodology.dashboard.banner_shows_resolved_docs_dir (ADR-0083).
-  // Pre-declares the post-implementation signature:
-  //   buildStartupBanner(port: number, docsDir: string, ifaces?: ...)
-  // The @ts-expect-error below will be removed once buildStartupBanner is extended
-  // per ADR-0083 and the second parameter becomes docsDir: string (not ifaces).
   it("includes a Docs dir line showing the resolved docs directory", () => {
-    // @ts-expect-error — test pre-declares the post-implementation signature;
-    // will be removed once buildStartupBanner is extended per ADR-0083
     const banner = buildStartupBanner(4567, "/tmp/some/docs/dir");
     expect(banner).toContain("Docs dir: /tmp/some/docs/dir");
     expect(banner).toContain("http://127.0.0.1:4567/");

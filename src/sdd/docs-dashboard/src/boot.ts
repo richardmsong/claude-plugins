@@ -1,11 +1,57 @@
 import { Database } from "bun:sqlite";
-import { existsSync } from "fs";
-import { join, dirname } from "path";
+import { existsSync, readFileSync } from "fs";
+import { join, dirname, isAbsolute } from "path";
 import { openDb } from "docs-mcp/db";
 import { indexAllDocs } from "docs-mcp/content-indexer";
 import { runLineageScan } from "docs-mcp/lineage-scanner";
 import { runBlameScan } from "docs-mcp/blame-scanner";
 import { startWatcher } from "docs-mcp/watcher";
+
+/**
+ * Resolve the docs directory for this docsRoot.
+ *
+ * Reads <docsRoot>/spec-driven-config.json if present:
+ * - If present and parseable, uses config.spec.adr_dir (resolved relative to
+ *   docsRoot when not absolute) as the docs directory — even if the resolved
+ *   path does not exist on disk (honored as-given; no silent fallback).
+ * - If spec.adr_dir is missing, empty, or whitespace-only: falls back to
+ *   <docsRoot>/docs/.
+ * - If config absent: falls back to <docsRoot>/docs/.
+ * - If config present but JSON is malformed: throws an Error naming the config
+ *   path and the parse failure.
+ */
+export function resolveDocsDir(docsRoot: string): string {
+  const configPath = join(docsRoot, "spec-driven-config.json");
+  if (!existsSync(configPath)) {
+    return join(docsRoot, "docs");
+  }
+
+  const raw = readFileSync(configPath, "utf8");
+  let config: unknown;
+  try {
+    config = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `Failed to parse ${configPath}: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  const adrDir =
+    config !== null &&
+    typeof config === "object" &&
+    "spec" in config &&
+    config.spec !== null &&
+    typeof config.spec === "object" &&
+    "adr_dir" in config.spec
+      ? (config.spec as Record<string, unknown>).adr_dir
+      : undefined;
+
+  if (typeof adrDir !== "string" || adrDir.trim() === "") {
+    return join(docsRoot, "docs");
+  }
+
+  return isAbsolute(adrDir) ? adrDir : join(docsRoot, adrDir);
+}
 
 /**
  * Walk up from startDir until we find a directory containing .git.
@@ -35,6 +81,7 @@ export interface BootResult {
   gitRoot: string | null;
   db: Database;
   stopWatcher: () => void;
+  docsDir: string;
 }
 
 /**
@@ -67,7 +114,7 @@ export function boot(
 
   const db = openDb(resolvedDbPath);
 
-  const docsDir = join(docsRoot, "docs");
+  const docsDir = resolveDocsDir(docsRoot);
 
   // Initial index — run synchronously on boot
   try {
@@ -96,5 +143,5 @@ export function boot(
 
   const stopWatcher = startWatcher(db, docsDir, gitRoot, onReindex);
 
-  return { gitRoot, db, stopWatcher };
+  return { gitRoot, db, stopWatcher, docsDir };
 }

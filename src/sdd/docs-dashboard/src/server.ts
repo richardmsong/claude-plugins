@@ -59,6 +59,7 @@ function parseArgs(argv: string[]): { port: number; dbPath: string | null; root:
  */
 export function buildStartupBanner(
   port: number,
+  docsDir: string,
   ifaces: ReturnType<typeof networkInterfaces> = networkInterfaces()
 ): string {
   const lines: string[] = [`Dashboard ready:`, `  http://127.0.0.1:${port}/`];
@@ -70,6 +71,8 @@ export function buildStartupBanner(
       lines.push(`  http://${iface.address}:${port}/`);
     }
   }
+
+  lines.push(`Docs dir: ${docsDir}`);
 
   return lines.join("\n");
 }
@@ -159,9 +162,10 @@ async function main() {
   let db: Database;
   let gitRoot: string | null;
   let stopWatcher: () => void;
+  let docsDir: string;
 
   try {
-    ({ gitRoot, db, stopWatcher } = boot(docsRoot, dbPath, (changed: string[]) => {
+    ({ gitRoot, db, stopWatcher, docsDir } = boot(docsRoot, dbPath, (changed: string[]) => {
       broadcast({ type: "reindex", changed });
     }));
   } catch (err) {
@@ -247,7 +251,7 @@ async function main() {
     },
   });
 
-  console.log(buildStartupBanner(server.port ?? port));
+  console.log(buildStartupBanner(server.port ?? port, docsDir));
 }
 
 if (import.meta.main) {
