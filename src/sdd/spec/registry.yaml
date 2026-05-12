@@ -552,7 +552,7 @@
   status: active
 
 - id: methodology.dashboard.banner_shows_resolved_docs_dir
-  definition: The dashboard's startup banner includes a line of the form `Docs dir: <resolved-path>` where `<resolved-path>` is the same `docsDir` value `boot()` passes to `startWatcher`.
+  definition: 'The dashboard''s startup banner includes a line of the form `Docs dir: <resolved-path>` where `<resolved-path>` is the same `docsDir` value `boot()` passes to `startWatcher`.'
   verifier: src/sdd/docs-dashboard/tests/server-banner.test.ts
   requires:
     - methodology.dashboard.respects_configured_paths
@@ -595,5 +595,37 @@
   verifier: src/sdd/docs-dashboard/tests/overlay-model.test.ts::computeGutterModel
   requires:
     - methodology.dashboard.blame_uncommitted_lines_structured
+  glossary_terms: []
+  status: active
+
+- id: methodology.dashboard.ui_tests_in_verify_chain
+  definition: '`spec-driven-config.json`''s `verify[]` includes a command that runs the UI Bun test suite (`cd src/sdd/docs-dashboard/ui && bun test src/__tests__/`) so component regressions fail the methodology gate.'
+  verifier: spec/checks_config_test.go::TestVerifyArrayIncludesUITests
+  requires:
+    - methodology.config.verify_array_well_formed
+  glossary_terms: []
+  status: active
+
+- id: methodology.dashboard.markdown_view_consumes_structured_uncommitted
+  definition: '`MarkdownView` renders working-tree lines from the `uncommitted_lines: UncommittedRange[]` prop, applying a CSS class corresponding to `OverlayLine.kind` (`added` or `removed`) computed via `parseUnifiedDiff` + `computeOverlay` from `ui/src/lib/overlay-model.ts`.'
+  verifier: src/sdd/docs-dashboard/ui/src/__tests__/MarkdownView.test.tsx::renders working-tree overlay
+  requires:
+    - methodology.dashboard.blame_uncommitted_lines_structured
+    - methodology.dashboard.overlay_merger_synthesizes_removals
+  glossary_terms: []
+  status: active
+
+- id: methodology.dashboard.blame_gutter_renders_wip_marker
+  definition: When `BlameGutter` receives an `uncommitted_lines` range covering line N, the rendered gutter row for line N carries a `wip`-themed CSS class regardless of whether a `blocks` entry also covers line N, computed via `computeGutterModel` from `ui/src/lib/overlay-model.ts`.
+  verifier: src/sdd/docs-dashboard/ui/src/__tests__/BlameGutter.test.tsx::renders WIP marker
+  requires:
+    - methodology.dashboard.gutter_wip_precedence
+  glossary_terms: []
+  status: active
+
+- id: methodology.dashboard.blame_gutter_commit_click_dispatches_overlay_state
+  definition: '`BlameGutter` fires the `onCommitClick` callback with the clicked block''s commit hash; the consuming `MarkdownView` enters commit-overlay mode for that hash on first click, exits on a second click of the same hash, replaces with the new hash when a different commit is clicked.'
+  verifier: src/sdd/docs-dashboard/ui/src/__tests__/BlameGutter.test.tsx::commit click dispatches overlay state
+  requires: []
   glossary_terms: []
   status: active

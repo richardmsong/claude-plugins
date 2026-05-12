@@ -1,6 +1,10 @@
 package spec
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -222,6 +226,119 @@ func TestCheckConfigSpecReactionsDir(t *testing.T) {
 	}
 }
 
+// TestProjectVerifyIncludesInspect bounds project.config.verify_includes_inspect.
+//
+// The project's verify[] array must contain an entry that invokes
+// `inspect eval-set` over <project>/spec/evals/ followed by
+// `python scripts/inspect-gate.py` over the eval log directory (within the
+// same shell entry separated by `;`, or as two consecutive entries).
+// The --log-dir path passed to `inspect eval-set` must equal the path argument
+// to `python scripts/inspect-gate.py` — diverging log-dir paths are rejected.
+// The positional path argument to `inspect eval-set` (before --log-dir) must
+// equal the project's eval directory: `src/sdd/spec/evals`.
+func TestProjectVerifyIncludesInspect(t *testing.T) {
+	cases := []struct {
+		name      string
+		cfg       *Config
+		wantCount int // number of CheckErrors expected
+		wantField string
+	}{
+		{
+			name: "single entry with inspect eval-set and gate separated by semicolon accepted",
+			cfg: configWithVerify([]string{
+				"cd src/sdd && go test ./spec/...",
+				"inspect eval-set src/sdd/spec/evals --log-dir src/sdd/spec/eval-logs --epochs 3 ; python scripts/inspect-gate.py src/sdd/spec/eval-logs",
+			}),
+			wantCount: 0,
+		},
+		{
+			name: "two consecutive entries for inspect and gate accepted",
+			cfg: configWithVerify([]string{
+				"inspect eval-set src/sdd/spec/evals --log-dir src/sdd/spec/eval-logs",
+				"python scripts/inspect-gate.py src/sdd/spec/eval-logs",
+			}),
+			wantCount: 0,
+		},
+		{
+			name: "verify array missing inspect eval-set entry flagged",
+			cfg: configWithVerify([]string{
+				"cd src/sdd && go test ./spec/...",
+			}),
+			wantCount: 1,
+			wantField: "verify",
+		},
+		{
+			name: "inspect eval-set present but gate missing flagged",
+			cfg: configWithVerify([]string{
+				"inspect eval-set src/sdd/spec/evals",
+			}),
+			wantCount: 1,
+			wantField: "verify",
+		},
+		{
+			name: "log-dir in inspect eval-set differs from gate path flagged",
+			cfg: configWithVerify([]string{
+				"inspect eval-set src/sdd/spec/evals --log-dir src/sdd/spec/eval-logs --epochs 3 ; python scripts/inspect-gate.py src/sdd/spec/OTHER-logs",
+			}),
+			wantCount: 1,
+			wantField: "verify",
+		},
+		{
+			name: "log-dir in consecutive entries differs from gate path flagged",
+			cfg: configWithVerify([]string{
+				"inspect eval-set src/sdd/spec/evals --log-dir src/sdd/spec/eval-logs",
+				"python scripts/inspect-gate.py src/sdd/spec/OTHER-logs",
+			}),
+			wantCount: 1,
+			wantField: "verify",
+		},
+		{
+			// The eval-dir argument to `inspect eval-set` must equal the project's
+			// eval directory (src/sdd/spec/evals).  A wrong directory passes the
+			// log-dir consistency check but fails the eval-dir check.
+			name: "eval-dir argument to inspect eval-set is wrong path flagged",
+			cfg: configWithVerify([]string{
+				"inspect eval-set /some/wrong/dir --log-dir src/sdd/spec/eval-logs --epochs 3 ; python scripts/inspect-gate.py src/sdd/spec/eval-logs",
+			}),
+			wantCount: 1,
+			wantField: "verify",
+		},
+		{
+			// Same as above, using consecutive entries.
+			name: "wrong eval-dir in consecutive entries flagged",
+			cfg: configWithVerify([]string{
+				"inspect eval-set other/evals --log-dir src/sdd/spec/eval-logs",
+				"python scripts/inspect-gate.py src/sdd/spec/eval-logs",
+			}),
+			wantCount: 1,
+			wantField: "verify",
+		},
+		{
+			name:      "nil verify array flagged",
+			cfg:       configWithVerify(nil),
+			wantCount: 1,
+			wantField: "verify",
+		},
+		{
+			name:      "nil config flagged",
+			cfg:       nil,
+			wantCount: 1,
+			wantField: "verify",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := newValidator().CheckProjectVerifyIncludesInspect(nil, nil, tc.cfg, "")
+			if len(errs) != tc.wantCount {
+				t.Errorf("got %d errors, want %d: %v", len(errs), tc.wantCount, errs)
+			}
+			if tc.wantField != "" && len(errs) > 0 && errs[0].Field != tc.wantField {
+				t.Errorf("got Field=%q, want %q", errs[0].Field, tc.wantField)
+			}
+		})
+	}
+}
+
 // TestCheckConfigVerifyArray bounds methodology.validator.config_verify_array_well_formed.
 //
 // CheckConfigVerifyArray must return a CheckError when the loaded config's
@@ -279,5 +396,58 @@ func TestCheckConfigVerifyArray(t *testing.T) {
 				t.Errorf("got Field=%q, want %q", errs[0].Field, tc.wantField)
 			}
 		})
+	}
+}
+
+// TestVerifyArrayIncludesUITests bounds methodology.dashboard.ui_tests_in_verify_chain.
+//
+// The project's verify[] array must contain an entry that runs the UI Bun test
+// suite by executing `cd src/sdd/docs-dashboard/ui && bun test src/__tests__/`
+// so that component regressions fail the methodology gate.
+//
+// Free function — does NOT depend on the Validator interface. Walks up from
+// cwd to locate spec-driven-config.json, parses it directly, asserts that
+// at least one verify[] entry contains the UI test command. Expected to FAIL
+// until the entry is added by the dev-harness pass following ADR-0085.
+func TestVerifyArrayIncludesUITests(t *testing.T) {
+	const needle = "cd src/sdd/docs-dashboard/ui && bun test src/__tests__/"
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	dir := cwd
+	var configPath string
+	for {
+		candidate := filepath.Join(dir, "spec-driven-config.json")
+		if _, err := os.Stat(candidate); err == nil {
+			configPath = candidate
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("spec-driven-config.json not found walking up from %q", cwd)
+		}
+		dir = parent
+	}
+
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", configPath, err)
+	}
+	var cfg Config
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("parse %s: %v", configPath, err)
+	}
+
+	found := false
+	for _, cmd := range cfg.Verify {
+		if strings.Contains(cmd, needle) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("spec-driven-config.json verify[] does not contain a UI Bun test entry (expected substring %q); add it per ADR-0085", needle)
 	}
 }

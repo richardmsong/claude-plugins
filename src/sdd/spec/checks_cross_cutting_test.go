@@ -3,6 +3,7 @@ package spec
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -537,5 +538,370 @@ func TestUnboundCheck(t *testing.T) {}
 				t.Errorf("got %d errors, want %d: %v", len(errs), tc.wantCount, errs)
 			}
 		})
+	}
+}
+
+// TestRegistryIDPrefixAllowed bounds project.registry.id_prefix_allowed.
+//
+// Every active entry in this repo's registry must have an id field that begins
+// with "methodology." or "project.".  Withdrawn entries are not checked.
+// Negative case: an entry with prefix "unknown.foo.bar" causes a CheckError.
+func TestRegistryIDPrefixAllowed(t *testing.T) {
+	cases := []struct {
+		name      string
+		input     []Invariant
+		wantCount int
+		wantField string
+	}{
+		{
+			name: "methodology-prefixed id accepted",
+			input: []Invariant{
+				{ID: "methodology.validator.config_spec_registry", Status: StatusActive},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "project-prefixed id accepted",
+			input: []Invariant{
+				{ID: "project.registry.id_prefix_allowed", Status: StatusActive},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "mixed valid prefixes all accepted",
+			input: []Invariant{
+				{ID: "methodology.adr.requires_delta", Status: StatusActive},
+				{ID: "project.config.verify_includes_inspect", Status: StatusActive},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "unknown prefix flagged",
+			input: []Invariant{
+				{ID: "unknown.foo.bar", Status: StatusActive},
+			},
+			wantCount: 1,
+			wantField: "id",
+		},
+		{
+			name: "bare prefix without dot flagged",
+			input: []Invariant{
+				{ID: "methodology", Status: StatusActive},
+			},
+			wantCount: 1,
+			wantField: "id",
+		},
+		{
+			name: "withdrawn entry with unknown prefix not checked",
+			input: []Invariant{
+				{ID: "unknown.foo.bar", Status: StatusWithdrawn},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "valid and invalid entries: only invalid flagged",
+			input: []Invariant{
+				{ID: "methodology.validator.config_spec_registry", Status: StatusActive},
+				{ID: "unknown.foo.bar", Status: StatusActive},
+				{ID: "project.registry.id_prefix_allowed", Status: StatusActive},
+			},
+			wantCount: 1,
+			wantField: "id",
+		},
+		{
+			name:      "empty registry accepted",
+			input:     []Invariant{},
+			wantCount: 0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := newValidator().CheckRegistryIDPrefixAllowed(tc.input, nil, nil, "")
+			if len(errs) != tc.wantCount {
+				t.Errorf("got %d errors, want %d: %v", len(errs), tc.wantCount, errs)
+			}
+			if tc.wantField != "" && len(errs) > 0 && errs[0].Field != tc.wantField {
+				t.Errorf("got Field=%q, want %q", errs[0].Field, tc.wantField)
+			}
+		})
+	}
+}
+
+// TestMethodologySelfContained bounds methodology.registry.methodology_self_contained.
+//
+// Every active registry entry whose id starts with "methodology." must have a
+// requires list containing only IDs that also start with "methodology.".
+// Negative case: a methodology entry whose requires list contains a "project.*"
+// ID causes a CheckError.
+func TestMethodologySelfContained(t *testing.T) {
+	cases := []struct {
+		name      string
+		input     []Invariant
+		wantCount int
+		wantField string
+	}{
+		{
+			name: "methodology entry with empty requires accepted",
+			input: []Invariant{
+				{ID: "methodology.adr.requires_delta", Requires: []string{}, Status: StatusActive},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "methodology entry requiring only methodology IDs accepted",
+			input: []Invariant{
+				{ID: "methodology.adr.requires_delta", Status: StatusActive},
+				{ID: "methodology.adr.delta_reconciles", Requires: []string{"methodology.adr.requires_delta"}, Status: StatusActive},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "methodology entry requiring a project ID flagged",
+			input: []Invariant{
+				{ID: "project.registry.id_prefix_allowed", Status: StatusActive},
+				{ID: "methodology.eval.task_naming", Requires: []string{"project.registry.id_prefix_allowed"}, Status: StatusActive},
+			},
+			wantCount: 1,
+			wantField: "requires",
+		},
+		{
+			name: "project entry requiring methodology IDs not checked",
+			input: []Invariant{
+				{ID: "methodology.validator.config_spec_registry", Status: StatusActive},
+				{ID: "project.config.verify_includes_inspect", Requires: []string{"methodology.validator.config_spec_registry"}, Status: StatusActive},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "methodology entry requiring unknown-prefix ID flagged",
+			input: []Invariant{
+				{ID: "methodology.foo.bar", Requires: []string{"unknown.something"}, Status: StatusActive},
+			},
+			wantCount: 1,
+			wantField: "requires",
+		},
+		{
+			name: "withdrawn methodology entry with project requires not checked",
+			input: []Invariant{
+				{ID: "project.registry.id_prefix_allowed", Status: StatusActive},
+				{ID: "methodology.old.check", Requires: []string{"project.registry.id_prefix_allowed"}, Status: StatusWithdrawn},
+			},
+			wantCount: 0,
+		},
+		{
+			name:      "empty registry accepted",
+			input:     []Invariant{},
+			wantCount: 0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := newValidator().CheckMethodologySelfContained(tc.input, nil, nil, "")
+			if len(errs) != tc.wantCount {
+				t.Errorf("got %d errors, want %d: %v", len(errs), tc.wantCount, errs)
+			}
+			if tc.wantField != "" && len(errs) > 0 && errs[0].Field != tc.wantField {
+				t.Errorf("got Field=%q, want %q", errs[0].Field, tc.wantField)
+			}
+		})
+	}
+}
+
+// TestGlossaryDeltaReconciles bounds methodology.glossary.delta_reconciles.
+//
+// The running glossary at spec.glossary equals the integral of
+// (### Added (glossary) minus ### Withdrawn (glossary)) entries across all ADRs.
+// ADRs that use the legacy bare ### Added / ### Withdrawn headers contribute
+// zero glossary deltas (treated as empty glossary sections).
+//
+// This test uses synthetic ADR content and a synthetic glossary; it is unit-only
+// (no embedded glossary file read).
+func TestGlossaryDeltaReconciles(t *testing.T) {
+	// adrAddsTwoGlossaryTerms declares two glossary additions.
+	adrAddsTwoGlossaryTerms := `# ADR
+
+## Invariant Delta
+
+### Added (invariants)
+
+(none)
+
+### Added (glossary)
+
+` + "```yaml" + `
+- term: methodology (prefix)
+  definition: SDD tooling behavior contracts.
+- term: project (prefix)
+  definition: Repo-local development contracts.
+` + "```" + `
+
+### Withdrawn (invariants)
+
+(none)
+
+### Withdrawn (glossary)
+
+(none)
+
+## Decision history (rationale notes)
+
+Added for testing.
+`
+
+	// adrWithdrawsOneGlossaryTerm withdraws one term added above.
+	adrWithdrawsOneGlossaryTerm := `# ADR
+
+## Invariant Delta
+
+### Added (invariants)
+
+(none)
+
+### Added (glossary)
+
+(none)
+
+### Withdrawn (invariants)
+
+(none)
+
+### Withdrawn (glossary)
+
+` + "```yaml" + `
+- term: project (prefix)
+  reason: restructured
+` + "```" + `
+
+## Decision history (rationale notes)
+
+Added for testing.
+`
+
+	// adrLegacyBareHeaders uses the old format — no glossary deltas.
+	adrLegacyBareHeaders := `# ADR
+
+## Invariant Delta
+
+### Added
+
+- id: a.b
+  definition: First invariant.
+  verifier: spec/checks_test.go::TestFoo
+  status: active
+
+### Withdrawn
+
+(none)
+
+## Decision history (rationale notes)
+
+Added for testing.
+`
+
+	cases := []struct {
+		name      string
+		glossary  []GlossaryEntry
+		adrFiles  map[string]string
+		wantCount int
+	}{
+		{
+			name: "glossary matches ADR delta integral accepted",
+			glossary: []GlossaryEntry{
+				{Term: "methodology (prefix)", Definition: "SDD tooling behavior contracts."},
+			},
+			adrFiles: map[string]string{
+				"adr-0080-adds.md":    adrAddsTwoGlossaryTerms,
+				"adr-0081-removes.md": adrWithdrawsOneGlossaryTerm,
+			},
+			wantCount: 0,
+		},
+		{
+			name: "glossary has extra term not in any ADR delta flagged",
+			glossary: []GlossaryEntry{
+				{Term: "methodology (prefix)", Definition: "SDD tooling behavior contracts."},
+				{Term: "extra term", Definition: "Not declared in any ADR."},
+			},
+			adrFiles: map[string]string{
+				"adr-0080-adds.md":    adrAddsTwoGlossaryTerms,
+				"adr-0081-removes.md": adrWithdrawsOneGlossaryTerm,
+			},
+			wantCount: 1,
+		},
+		{
+			name: "ADR delta adds term but glossary missing it flagged",
+			glossary: []GlossaryEntry{},
+			adrFiles: map[string]string{
+				"adr-0080-adds.md": adrAddsTwoGlossaryTerms,
+				// no withdrawals ADR
+			},
+			wantCount: 1,
+		},
+		{
+			name: "legacy bare-header ADR contributes no glossary delta",
+			glossary: []GlossaryEntry{},
+			adrFiles: map[string]string{
+				"adr-0078-legacy.md": adrLegacyBareHeaders,
+			},
+			wantCount: 0,
+		},
+		{
+			name:      "empty glossary and no ADRs accepted",
+			glossary:  []GlossaryEntry{},
+			adrFiles:  map[string]string{},
+			wantCount: 0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for name, content := range tc.adrFiles {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+					t.Fatalf("write ADR %s: %v", name, err)
+				}
+			}
+			errs := newValidator().CheckGlossaryDeltaReconciles(nil, tc.glossary, nil, dir)
+			if len(errs) != tc.wantCount {
+				t.Errorf("got %d errors, want %d: %v", len(errs), tc.wantCount, errs)
+			}
+		})
+	}
+}
+
+// verifyYAMLCodeBlock asserts that a non-empty, non-"(none)" code block under an
+// explicit Invariant Delta header contains valid YAML.  This helper is used by
+// TestGlossaryDeltaBlock to validate each explicit sub-section.
+func verifyYAMLCodeBlock(t *testing.T, header, content string) {
+	t.Helper()
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" || trimmed == "(none)" {
+		return // empty or explicitly-empty sections are fine
+	}
+	// Extract content between the first ` ``` ` pair.
+	const fence = "```"
+	start := strings.Index(trimmed, fence)
+	if start == -1 {
+		// no code fence — check if it looks like a bare YAML list
+		return
+	}
+	afterFence := trimmed[start+len(fence):]
+	// skip optional language tag line (e.g. "yaml\n")
+	if nl := strings.Index(afterFence, "\n"); nl != -1 {
+		afterFence = afterFence[nl+1:]
+	}
+	end := strings.Index(afterFence, fence)
+	if end == -1 {
+		t.Errorf("header %q: unclosed code fence in delta block", header)
+		return
+	}
+	yamlBody := strings.TrimSpace(afterFence[:end])
+	if yamlBody == "" || yamlBody == "(none)" {
+		return
+	}
+	// Minimal YAML validity: must parse as a list (starts with "- ") or be empty.
+	if !strings.HasPrefix(yamlBody, "-") {
+		t.Errorf("header %q: delta block YAML is not a list (expected '- ' prefix), got: %.80s", header, yamlBody)
 	}
 }

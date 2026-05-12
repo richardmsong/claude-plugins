@@ -26,6 +26,13 @@ type Validator interface {
 	CheckADRDeltaAddedBlock(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
 	CheckADRDeltaWithdrawnBlock(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
 
+	// CheckADRGlossaryDeltaBlock walks each ADR's ## Invariant Delta section and
+	// validates that any explicit sub-section blocks (### Added (invariants), etc.)
+	// contain well-formed YAML (a list starting with "- ") or are empty / "(none)".
+	// ADRs using legacy bare ### Added / ### Withdrawn headers are accepted without
+	// inspection (they contribute empty glossary deltas by definition).
+	CheckADRGlossaryDeltaBlock(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
+
 	// Cross-cutting checks
 	CheckVerifierResolves(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
 	CheckVerifierUnique(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
@@ -70,4 +77,50 @@ type Validator interface {
 	// where the identifier resolves to an interface type — assertions must live only
 	// in _test.go files, per ADR-0082.
 	CheckNoProductionSatisfactionAssertions(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
+
+	// Cross-cutting checks added by ADR-0080
+
+	// CheckRegistryIDPrefixAllowed returns a CheckError for every active entry
+	// in this repo's registry whose id field does not begin with "methodology."
+	// or "project.". Withdrawn entries are not checked.
+	CheckRegistryIDPrefixAllowed(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
+
+	// CheckMethodologySelfContained returns a CheckError for every active entry
+	// whose id begins with "methodology." and whose requires list contains an id
+	// that does NOT begin with "methodology.". The check is framed as a
+	// self-referential property of the methodology prefix: methodology entries
+	// depend only on other methodology entries; dependencies on other prefixes
+	// (project.*, external.*) are forbidden.
+	CheckMethodologySelfContained(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
+
+	// CheckGlossaryDeltaReconciles returns a CheckError when the running glossary
+	// at spec.glossary does not equal the integral of Added (glossary) minus
+	// Withdrawn (glossary) across all ADR delta blocks. ADRs with legacy bare
+	// ### Added / ### Withdrawn headers contribute zero glossary deltas.
+	CheckGlossaryDeltaReconciles(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
+
+	// Eval dispatch checks (ADR-0080, project-scoped)
+
+	// CheckProjectVerifyIncludesInspect returns a CheckError when this repo's
+	// verify[] array does not contain an entry that invokes `inspect eval-set`
+	// followed by `python scripts/inspect-gate.py`, or when the --log-dir path
+	// passed to `inspect eval-set` and the path argument to `inspect-gate.py`
+	// differ (diverging log-dir paths are rejected because the gate reads the
+	// logs that Inspect wrote).
+	CheckProjectVerifyIncludesInspect(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
+
+	// CheckEvalTaskNamingMatchesInvariantID returns a CheckError for every Python
+	// module under <project>/spec/evals/ matching *_eval.py whose @task-decorated
+	// function name does not match the full post-prefix suffix of an active
+	// registry invariant_id (with `.` replaced by `_`), or whose file basename
+	// does not follow the convention <task_function>_eval.py.
+	// "Full post-prefix suffix" means all segments after the first dot-separated
+	// component: e.g. methodology.compile_invariants.file_scope →
+	// compile_invariants_file_scope (not the bare leaf `file_scope`).
+	CheckEvalTaskNamingMatchesInvariantID(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
+
+	// CheckVerifyArrayIncludesUITests returns a CheckError when the config's verify[]
+	// array does not contain an entry that runs the UI Bun test suite
+	// (`cd src/sdd/docs-dashboard/ui && bun test src/__tests__/`), per ADR-0085.
+	CheckVerifyArrayIncludesUITests(reg []Invariant, glos []GlossaryEntry, cfg *Config, adrDir string) []CheckError
 }

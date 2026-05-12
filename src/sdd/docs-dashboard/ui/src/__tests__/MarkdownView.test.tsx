@@ -2,6 +2,7 @@ import React from "react";
 import { render } from "@testing-library/react";
 import { vi, describe, it, expect } from "bun:test";
 import MarkdownView from "../components/MarkdownView";
+import type { UncommittedRange } from "../lib/overlay-model";
 
 const navigate = vi.fn();
 
@@ -170,5 +171,37 @@ describe("MarkdownView", () => {
     );
     const lis = container.querySelectorAll("li[data-line-start]");
     expect(lis.length).toBeGreaterThan(0);
+  });
+});
+
+// ADR-0085: MarkdownView consumes structured uncommitted_lines (UncommittedRange[])
+// and renders overlay rows with a CSS class matching OverlayLine.kind.
+//
+// This describe block is expected to FAIL on first run because MarkdownView still
+// consumes uncommittedLines as number[] and has no overlay class wiring yet.
+describe("MarkdownView — ADR-0085 working-tree overlay", () => {
+  it("renders working-tree overlay", () => {
+    // The new structured shape: UncommittedRange[] instead of number[].
+    // Line 3 of the markdown source is in the "added" range.
+    const uncommittedLines: UncommittedRange[] = [
+      { line_start: 3, line_end: 3, kind: "added" },
+    ];
+
+    const { container } = render(
+      <MarkdownView
+        markdown={"# Title\n\nbody\n"}
+        docPath="docs/adr-0001-test.md"
+        navigate={navigate}
+        // Cast to any because MarkdownView currently declares this as number[].
+        // When the prop type is updated to UncommittedRange[], the cast is removed.
+        uncommittedLines={uncommittedLines as unknown as number[]}
+      />
+    );
+
+    // Assert that an element covering source line 3 carries the overlay-added class.
+    // The component must emit this class when a line falls in an UncommittedRange
+    // with kind === "added".
+    const overlayAdded = container.querySelector(".overlay-added");
+    expect(overlayAdded).not.toBeNull();
   });
 });

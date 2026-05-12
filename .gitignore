@@ -10,3 +10,4 @@ bin/
 .playwright-mcp
 src/sdd/docs-dashboard/ui/dist/*
 .tmp
+__pycache__/
