@@ -26,7 +26,8 @@
     "reactions_dir": "src/sdd/docs/reactions/"
   },
   "verify": [
-    "cd src/sdd && go test ./spec/..."
+    "cd src/sdd && go test ./spec/...",
+    "cd src/sdd/docs-dashboard && bun test tests/"
   ],
   "dispatch": {}
 }

@@ -541,3 +541,20 @@
     - methodology.validator.test_shape_unit_only
   glossary_terms: []
   status: active
+
+# 12. Dashboard (2 entries)
+- id: methodology.dashboard.respects_configured_paths
+  definition: When `boot()` resolves the docs directory, it reads `<docsRoot>/spec-driven-config.json` if present and uses `config.spec.adr_dir` as the `docsDir` passed to `startWatcher` — resolved relative to docsRoot when not absolute, used as-is when absolute, honored even when the resolved path does not exist on disk; falls back to `<docsRoot>/docs/` only when the config file does not exist or `spec.adr_dir` is missing, empty, or whitespace-only; throws when the config file is present but contains malformed JSON.
+  verifier: src/sdd/docs-dashboard/tests/boot-config-respect.test.ts
+  requires:
+    - methodology.validator.config_spec_adr_dir
+  glossary_terms: []
+  status: active
+
+- id: methodology.dashboard.banner_shows_resolved_docs_dir
+  definition: The dashboard's startup banner includes a line of the form `Docs dir: <resolved-path>` where `<resolved-path>` is the same `docsDir` value `boot()` passes to `startWatcher`.
+  verifier: src/sdd/docs-dashboard/tests/server-banner.test.ts
+  requires:
+    - methodology.dashboard.respects_configured_paths
+  glossary_terms: []
+  status: active

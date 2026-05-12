@@ -152,4 +152,17 @@ describe("buildStartupBanner", () => {
     expect(banner).toContain("  http://127.0.0.1:9999/");
     expect(banner).toContain("  http://10.1.2.3:9999/");
   });
+
+  // Contract: methodology.dashboard.banner_shows_resolved_docs_dir (ADR-0083).
+  // Pre-declares the post-implementation signature:
+  //   buildStartupBanner(port: number, docsDir: string, ifaces?: ...)
+  // The @ts-expect-error below will be removed once buildStartupBanner is extended
+  // per ADR-0083 and the second parameter becomes docsDir: string (not ifaces).
+  it("includes a Docs dir line showing the resolved docs directory", () => {
+    // @ts-expect-error — test pre-declares the post-implementation signature;
+    // will be removed once buildStartupBanner is extended per ADR-0083
+    const banner = buildStartupBanner(4567, "/tmp/some/docs/dir");
+    expect(banner).toContain("Docs dir: /tmp/some/docs/dir");
+    expect(banner).toContain("http://127.0.0.1:4567/");
+  });
 });

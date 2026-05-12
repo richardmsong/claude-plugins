@@ -9,6 +9,8 @@
 
 Replace the dashboard's `--docs-dir` flag and `findRepoRoot`-based DB path derivation with the same `--root` / `resolveDocsRoot` / `CLAUDE_PROJECT_DIR` priority chain used by docs-mcp. Both components derive docsRoot identically; the DB lives at `<docsRoot>/.agent/.docs-index.db`; the docs directory is always `<docsRoot>/docs/`.
 
+> The "docs directory is always `<docsRoot>/docs/`" clause is superseded by [adr-0083-dashboard-respects-configured-adr-dir.md](adr-0083-dashboard-respects-configured-adr-dir.md): the dashboard now reads `<docsRoot>/spec-driven-config.json`'s `spec.adr_dir` when present, and falls back to `<docsRoot>/docs/` only when the config file is absent or the field is empty.
+
 ## Motivation
 
 The dashboard and MCP server index the same corpus but resolve paths differently. The MCP uses `--root` → `CLAUDE_PROJECT_DIR` → `cwd` (ADR-0048) and puts the DB at `<docsRoot>/.agent/.docs-index.db`. The dashboard uses `--docs-dir` for the docs directory and `<repoRoot>/.agent/.docs-index.db` for the DB. When `docsRoot != repoRoot` (e.g. `--root src/sdd`), they write to different DBs. This causes stale indexes and disk I/O errors from concurrent access to different files.
