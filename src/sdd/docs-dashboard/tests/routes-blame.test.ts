@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { seedTestDb } from "./testutil";
 import { handleBlame, handleDiff } from "../src/routes";
+import { spawnSync } from "child_process";
+import { openDb } from "docs-mcp/db";
+import { indexFile } from "docs-mcp/content-indexer";
+import { join } from "path";
+import { tmpdir } from "os";
+import { mkdirSync, writeFileSync, rmSync } from "fs";
 
 const ADR_CONTENT = `# ADR: Blame Test
 
@@ -171,6 +177,189 @@ describe("handleBlame", () => {
     // The co-modified doc should appear in adrs
     expect(data.blocks[0].adrs.length).toBe(1);
     expect(data.blocks[0].adrs[0].doc_path).toBe("docs/adr-0002-another.md");
+  });
+});
+
+// ---- ADR-0084: methodology.dashboard.blame_uncommitted_lines_structured ----
+//
+// Verifier for: the `/api/blame` response's `uncommitted_lines` field must be
+// an array of { line_start, line_end, kind } objects computed from
+// `git diff HEAD -- <file>`, not flat line numbers.
+//
+// Setup: build a real git repo (git init + initial commit + working-tree edit)
+// so the backend can detect actual uncommitted changes.
+//
+// RED until dev-harness lands the production change (findUncommittedLines
+// currently returns number[], not structured objects).
+
+/**
+ * Initialise a temp directory as a real git repo, commit an initial doc,
+ * then apply a working-tree edit.  Returns the repo root, the relative doc
+ * path, a pre-seeded DB, and a cleanup function.
+ */
+function makeGitRepoWithUncommittedEdit(
+  filename: string,
+  committedContent: string,
+  editedContent: string,
+): { repoRoot: string; docRelPath: string; db: Database; cleanup: () => void } {
+  const repoRoot = join(
+    tmpdir(),
+    `blame-git-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  const docsDir = join(repoRoot, "docs");
+  mkdirSync(docsDir, { recursive: true });
+
+  const absDocPath = join(docsDir, filename);
+  writeFileSync(absDocPath, committedContent, "utf8");
+
+  // git init + initial commit
+  const gitEnv = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "Test",
+    GIT_AUTHOR_EMAIL: "test@example.com",
+    GIT_COMMITTER_NAME: "Test",
+    GIT_COMMITTER_EMAIL: "test@example.com",
+  };
+  const run = (args: string[]) =>
+    spawnSync("git", args, { cwd: repoRoot, env: gitEnv, encoding: "utf-8" });
+
+  run(["init"]);
+  run(["config", "user.email", "test@example.com"]);
+  run(["config", "user.name", "Test"]);
+  run(["add", "."]);
+  run(["commit", "-m", "feat: initial commit"]);
+
+  // Apply the working-tree edit (not staged, not committed)
+  writeFileSync(absDocPath, editedContent, "utf8");
+
+  // Seed the DB
+  const dbDir = join(
+    tmpdir(),
+    `blame-db-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  mkdirSync(dbDir, { recursive: true });
+  const dbPath = join(dbDir, "test.db");
+  const db = openDb(dbPath);
+  indexFile(db, absDocPath, repoRoot);
+
+  return {
+    repoRoot,
+    docRelPath: `docs/${filename}`,
+    db,
+    cleanup: () => {
+      db.close();
+      rmSync(repoRoot, { recursive: true, force: true });
+      rmSync(dbDir, { recursive: true, force: true });
+    },
+  };
+}
+
+describe("handleBlame — ADR-0084 uncommitted_lines structured shape", () => {
+  it("returns empty array when repoRoot is null", async () => {
+    // When repoRoot is null the endpoint should return uncommitted_lines: []
+    // regardless of what's in the DB.
+    const { db: gitDb, cleanup: gitCleanup, docRelPath } = makeGitRepoWithUncommittedEdit(
+      "adr-0084-null-root.md",
+      "# Doc\n\nLine one.\nLine two.\n",
+      "# Doc\n\nLine one.\nLine two.\nLine three.\n",
+    );
+
+    try {
+      const url = new URL(
+        "http://localhost/api/blame?doc=" + encodeURIComponent(`docs/${docRelPath.replace(/^docs\//, "")}`),
+      );
+      // Pass null for repoRoot — must return [] not an error
+      const res = handleBlame(gitDb, null, url);
+      expect(res.status).toBe(200);
+      const data = await res.json() as { uncommitted_lines: unknown[] };
+      expect(Array.isArray(data.uncommitted_lines)).toBe(true);
+      expect(data.uncommitted_lines).toHaveLength(0);
+    } finally {
+      gitCleanup();
+    }
+  });
+
+  it("returns structured objects (not plain numbers) when the file has added lines vs HEAD", async () => {
+    // The committed version has 4 lines; the WT version adds a 5th line.
+    // The structured shape should include at least one { line_start, line_end, kind: "added" }.
+    // RED until dev-harness rewrites findUncommittedLines.
+    const committedContent = "# Doc\n\nLine one.\nLine two.\n";
+    const editedContent = "# Doc\n\nLine one.\nLine two.\nLine three — added.\n";
+
+    const { repoRoot: gitRoot, docRelPath, db: gitDb, cleanup: gitCleanup } =
+      makeGitRepoWithUncommittedEdit("adr-0084-added.md", committedContent, editedContent);
+
+    try {
+      const url = new URL(
+        "http://localhost/api/blame?doc=" + encodeURIComponent(docRelPath),
+      );
+      const res = handleBlame(gitDb, gitRoot, url);
+      expect(res.status).toBe(200);
+      const data = await res.json() as {
+        uncommitted_lines: Array<{ line_start: number; line_end: number; kind: "added" | "modified" }>;
+      };
+
+      // Must be an array of objects, not an array of plain numbers.
+      expect(Array.isArray(data.uncommitted_lines)).toBe(true);
+      expect(data.uncommitted_lines.length).toBeGreaterThan(0);
+
+      for (const entry of data.uncommitted_lines) {
+        // Each entry must be an object with the three required fields.
+        expect(typeof entry).toBe("object");
+        expect(entry).not.toBeNull();
+        expect(typeof entry.line_start).toBe("number");
+        expect(typeof entry.line_end).toBe("number");
+        expect(entry.line_end).toBeGreaterThanOrEqual(entry.line_start);
+        expect(entry.line_start).toBeGreaterThan(0);
+        expect(["added", "modified"]).toContain(entry.kind);
+      }
+
+      // The added line(s) must carry kind: "added"
+      const addedEntries = data.uncommitted_lines.filter((e) => e.kind === "added");
+      expect(addedEntries.length).toBeGreaterThan(0);
+    } finally {
+      gitCleanup();
+    }
+  });
+
+  it("returns kind: 'modified' entries when existing lines are changed", async () => {
+    // The committed version has 4 lines; the WT version modifies line 3.
+    // The structured shape should include at least one { kind: "modified" } entry.
+    // RED until dev-harness rewrites findUncommittedLines.
+    const committedContent = "# Doc\n\nLine one.\nLine two.\n";
+    const editedContent = "# Doc\n\nLine one.\nLine two — modified.\n";
+
+    const { repoRoot: gitRoot, docRelPath, db: gitDb, cleanup: gitCleanup } =
+      makeGitRepoWithUncommittedEdit("adr-0084-modified.md", committedContent, editedContent);
+
+    try {
+      const url = new URL(
+        "http://localhost/api/blame?doc=" + encodeURIComponent(docRelPath),
+      );
+      const res = handleBlame(gitDb, gitRoot, url);
+      expect(res.status).toBe(200);
+      const data = await res.json() as {
+        uncommitted_lines: Array<{ line_start: number; line_end: number; kind: "added" | "modified" }>;
+      };
+
+      expect(Array.isArray(data.uncommitted_lines)).toBe(true);
+      expect(data.uncommitted_lines.length).toBeGreaterThan(0);
+
+      for (const entry of data.uncommitted_lines) {
+        expect(typeof entry).toBe("object");
+        expect(entry).not.toBeNull();
+        expect(typeof entry.line_start).toBe("number");
+        expect(typeof entry.line_end).toBe("number");
+        expect(entry.line_end).toBeGreaterThanOrEqual(entry.line_start);
+        expect(["added", "modified"]).toContain(entry.kind);
+      }
+
+      // At least one "modified" entry must be present
+      const modifiedEntries = data.uncommitted_lines.filter((e) => e.kind === "modified");
+      expect(modifiedEntries.length).toBeGreaterThan(0);
+    } finally {
+      gitCleanup();
+    }
   });
 });
 

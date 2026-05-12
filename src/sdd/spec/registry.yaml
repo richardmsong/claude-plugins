@@ -558,3 +558,42 @@
     - methodology.dashboard.respects_configured_paths
   glossary_terms: []
   status: active
+
+- id: methodology.dashboard.blame_uncommitted_lines_structured
+  definition: The `/api/blame` response's `uncommitted_lines` field is an array of objects each with `line_start` (positive integer), `line_end` (positive integer at-least `line_start`), and `kind` (`"added"` or `"modified"`), computed from `git diff HEAD -- <file>` when `repoRoot` is available, or `[]` when it is not.
+  verifier: src/sdd/docs-dashboard/tests/routes-blame.test.ts
+  requires:
+    - methodology.dashboard.respects_configured_paths
+  glossary_terms: []
+  status: active
+
+- id: methodology.dashboard.diff_endpoint_three_modes
+  definition: '`/api/diff` returns the working-tree-vs-HEAD diff for the doc when invoked with `working_tree=1` and no `commit`; returns the full-file commit-vs-parent diff when invoked with `commit=<hash>` plus both `line_start`/`line_end` absent; returns the range-scoped commit diff (existing ADR-0040 behavior) when invoked with `commit=<hash>` plus both `line_start`/`line_end` present; returns HTTP 400 for any other parameter combination including partial-range (exactly one of `line_start`/`line_end` present), missing `doc`, or invalid commit hash.'
+  verifier: src/sdd/docs-dashboard/tests/routes-diff.test.ts
+  requires:
+    - methodology.dashboard.respects_configured_paths
+  glossary_terms: []
+  status: active
+
+- id: methodology.dashboard.overlay_parser_classifies_lines
+  definition: '`parseUnifiedDiff(diffText)` returns an array of `DiffLine` records where every `+` line in the input produces a record with `kind: "added"`, every `-` line produces a record with `kind: "removed"`, every context line (single-space prefix) produces a record with `kind: "context"`, with `lineNo` on each record matching the right-hand-side line number from the diff''s `@@` hunk header for added records, the right-hand-side line number for context records, the left-hand-side line number for removed records.'
+  verifier: src/sdd/docs-dashboard/tests/overlay-model.test.ts::parseUnifiedDiff
+  requires: []
+  glossary_terms: []
+  status: active
+
+- id: methodology.dashboard.overlay_merger_synthesizes_removals
+  definition: '`computeOverlay(diff, baseLines)` returns an `OverlayLine[]` where added lines from the diff render with `kind: "added"` carrying the new-file line number as `baseLineNo`, context lines render with `kind: "kept"` carrying the new-file line number as `baseLineNo`, removed lines from the diff are inserted into the sequence with `kind: "removed"` plus `baseLineNo: null` at the position immediately following the preceding kept-or-added neighbor in the diff''s old-file ordering.'
+  verifier: src/sdd/docs-dashboard/tests/overlay-model.test.ts::computeOverlay
+  requires:
+    - methodology.dashboard.overlay_parser_classifies_lines
+  glossary_terms: []
+  status: active
+
+- id: methodology.dashboard.gutter_wip_precedence
+  definition: '`computeGutterModel(blocks, uncommitted)` returns a `GutterRow[]` where every line covered by an `uncommitted` range produces a row with `kind: "wip"` regardless of whether that line is also covered by a `blocks` entry, with every line covered only by a `blocks` entry producing a row with `kind: "commit"` carrying that block''s commit hash.'
+  verifier: src/sdd/docs-dashboard/tests/overlay-model.test.ts::computeGutterModel
+  requires:
+    - methodology.dashboard.blame_uncommitted_lines_structured
+  glossary_terms: []
+  status: active
