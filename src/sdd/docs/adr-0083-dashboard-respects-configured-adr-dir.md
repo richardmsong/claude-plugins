@@ -1,9 +1,10 @@
 # ADR: Dashboard respects `spec.adr_dir` from `spec-driven-config.json`
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-05-12: draft
 - 2026-05-12: accepted — design audit CLEAN (Round 2); roundtrip CLEAN on both verifiers
+- 2026-05-12: implemented — all verifiers green (boot.ts + server.ts banner)
 
 ## Overview
 

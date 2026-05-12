@@ -1,9 +1,10 @@
 # ADR: Dashboard git-state overlay (uncommitted highlights + click-commit-to-diff)
 
-**Status**: accepted
+**Status**: implemented
 **Status history**:
 - 2026-05-12: draft
 - 2026-05-12: accepted — design audit CLEAN (Round 3); roundtrip CLEAN on all five verifiers
+- 2026-05-12: implemented — all verifiers green (routes.ts gitDiff/diff modes/uncommitted ranges + ui/src/lib/overlay-model.ts)
 
 ## Overview
 
