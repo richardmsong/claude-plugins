@@ -296,8 +296,8 @@ export function handleBlame(db: Database, repoRoot: string | null, url: URL): Re
     });
   }
 
-  // Determine uncommitted lines: lines not present in blame_lines.
-  const uncommittedLines = repoRoot ? findUncommittedLines(repoRoot, docPath, blameRows) : [];
+  // Determine uncommitted lines via git diff HEAD -- <file>.
+  const uncommittedLines = repoRoot ? findUncommittedRanges(repoRoot, docPath) : [];
 
   return json({ blocks, uncommitted_lines: uncommittedLines });
 }
@@ -444,66 +444,215 @@ function parsePorcelainSimple(
   return grouped;
 }
 
-/**
- * Determine line numbers not covered by blame_lines (uncommitted/working-copy lines).
- */
-function findUncommittedLines(
-  repoRoot: string,
-  docPath: string,
-  blameRows: { line_start: number; line_end: number }[]
-): number[] {
-  const absPath = `${repoRoot}/${docPath}`;
-  const result = spawnSync("wc", ["-l", absPath], { encoding: "utf-8" });
-  if (result.status !== 0) return [];
+// ---- ADR-0084: UncommittedRange type ----
 
-  const lineCount = parseInt(result.stdout.trim().split(/\s+/)[0], 10);
-  if (isNaN(lineCount) || lineCount <= 0) return [];
-
-  const blamed = new Set<number>();
-  for (const row of blameRows) {
-    for (let l = row.line_start; l <= row.line_end; l++) {
-      blamed.add(l);
-    }
-  }
-
-  const uncommitted: number[] = [];
-  for (let l = 1; l <= lineCount; l++) {
-    if (!blamed.has(l)) uncommitted.push(l);
-  }
-  return uncommitted;
+interface UncommittedRange {
+  line_start: number;
+  line_end: number;
+  kind: "added" | "modified";
 }
 
 /**
- * GET /api/diff?doc=<p>&commit=<hash>&line_start=<n>&line_end=<n>
+ * Determine uncommitted line ranges by shelling `git diff HEAD -- <file>`.
  *
- * Runs git show <commit> -- <file> and extracts only the diff hunks that
- * overlap the requested [line_start, line_end] range.
+ * Returns structured { line_start, line_end, kind } ranges where:
+ *   - kind "added": all lines in the range were newly added (no corresponding
+ *     old-file line, i.e. only `+` lines in the hunk with no preceding `-`
+ *     lines in that contiguous group)
+ *   - kind "modified": at least one line in the range replaces an existing
+ *     committed line (there is a `-`/`+` pair)
+ *
+ * Returns [] when git fails or repoRoot is unavailable.
+ */
+function findUncommittedRanges(
+  repoRoot: string,
+  docPath: string,
+): UncommittedRange[] {
+  const diffText = gitDiff(repoRoot, docPath, "HEAD", null);
+  if (!diffText) return [];
+
+  return parseUncommittedRanges(diffText);
+}
+
+/**
+ * Parse a unified diff (from git diff HEAD) into UncommittedRange objects.
+ *
+ * Strategy: walk each hunk and group consecutive `+` lines. A group is
+ * "added" if no `-` line immediately precedes or follows it in the hunk
+ * (i.e., the lines are net-new). It is "modified" if there is at least one
+ * `-` line adjacent to the `+` group (a delete/replace pair).
+ */
+function parseUncommittedRanges(diffText: string): UncommittedRange[] {
+  const lines = diffText.split("\n");
+  const ranges: UncommittedRange[] = [];
+
+  let newLine = 0;
+  let inHunk = false;
+
+  // Per-hunk tracking
+  type PendingGroup = { start: number; end: number; hasRemoval: boolean };
+  let pendingGroup: PendingGroup | null = null;
+  let prevWasRemoval = false;
+
+  const flushGroup = (group: PendingGroup) => {
+    ranges.push({
+      line_start: group.start,
+      line_end: group.end,
+      kind: group.hasRemoval ? "modified" : "added",
+    });
+  };
+
+  for (const raw of lines) {
+    // Hunk header
+    const hunkMatch = raw.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunkMatch) {
+      if (pendingGroup) { flushGroup(pendingGroup); pendingGroup = null; }
+      newLine = parseInt(hunkMatch[1], 10);
+      prevWasRemoval = false;
+      inHunk = true;
+      continue;
+    }
+
+    if (!inHunk) continue;
+
+    // Skip non-content diff header lines
+    if (
+      raw.startsWith("diff ") ||
+      raw.startsWith("index ") ||
+      raw.startsWith("--- ") ||
+      raw.startsWith("+++ ") ||
+      raw.startsWith("\\ ")
+    ) {
+      if (pendingGroup) { flushGroup(pendingGroup); pendingGroup = null; }
+      inHunk = false;
+      continue;
+    }
+
+    if (raw.startsWith("+")) {
+      if (!pendingGroup) {
+        pendingGroup = { start: newLine, end: newLine, hasRemoval: prevWasRemoval };
+      } else {
+        pendingGroup.end = newLine;
+        if (prevWasRemoval) pendingGroup.hasRemoval = true;
+      }
+      prevWasRemoval = false;
+      newLine++;
+    } else if (raw.startsWith("-")) {
+      // A removal: flush any non-adjacent pending group first, then mark flag
+      if (pendingGroup) {
+        // If there's a pending group not immediately adjacent to this removal,
+        // flush it. But in unified diff, `-` and `+` are typically interleaved
+        // so we mark the pending group as "modified" and keep it open.
+        pendingGroup.hasRemoval = true;
+      }
+      prevWasRemoval = true;
+    } else if (raw.startsWith(" ")) {
+      // Context line: flush any pending group
+      if (pendingGroup) { flushGroup(pendingGroup); pendingGroup = null; }
+      prevWasRemoval = false;
+      newLine++;
+    }
+  }
+
+  if (pendingGroup) flushGroup(pendingGroup);
+
+  return ranges;
+}
+
+/**
+ * ADR-0084: Shared diff helper.
+ *
+ * gitDiff(repoRoot, docPath, left, right):
+ *   - left="HEAD", right=null  → working-tree diff: `git diff HEAD -- <file>`
+ *   - left="<commit>^", right="<commit>"  → historical: `git diff <left> <right> -- <file>`
+ *
+ * Returns the unified diff text, or "" on failure.
+ */
+function gitDiff(
+  repoRoot: string,
+  docPath: string,
+  left: string,
+  right: string | null,
+): string {
+  const absPath = `${repoRoot}/${docPath}`;
+  const args: string[] =
+    right === null
+      ? ["diff", left, "--", absPath]
+      : ["diff", left, right, "--", absPath];
+
+  const result = spawnSync("git", args, {
+    cwd: repoRoot,
+    encoding: "utf-8",
+    maxBuffer: 20 * 1024 * 1024,
+  });
+
+  if (result.status !== 0) return "";
+  return result.stdout ?? "";
+}
+
+/**
+ * GET /api/diff — three modes (ADR-0084):
+ *
+ *   (a) ?doc=<p>&commit=<hash>&line_start=<n>&line_end=<n>
+ *       → existing range-scoped commit diff
+ *   (b) ?doc=<p>&commit=<hash>
+ *       → full-file commit-vs-parent diff (NEW)
+ *   (c) ?doc=<p>&working_tree=1
+ *       → working-tree vs HEAD diff (NEW)
+ *
  * Returns: { diff: string }
+ *
+ * Returns 400 for:
+ *   - missing doc
+ *   - neither commit nor working_tree=1 provided
+ *   - invalid commit hash
+ *   - partial range (exactly one of line_start/line_end present)
+ *   - line_start > line_end
  */
 export function handleDiff(repoRoot: string | null, url: URL): Response {
   const docPath = url.searchParams.get("doc");
   const commit = url.searchParams.get("commit");
   const lineStartParam = url.searchParams.get("line_start");
   const lineEndParam = url.searchParams.get("line_end");
+  const workingTree = url.searchParams.get("working_tree");
 
   if (!docPath) return badRequest("Missing required query param: doc");
-  if (!commit) return badRequest("Missing required query param: commit");
-  if (!lineStartParam) return badRequest("Missing required query param: line_start");
-  if (!lineEndParam) return badRequest("Missing required query param: line_end");
 
-  const lineStart = parseInt(lineStartParam, 10);
-  const lineEnd = parseInt(lineEndParam, 10);
-  if (isNaN(lineStart) || isNaN(lineEnd) || lineStart < 1 || lineEnd < lineStart) {
-    return badRequest("Invalid line_start or line_end");
+  // Mode (c): working_tree=1
+  if (workingTree === "1") {
+    if (!repoRoot) return json({ diff: "" });
+    const diffText = gitDiff(repoRoot, docPath, "HEAD", null);
+    return json({ diff: diffText });
   }
+
+  // Modes (a) and (b): commit is required
+  if (!commit) return badRequest("Missing required query param: commit");
 
   // Validate commit hash (must be hex string)
   if (!/^[0-9a-f]{4,40}$/i.test(commit)) {
     return badRequest("Invalid commit hash");
   }
 
-  if (!repoRoot) {
-    return json({ diff: "" });
+  // Partial-range validation: exactly one of line_start/line_end is an error
+  const hasStart = lineStartParam !== null;
+  const hasEnd = lineEndParam !== null;
+  if (hasStart !== hasEnd) {
+    return badRequest("line_start and line_end must both be present or both absent");
+  }
+
+  if (!repoRoot) return json({ diff: "" });
+
+  // Mode (b): commit-only, no range → full-file commit-vs-parent
+  if (!hasStart && !hasEnd) {
+    const diffText = gitDiff(repoRoot, docPath, `${commit}^`, commit);
+    return json({ diff: diffText });
+  }
+
+  // Mode (a): range-scoped commit diff
+  const lineStart = parseInt(lineStartParam!, 10);
+  const lineEnd = parseInt(lineEndParam!, 10);
+  if (isNaN(lineStart) || isNaN(lineEnd) || lineStart < 1 || lineEnd < lineStart) {
+    return badRequest("Invalid line_start or line_end");
   }
 
   const absPath = `${repoRoot}/${docPath}`;
@@ -514,7 +663,6 @@ export function handleDiff(repoRoot: string | null, url: URL): Response {
   });
 
   if (result.status !== 0) {
-    // Commit not found or git not available
     return json({ diff: "" });
   }
 
